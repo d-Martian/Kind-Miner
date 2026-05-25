@@ -1,0 +1,78 @@
+# kind-miner configuration
+# Copy to ~/.config/kind-miner/config.yaml and fill in your wallet address.
+
+# Your Monero wallet address (required)
+wallet: ""
+
+# Connection mode: p2pool-remote | p2pool-local | pool
+#
+#   p2pool-remote  Runs p2pool locally, connects to a remote monerod node.
+#                  0% fee, trustless payouts, no local blockchain needed.
+#                  Recommended for most users.
+#
+#   p2pool-local   Runs p2pool locally, connects to your own monerod node.
+#                  Fully trustless and private. Requires ~180 GB disk space.
+#
+#   pool           Connects XMRig directly to a traditional Stratum pool.
+#                  Simplest setup, but pool takes a small fee (~0.6–1%).
+mode: p2pool-remote
+
+# --- p2pool-remote / p2pool-local settings ---
+
+# Remote monerod RPC URL (used when mode: p2pool-remote).
+# Leave blank to auto-select from the built-in community node list.
+remote_node: ""
+
+# P2Pool sidechain: "mini" (recommended for <50 kH/s) or "main"
+p2pool_chain: mini
+
+# --- p2pool-local settings ---
+
+# Set to true to have kind-miner start/stop monerod for you.
+manage_monerod: false
+
+# Path to the monerod binary. Leave blank to search PATH.
+monerod_path: ""
+
+# --- p2pool subprocess ---
+
+# kind-miner manages the p2pool subprocess for you in p2pool-remote and
+# p2pool-local modes. Set to false only if you run p2pool yourself.
+manage_p2pool: true
+
+# Path to the p2pool binary. Leave blank to use the bundled binary.
+p2pool_path: ""
+
+# --- pool mode settings ---
+
+# Stratum pool URL (used when mode: pool).
+# Example: "pool.supportxmr.com:3333"
+pool_url: ""
+
+# --- XMRig settings ---
+
+# Path to the xmrig binary. Leave blank to use the bundled binary.
+xmrig_path: ""
+
+# Maximum CPU threads to use for mining.
+# 0 = auto (half of available logical cores — leaves headroom for the OS)
+max_threads: 0
+
+# --- Throttle behavior ---
+
+# How aggressively kind-miner backs off when the system gets busy.
+#
+#   low     Backs off only when CPU is very busy (good for dedicated machines)
+#   medium  Balanced default — backs off at moderate load
+#   high    Backs off early, maximum system responsiveness
+throttle_sensitivity: medium
+
+# Pause mining when running on battery power.
+pause_on_battery: true
+
+# Pause mining when CPU temperature exceeds this value (Celsius).
+# Set to 0 to disable temperature-based throttling.
+temp_limit_celsius: 95
+
+# Log level: debug | info | warn | error
+log_level: info

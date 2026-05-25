@@ -1,0 +1,100 @@
+name: Release
+
+# Fires when you push a version tag: git tag v0.1.0 && git push --tags
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # needed to create the GitHub Release and upload assets
+
+jobs:
+  build:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux — ubuntu runner has the GTK/AppIndicator headers we need for CGo
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+
+          # macOS Intel
+          - runner: macos-13
+            goos: darwin
+            goarch: amd64
+
+          # macOS Apple Silicon (native arm64 runner)
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+
+          # Windows
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # systray uses CGo on Linux; needs the AppIndicator dev headers
+      - name: Install Linux build deps
+        if: matrix.goos == 'linux'
+        run: sudo apt-get install -y libayatana-appindicator3-dev
+
+      - name: Build
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          EXT=""
+          [[ "${{ matrix.goos }}" == "windows" ]] && EXT=".exe"
+          go build \
+            -ldflags "-X main.version=${GITHUB_REF_NAME} -s -w" \
+            -o "kind-miner${EXT}" \
+            ./cmd/kind-miner
+
+      - name: Package (Linux / macOS)
+        if: matrix.goos != 'windows'
+        shell: bash
+        run: |
+          NAME="kind-miner-${GITHUB_REF_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir "$NAME"
+          mv kind-miner "$NAME/"
+          cp README.md config.example.yaml "$NAME/"
+          tar czf "${NAME}.tar.gz" "$NAME"
+          sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          echo "ASSET=${NAME}.tar.gz"         >> "$GITHUB_ENV"
+          echo "CHECKSUM=${NAME}.tar.gz.sha256" >> "$GITHUB_ENV"
+
+      - name: Package (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          $name = "kind-miner-$env:GITHUB_REF_NAME-windows-amd64"
+          New-Item -ItemType Directory $name | Out-Null
+          Move-Item "kind-miner.exe" "$name/"
+          Copy-Item README.md, config.example.yaml "$name/"
+          Compress-Archive "$name" "${name}.zip"
+          $hash = (Get-FileHash "${name}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${name}.zip" | Out-File -Encoding ascii "${name}.zip.sha256"
+          "ASSET=${name}.zip"           | Out-File -Append $env:GITHUB_ENV
+          "CHECKSUM=${name}.zip.sha256" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true                  # review before publishing
+          generate_release_notes: true # auto-fills from commit messages
+          files: |
+            ${{ env.ASSET }}
+            ${{ env.CHECKSUM }}
