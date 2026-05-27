@@ -66,13 +66,17 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 		return err
 	}
 
+	p2pPort := 37889
+	if p.chain == "mini" {
+		p2pPort = 37888
+	}
 	args := []string{
 		"--host", p.nodeHost,
 		"--rpc-port", fmt.Sprintf("%d", p.rpcPort),
 		"--zmq-port", fmt.Sprintf("%d", p.zmqPort),
 		"--wallet", p.wallet,
 		"--stratum", fmt.Sprintf("0.0.0.0:%d", p.stratumPort),
-		"--p2p", "0.0.0.0:37889",
+		"--p2p", fmt.Sprintf("0.0.0.0:%d", p2pPort),
 		"--no-color",
 	}
 	if p.socks5Proxy != "" {

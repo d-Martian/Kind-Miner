@@ -22,3 +22,11 @@ bin/xmrig
 *.dll
 *.so
 *.dylib
+
+# Release artifacts
+dist/
+kind-miner_v*
+kind-miner-v*
+*.sig
+*.tar.gz
+*.zip

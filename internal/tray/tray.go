@@ -167,7 +167,7 @@ func openEditor(path string) {
 	case "darwin":
 		cmd = exec.Command("open", "-t", path)
 	default:
-		editor := os.Getenv("EDITOR")
+		editor := os.Getenv("VISUAL")
 		if editor == "" {
 			editor = "xdg-open"
 		}
