@@ -1,0 +1,24 @@
+# P2Pool runtime data
+p2pool.cache
+p2pool.log
+p2pool_i2p_peers.txt
+p2pool_onion_peers.txt
+p2pool_peers.txt
+
+# Compiled binaries
+kind-miner
+bin/p2pool
+bin/xmrig
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Go build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
