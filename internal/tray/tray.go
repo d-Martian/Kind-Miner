@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/getlantern/systray"
+	"fyne.io/systray"
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
