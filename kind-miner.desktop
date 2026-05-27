@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=kind-miner
+GenericName=Monero Miner
+Comment=Idle Monero CPU mining for always-on machines
+Exec=kind-miner
+Icon=kind-miner
+Categories=Network;Utility;
+Keywords=monero;mining;cryptocurrency;xmr;p2pool;
+Terminal=false
+StartupNotify=false

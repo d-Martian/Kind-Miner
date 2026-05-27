@@ -5,7 +5,7 @@ LDFLAGS  := -ldflags "-X main.version=$(VERSION) -s -w"
 
 DIST := dist
 
-.PHONY: all deps build build-all test clean bundle-linux bundle-darwin bundle-windows
+.PHONY: all deps build build-all test clean bundle-linux bundle-darwin bundle-windows appimage vendor
 
 all: deps build
 
@@ -53,5 +53,11 @@ bundle-windows: $(DIST)/windows-amd64/$(BINARY).exe
 	cp config.example.yaml $(DIST)/windows-amd64/
 	cd $(DIST) && zip -r kind-miner-$(VERSION)-windows-amd64.zip windows-amd64/
 
+appimage:
+	bash scripts/build-appimage.sh $(VERSION)
+
+vendor:
+	go mod vendor
+
 clean:
-	rm -rf $(DIST) $(BINARY)
+	rm -rf $(DIST) $(BINARY) build/ AppDir/

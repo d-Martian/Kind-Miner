@@ -1,0 +1,59 @@
+app-id: org.codeberg.dMartian.KindMiner
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.golang
+command: kind-miner
+
+finish-args:
+  # Network access for mining traffic and Tor SOCKS at 127.0.0.1:9050
+  - --share=network
+  # D-Bus session bus — fyne.io/systray uses godbus for the status notifier
+  - --socket=session-bus
+  # Config file location (~/.config/kind-miner/)
+  - --filesystem=xdg-config/kind-miner:create
+  # Downloaded XMRig / p2pool binaries (~/.local/share/kind-miner/bin/)
+  - --filesystem=xdg-data/kind-miner:create
+  # System tray — covers both KDE and GNOME/freedesktop implementations
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.StatusNotifierWatcher
+  - --talk-name=com.canonical.AppMenu.Registrar
+
+build-options:
+  env:
+    - GOPATH=/run/build/kind-miner/gopath
+    - GOFLAGS=-mod=vendor
+    - CGO_ENABLED=0
+
+modules:
+  - name: kind-miner
+    buildsystem: simple
+    build-commands:
+      # Activate the Go SDK extension and build
+      - |
+        . /usr/lib/sdk/golang/enable.sh
+        go build \
+          -ldflags "-X main.version=${FLATPAK_BRANCH:-dev} -s -w" \
+          -o /app/bin/kind-miner \
+          ./cmd/kind-miner
+      # Desktop integration
+      - install -Dm644 kind-miner.desktop
+          /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
+      - sed -i 's/^Icon=.*/Icon=org.codeberg.dMartian.KindMiner/'
+          /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
+      - install -Dm644 assets/icons/app.png
+          /app/share/icons/hicolor/512x512/apps/org.codeberg.dMartian.KindMiner.png
+      - install -Dm644 assets/icons/app.png
+          /app/share/icons/hicolor/256x256/apps/org.codeberg.dMartian.KindMiner.png
+    sources:
+      - type: git
+        url: https://codeberg.org/dMartian/kind-miner.git
+        tag: v0.1.0
+      # Go modules — generate with:
+      #   go mod vendor
+      # Then replace the git source above with:
+      #   - type: dir
+      #     path: ..
+      # For Flathub submission use flatpak-go-vendor-generator to produce
+      # individual module sources from go.sum.
