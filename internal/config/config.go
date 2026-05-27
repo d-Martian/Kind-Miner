@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -138,73 +137,30 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// RunWizard interactively collects the minimum required settings and writes
-// a config file. It writes to stdout/stdin so it must only be called when
-// a terminal is attached.
+// RunWizard collects the one thing that has no sensible default — the wallet
+// address — and writes a config with safe defaults for everything else.
+// It must only be called when a terminal is attached.
 func RunWizard() (*Config, error) {
 	cfg := Defaults()
 	scanner := bufio.NewScanner(os.Stdin)
 
 	fmt.Println()
-	fmt.Println("kind-miner — first-run setup")
-	fmt.Println("─────────────────────────────")
+	fmt.Println("kind-miner — first run")
+	fmt.Println("──────────────────────")
+	fmt.Println()
+	fmt.Println("Mines Monero in the background using idle CPU cycles.")
+	fmt.Println("Your coins go directly to your wallet — no account, no fee.")
 	fmt.Println()
 
-	cfg.Wallet = prompt(scanner, "Your Monero wallet address: ", "")
+	cfg.Wallet = prompt(scanner, "Monero wallet address: ", "")
 	if cfg.Wallet == "" {
 		return nil, fmt.Errorf("wallet address is required")
-	}
-
-	fmt.Println()
-	fmt.Println("Connection mode:")
-	fmt.Println("  1  Remote node + P2Pool  (recommended — decentralized, no local setup)")
-	fmt.Println("  2  Local node + P2Pool   (fully trustless — requires ~180 GB free disk)")
-	fmt.Println("  3  Traditional pool      (simplest — small fee applies)")
-	choice := prompt(scanner, "Choice [1]: ", "1")
-	switch choice {
-	case "2":
-		cfg.Mode = ModeP2PoolLocal
-		fmt.Println()
-		fmt.Println("  kind-miner can manage your monerod process for you.")
-		fmt.Println("  You will need the monerod binary installed and ~180 GB free.")
-		ans := prompt(scanner, "  Manage monerod automatically? [y/N]: ", "n")
-		cfg.ManageMonerod = strings.ToLower(ans) == "y"
-	case "3":
-		cfg.Mode = ModePool
-		cfg.PoolURL = prompt(scanner, "  Pool URL (e.g. pool.supportxmr.com:3333): ", "")
-		if cfg.PoolURL == "" {
-			return nil, fmt.Errorf("pool URL is required for pool mode")
-		}
-	default:
-		cfg.Mode = ModeP2PoolRemote
-	}
-
-	fmt.Println()
-	fmt.Println("Throttle sensitivity (how quickly kind-miner backs off when your system gets busy):")
-	fmt.Println("  1  low     — backs off only when CPU is very busy")
-	fmt.Println("  2  medium  — balanced default (recommended)")
-	fmt.Println("  3  high    — backs off early, maximum responsiveness")
-	sens := prompt(scanner, "Choice [2]: ", "2")
-	switch sens {
-	case "1":
-		cfg.ThrottleSensitivity = SensitivityLow
-	case "3":
-		cfg.ThrottleSensitivity = SensitivityHigh
-	default:
-		cfg.ThrottleSensitivity = SensitivityMedium
-	}
-
-	fmt.Println()
-	threadsStr := prompt(scanner, "Max CPU threads (0 = auto, half of available cores) [0]: ", "0")
-	n, err := strconv.Atoi(threadsStr)
-	if err == nil {
-		cfg.MaxThreads = n
 	}
 
 	if err := cfg.Save(); err != nil {
 		return nil, fmt.Errorf("saving config: %w", err)
 	}
-	fmt.Printf("\nConfig saved to %s\n\n", Path())
+	fmt.Println()
 	return cfg, nil
 }
 
