@@ -171,7 +171,14 @@ func openEditor(path string) {
 		if editor == "" {
 			editor = "xdg-open"
 		}
-		cmd = exec.Command(editor, path)
+		// Inside a Flatpak sandbox, xdg-open and $VISUAL can't cross the
+		// container boundary. flatpak-spawn --host delegates the launch to
+		// the host session, which has access to the full desktop.
+		if _, err := os.Stat("/.flatpak-info"); err == nil {
+			cmd = exec.Command("flatpak-spawn", "--host", editor, path)
+		} else {
+			cmd = exec.Command(editor, path)
+		}
 	}
 	if err := cmd.Start(); err != nil {
 		log.Printf("could not open editor: %v", err)
