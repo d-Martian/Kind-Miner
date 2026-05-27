@@ -40,20 +40,25 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 | **A Monero wallet address** | Any wallet that gives you a standard address (starts with `4`). [Feather](https://featherwallet.org) is recommended — it also runs over Tor. |
 | Linux, macOS, or Windows | Linux is the primary target; macOS and Windows work but are less tested. |
 
-**To install Tor:**
+**To install and start Tor:**
 ```sh
 # Debian / Ubuntu / Mint
 sudo apt install tor
+sudo systemctl enable --now tor
 
 # Fedora / RHEL
 sudo dnf install tor
+sudo systemctl enable --now tor
 
 # Arch
 sudo pacman -S tor
+sudo systemctl enable --now tor
 
 # macOS
 brew install tor && brew services start tor
 ```
+
+To confirm Tor is running: `systemctl is-active tor` should print `active`.
 
 ---
 
@@ -74,6 +79,31 @@ chmod +x kind-miner
 ```
 
 On first run with no config file, kind-miner opens a short setup wizard that asks for your wallet address and connection mode, then writes `~/.config/kind-miner/config.yaml` and starts mining.
+
+---
+
+## Keeping your machine awake
+
+Kind-miner only mines when the machine is on. Most operating systems will suspend the machine automatically after a period of inactivity — when that happens, mining stops until you wake it up.
+
+To mine overnight or continuously, turn off automatic sleep:
+
+**Linux — GNOME**  
+Settings → Power → Automatic Suspend → set to **Off**
+
+**Linux — KDE Plasma**  
+System Settings → Power Management → Energy Saving → uncheck **Suspend session**
+
+**Linux — command line**
+```sh
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+```
+
+**macOS**  
+System Settings → Battery (or Energy Saver) → set **Turn display off after** to **Never**, and enable **Prevent automatic sleeping when the display is off**
+
+**Windows**  
+Control Panel → Power Options → Change plan settings → set **Put the computer to sleep** to **Never**
 
 ---
 
