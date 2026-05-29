@@ -18,22 +18,31 @@ import (
 )
 
 // BinDir returns the directory where bundled binaries are stored.
-// Inside a Flatpak sandbox the exe lives under /app/bin (read-only), so we
-// redirect to XDG_DATA_HOME instead.
+// When running inside a Flatpak or AppImage the executable path is read-only,
+// so both cases redirect to XDG_DATA_HOME instead.
 func BinDir() string {
+	// Flatpak: exe lives under /app/bin (read-only squashfs)
 	if _, err := os.Stat("/.flatpak-info"); err == nil {
-		dataHome := os.Getenv("XDG_DATA_HOME")
-		if dataHome == "" {
-			home, _ := os.UserHomeDir()
-			dataHome = filepath.Join(home, ".local", "share")
-		}
-		return filepath.Join(dataHome, "kind-miner", "bin")
+		return xdgDataBin()
+	}
+	// AppImage: exe is mounted read-only under /tmp/.mount_*/usr/bin/
+	if os.Getenv("APPIMAGE") != "" {
+		return xdgDataBin()
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "bin"
 	}
 	return filepath.Join(filepath.Dir(exe), "bin")
+}
+
+func xdgDataBin() string {
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		home, _ := os.UserHomeDir()
+		dataHome = filepath.Join(home, ".local", "share")
+	}
+	return filepath.Join(dataHome, "kind-miner", "bin")
 }
 
 // EnsureXMRig ensures the xmrig binary is present in binDir.
