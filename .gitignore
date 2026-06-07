@@ -5,8 +5,8 @@ p2pool_i2p_peers.txt
 p2pool_onion_peers.txt
 p2pool_peers.txt
 
-# Compiled binaries
-kind-miner
+# Compiled binaries (anchored to repo root so it doesn't match cmd/kind-miner/)
+/kind-miner
 bin/p2pool
 bin/xmrig
 
@@ -30,3 +30,12 @@ kind-miner-v*
 *.sig
 *.tar.gz
 *.zip
+
+# Build / reproducibility artifacts
+build/
+
+# Managed Tor data directory (when run from the repo root)
+/tor/
+
+# Claude Code local settings
+.claude/settings.local.json

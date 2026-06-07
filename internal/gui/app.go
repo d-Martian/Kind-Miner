@@ -1,0 +1,409 @@
+package gui
+
+import (
+	"fmt"
+	"image/color"
+	"sync"
+	"time"
+
+	"fyne.io/fyne/v2"
+	fyneapp "fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/kind-miner/kind-miner/internal/core"
+	"github.com/kind-miner/kind-miner/internal/scheduler"
+)
+
+const appID = "org.codeberg.dMartian.KindMiner"
+
+// currentApp holds the running Fyne app so Quit can be invoked from a signal
+// handler in package main. Only one app exists per process.
+var currentApp fyne.App
+
+// Quit terminates the running GUI from any goroutine (e.g. an OS signal
+// handler). It is a no-op if no GUI is running.
+func Quit() {
+	if currentApp != nil {
+		currentApp.Quit()
+	}
+}
+
+// uiApp is the Fyne front-end: one application, one window, and one system
+// tray, all bound to a single core.Supervisor and driven from one event loop.
+//
+// Threading note: Fyne 2.5.3 has no fyne.Do helper, so background goroutines
+// (startup, the refresh ticker) mutate widgets and call Refresh directly —
+// the accepted pattern on this version. A future bump to Fyne 2.6 should route
+// these through fyne.Do.
+type uiApp struct {
+	app fyne.App
+	win fyne.Window
+	sup *core.Supervisor
+
+	// hasTray records whether a system-tray / menu-bar host exists. It drives
+	// close-to-tray vs close-to-quit, and whether a tray icon is registered.
+	hasTray bool
+
+	// dashboard widgets (created when the dashboard screen is shown)
+	status *canvas.Text
+	detail *canvas.Text
+	toggle *widget.Button
+
+	// system tray
+	trayMenu *fyne.Menu
+	mToggle  *fyne.MenuItem
+
+	refreshStop chan struct{}
+	stopOnce    sync.Once
+	lastPaused  bool
+}
+
+// RunGraphical owns the full GUI lifecycle: optional first-run onboarding, an
+// asynchronous startup with a progress screen, then the live dashboard. It
+// blocks until the user quits. The caller owns the supervisor and must call
+// Shutdown after this returns.
+func RunGraphical(sup *core.Supervisor, firstRun bool) {
+	u := newUIApp(sup)
+	u.installTray()
+
+	if firstRun {
+		u.win.SetContent(u.onboardingScreen())
+	} else {
+		u.startStartup()
+	}
+	u.win.ShowAndRun()
+	u.stopRefresh()
+}
+
+// RunTray presents an already-started supervisor as a system tray with an
+// on-demand window, matching the historical terminal-launch behaviour. It
+// blocks until the user quits; the caller owns Shutdown.
+func RunTray(sup *core.Supervisor) {
+	u := newUIApp(sup)
+	u.win.SetContent(u.dashboardScreen())
+	u.installTray()
+	if !u.hasTray {
+		// No tray to live in — keep a window on screen so there's a way back.
+		u.win.Show()
+	}
+	u.startRefresh()
+	// Terminal launch: live in the tray; the window opens from the tray menu.
+	u.app.Run()
+	u.stopRefresh()
+}
+
+func newUIApp(sup *core.Supervisor) *uiApp {
+	a := fyneapp.NewWithID(appID)
+	a.Settings().SetTheme(kindTheme{})
+	currentApp = a
+
+	w := a.NewWindow("kind-miner")
+	w.Resize(fyne.NewSize(440, 320))
+	w.CenterOnScreen()
+
+	u := &uiApp{app: a, win: w, sup: sup, refreshStop: make(chan struct{}), hasTray: systemTrayAvailable()}
+
+	// Close behaviour depends on whether a system tray exists. With one, closing
+	// tucks kind-miner away and it keeps mining. Without one (e.g. stock GNOME
+	// with no AppIndicator extension), hiding would strand the app with no way
+	// back — and orphan its StatusNotifierItem — so closing quits cleanly.
+	if u.hasTray {
+		w.SetCloseIntercept(func() { w.Hide() })
+	} else {
+		w.SetCloseIntercept(func() { a.Quit() })
+	}
+
+	return u
+}
+
+// startStartup swaps to the progress screen and runs the supervisor bring-up
+// on a background goroutine.
+func (u *uiApp) startStartup() {
+	u.win.SetContent(u.progressScreen(core.StepInstallXMRig))
+	go u.runStartup()
+}
+
+func (u *uiApp) runStartup() {
+	err := u.sup.Start(func(st core.Step) {
+		u.win.SetContent(u.progressScreen(st))
+	})
+	if err != nil {
+		u.win.SetContent(u.errorScreen(err))
+		u.showWindow()
+		return
+	}
+	u.win.SetContent(u.dashboardScreen())
+	u.startRefresh()
+}
+
+// ---- screens ----
+
+// onboardingScreen starts the first-run flow: a welcome screen that hands off
+// to wallet entry.
+func (u *uiApp) onboardingScreen() fyne.CanvasObject {
+	return welcomeScreen(func() {
+		u.win.SetContent(u.walletEntryScreen())
+	})
+}
+
+// walletEntryScreen collects the wallet address; on submit it saves the config
+// and proceeds to startup.
+func (u *uiApp) walletEntryScreen() fyne.CanvasObject {
+	return walletScreen(u.win, func(addr string) {
+		u.sup.Config().Wallet = addr
+		if err := u.sup.Config().Save(); err != nil {
+			u.win.SetContent(u.errorScreen(fmt.Errorf("saving config: %w", err)))
+			return
+		}
+		u.startStartup()
+	})
+}
+
+func (u *uiApp) progressScreen(step core.Step) fyne.CanvasObject {
+	title := canvas.NewText(SetupTitle, colorForeground)
+	title.TextSize = 20
+	title.TextStyle = fyne.TextStyle{Bold: true}
+
+	line := canvas.NewText(step.String()+"…", colorAccent)
+	line.TextSize = 15
+
+	blurb := canvas.NewText(stepBlurb(step), colorMuted)
+	blurb.TextSize = 12
+
+	bar := widget.NewProgressBarInfinite()
+
+	body := container.NewVBox(title, widget.NewLabel(""), line, bar, widget.NewLabel(""), blurb)
+	return container.NewPadded(body)
+}
+
+func (u *uiApp) dashboardScreen() fyne.CanvasObject {
+	u.status = canvas.NewText("Starting…", colorForeground)
+	u.status.TextSize = 24
+	u.status.TextStyle = fyne.TextStyle{Bold: true}
+
+	u.detail = canvas.NewText("", colorMuted)
+	u.detail.TextSize = 14
+
+	u.toggle = widget.NewButton("Pause", u.onToggle)
+	settings := widget.NewButton("Settings", u.onSettings)
+	quit := widget.NewButton("Quit", u.confirmQuit)
+
+	buttons := container.NewHBox(u.toggle, settings, widget.NewLabel(""), quit)
+	body := container.NewVBox(u.status, u.detail)
+
+	u.updateDashboard()
+	return container.NewBorder(nil, buttons, nil, nil, container.NewPadded(body))
+}
+
+func (u *uiApp) errorScreen(err error) fyne.CanvasObject {
+	title := canvas.NewText("Something went wrong", colorError)
+	title.TextSize = 20
+	title.TextStyle = fyne.TextStyle{Bold: true}
+
+	msg := widget.NewLabel(err.Error())
+	msg.Wrapping = fyne.TextWrapWord
+
+	retry := widget.NewButton("Retry", func() { u.startStartup() })
+	openCfg := widget.NewButton("Open config", func() { openInEditor(config.Path()) })
+	quit := widget.NewButton("Quit", func() { u.app.Quit() })
+
+	buttons := container.NewHBox(retry, openCfg, widget.NewLabel(""), quit)
+	body := container.NewVBox(title, msg)
+	return container.NewBorder(nil, buttons, nil, nil, container.NewPadded(body))
+}
+
+// ---- actions ----
+
+func (u *uiApp) onToggle() {
+	s := u.sup.Scheduler()
+	if s == nil {
+		return
+	}
+	if s.IsManuallyPaused() {
+		s.ManualResume()
+	} else {
+		s.ManualPause()
+	}
+	u.updateDashboard()
+}
+
+// onSettings opens the in-app settings window.
+func (u *uiApp) onSettings() {
+	u.showSettings()
+}
+
+// confirmQuit guards against accidentally stopping mining. When a tray exists
+// the window can simply be closed to keep mining in the background, so quitting
+// — which stops mining — asks first. With no tray (quitting is the only exit)
+// or before mining has started, it quits immediately.
+func (u *uiApp) confirmQuit() {
+	if !u.hasTray || u.sup.Scheduler() == nil {
+		u.app.Quit()
+		return
+	}
+	dialog.ShowConfirm("Quit kind-miner?",
+		"This stops mining. To keep mining in the background, close this window instead.",
+		func(ok bool) {
+			if ok {
+				u.app.Quit()
+			}
+		}, u.win)
+}
+
+func (u *uiApp) showWindow() {
+	u.win.Show()
+	u.win.RequestFocus()
+}
+
+// ---- live refresh ----
+
+func (u *uiApp) startRefresh() {
+	go func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				u.updateDashboard()
+			case <-u.refreshStop:
+				return
+			}
+		}
+	}()
+}
+
+func (u *uiApp) stopRefresh() {
+	u.stopOnce.Do(func() { close(u.refreshStop) })
+}
+
+// updateDashboard reads the current mining state and refreshes the window
+// labels, the toggle button, and the tray icon. Safe to call before startup
+// completes (it no-ops while the scheduler is nil).
+func (u *uiApp) updateDashboard() {
+	s := u.sup.Scheduler()
+	x := u.sup.XMRig()
+	if s == nil || x == nil {
+		return
+	}
+	state, reason := s.CurrentState()
+	paused := s.IsManuallyPaused()
+	icon, statusText, detailText := visuals(state, reason, x.Hashrate())
+
+	if u.status != nil {
+		u.status.Text = statusText
+		u.status.Color = statusColor(state)
+		u.status.Refresh()
+		u.detail.Text = detailText
+		u.detail.Refresh()
+	}
+	if u.toggle != nil {
+		if paused {
+			u.toggle.SetText("Resume")
+		} else {
+			u.toggle.SetText("Pause")
+		}
+	}
+	u.setTrayIcon(icon, paused)
+}
+
+// ---- system tray ----
+
+func (u *uiApp) installTray() {
+	if !u.hasTray {
+		return // no StatusNotifier host — registering an icon would orphan it
+	}
+	desk, ok := u.app.(desktop.App)
+	if !ok {
+		return // not a desktop driver (shouldn't happen on supported platforms)
+	}
+	u.mToggle = fyne.NewMenuItem("Pause", u.onToggle)
+	u.trayMenu = fyne.NewMenu("kind-miner",
+		fyne.NewMenuItem("Open kind-miner", u.showWindow),
+		u.mToggle,
+		fyne.NewMenuItem("Settings", u.onSettings),
+	)
+	desk.SetSystemTrayMenu(u.trayMenu) // Fyne appends a Quit item automatically
+	desk.SetSystemTrayIcon(resMining)
+}
+
+func (u *uiApp) setTrayIcon(icon fyne.Resource, paused bool) {
+	desk, ok := u.app.(desktop.App)
+	if !ok {
+		return
+	}
+	desk.SetSystemTrayIcon(icon)
+	if u.mToggle != nil && paused != u.lastPaused {
+		if paused {
+			u.mToggle.Label = "Resume"
+		} else {
+			u.mToggle.Label = "Pause"
+		}
+		u.lastPaused = paused
+		desk.SetSystemTrayMenu(u.trayMenu) // re-apply to reflect the new label
+	}
+}
+
+// ---- presentation helpers (ported from the old systray Tray) ----
+
+// visuals maps a mining state to its tray icon, headline, and detail line.
+func visuals(state scheduler.State, reason string, hr float64) (icon fyne.Resource, status, detail string) {
+	switch state {
+	case scheduler.StateFull:
+		return resMining, "Mining", formatHashrate(hr)
+	case scheduler.StateReduced:
+		return resThrottle, "Throttled", formatHashrate(hr)
+	case scheduler.StateMinimal:
+		return resThrottle, "Minimal", formatHashrate(hr)
+	case scheduler.StatePaused:
+		if reason != "" {
+			return resPaused, "Paused", reason
+		}
+		return resPaused, "Paused", ""
+	}
+	return resMining, "—", ""
+}
+
+func statusColor(s scheduler.State) color.Color {
+	switch s {
+	case scheduler.StateFull:
+		return colorOK
+	case scheduler.StateReduced, scheduler.StateMinimal:
+		return colorAccent
+	default:
+		return colorMuted
+	}
+}
+
+// formatHashrate formats a H/s value into a human-readable string.
+func formatHashrate(hs float64) string {
+	switch {
+	case hs >= 1_000_000:
+		return fmt.Sprintf("%.2f MH/s", hs/1_000_000)
+	case hs >= 1_000:
+		return fmt.Sprintf("%.2f kH/s", hs/1_000)
+	case hs > 0:
+		return fmt.Sprintf("%.2f H/s", hs)
+	default:
+		return "— H/s"
+	}
+}
+
+// stepBlurb returns the friendly explanation shown under each startup step.
+func stepBlurb(step core.Step) string {
+	switch step {
+	case core.StepInstallXMRig, core.StepStartXMRig:
+		return XMRigBlurb
+	case core.StepInstallP2Pool, core.StepStartP2Pool:
+		return P2PoolBlurb
+	case core.StepStartMonerod, core.StepStartTor, core.StepSelectNode:
+		return NodeBlurb
+	case core.StepReady:
+		return MinerBlurb
+	}
+	return ""
+}

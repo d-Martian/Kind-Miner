@@ -44,10 +44,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # systray uses CGo on Linux; needs the AppIndicator dev headers
+      # The GUI uses cgo: Fyne/GLFW needs the GL/X11/Wayland dev headers, and
+      # the system tray needs the AppIndicator headers.
       - name: Install Linux build deps
         if: matrix.goos == 'linux'
-        run: sudo apt-get install -y libayatana-appindicator3-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev \
+            libayatana-appindicator3-dev
 
       - name: Build
         shell: bash
@@ -58,8 +63,11 @@ jobs:
         run: |
           EXT=""
           [[ "${{ matrix.goos }}" == "windows" ]] && EXT=".exe"
+          # Reproducible build flags — keep in sync with scripts/reproduce.sh
+          # and REPRODUCIBLE.md.
           go build \
-            -ldflags "-X main.version=${GITHUB_REF_NAME} -s -w" \
+            -trimpath -buildvcs=false \
+            -ldflags "-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
             -o "kind-miner${EXT}" \
             ./cmd/kind-miner
 
