@@ -9,7 +9,13 @@ command: kind-miner
 finish-args:
   # Network access for mining traffic and Tor SOCKS at 127.0.0.1:9050
   - --share=network
-  # D-Bus session bus — fyne.io/systray uses godbus for the status notifier
+  # Graphical display for the Fyne window (Wayland preferred, X11 fallback).
+  # --share=ipc is needed for X11 MIT-SHM; --device=dri for OpenGL rendering.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # D-Bus session bus — Fyne's system tray uses godbus for the status notifier
   - --socket=session-bus
   # Config file location (~/.config/kind-miner/)
   - --filesystem=xdg-config/kind-miner:create
@@ -24,7 +30,9 @@ build-options:
   env:
     - GOPATH=/run/build/kind-miner/gopath
     - GOFLAGS=-mod=vendor
-    - CGO_ENABLED=0
+    # The GUI needs cgo (Fyne's GLFW/OpenGL driver). The freedesktop SDK
+    # provides the GL/X11/Wayland headers required to build it.
+    - CGO_ENABLED=1
 
 modules:
   - name: kind-miner
