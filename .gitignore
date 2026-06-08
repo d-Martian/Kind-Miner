@@ -34,8 +34,9 @@ kind-miner-v*
 # Build / reproducibility artifacts
 build/
 
-# Managed Tor data directory (when run from the repo root)
-/tor/
+# Managed Tor: downloaded Expert Bundle + runtime data (repo-root runs)
+bin/tor/
+bin/tor-data/
 
 # Claude Code local settings
 .claude/settings.local.json

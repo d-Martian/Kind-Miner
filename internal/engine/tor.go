@@ -83,7 +83,7 @@ func (t *Tor) Start(timeout time.Duration) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = os.Environ()
+	cmd.Env = torEnv(bin)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -153,22 +153,49 @@ func (t *Tor) readOutput(r io.Reader, readyCh chan<- struct{}) {
 	}
 }
 
-func (t *Tor) resolve() (string, error) {
-	if t.binPath != "" {
-		if _, err := os.Stat(t.binPath); err == nil {
-			return t.binPath, nil
+func (t *Tor) resolve() (string, error) { return FindTor(t.binPath) }
+
+// torEnv returns the child environment for tor, ensuring a bundled tor (the Tor
+// Expert Bundle ships its own libevent/libssl/libcrypto with no $ORIGIN rpath)
+// loads its sibling libraries rather than the host's incompatible ones.
+func torEnv(bin string) []string {
+	env := os.Environ()
+	var key string
+	switch runtime.GOOS {
+	case "darwin":
+		key = "DYLD_LIBRARY_PATH"
+	case "windows":
+		return env // Windows loads DLLs next to the exe automatically
+	default:
+		key = "LD_LIBRARY_PATH"
+	}
+	dir := filepath.Dir(bin)
+	if existing := os.Getenv(key); existing != "" {
+		dir = dir + string(os.PathListSeparator) + existing
+	}
+	return append(env, key+"="+dir)
+}
+
+// FindTor locates a tor binary: an explicit configPath, then a `bin/` directory
+// next to the kind-miner executable, then PATH. It returns an error if none is
+// found (the caller may then download one via autoinstall.EnsureTor).
+func FindTor(configPath string) (string, error) {
+	if configPath != "" {
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath, nil
 		}
-		return "", fmt.Errorf("tor not found at configured path %q", t.binPath)
+		return "", fmt.Errorf("tor not found at configured path %q", configPath)
 	}
 
 	name := "tor"
 	if runtime.GOOS == "windows" {
 		name = "tor.exe"
 	}
-	exe, _ := os.Executable()
-	bundled := filepath.Join(filepath.Dir(exe), "bin", name)
-	if _, err := os.Stat(bundled); err == nil {
-		return bundled, nil
+	if exe, err := os.Executable(); err == nil {
+		bundled := filepath.Join(filepath.Dir(exe), "bin", name)
+		if _, err := os.Stat(bundled); err == nil {
+			return bundled, nil
+		}
 	}
 
 	path, err := exec.LookPath(name)
