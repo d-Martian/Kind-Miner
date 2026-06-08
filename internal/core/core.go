@@ -257,15 +257,26 @@ func (s *Supervisor) ensureTor(emit func(Step)) {
 	}
 	if s.cfg.ManageTor {
 		emit(StepStartTor)
-		dataDir := filepath.Join(filepath.Dir(autoinstall.BinDir()), "tor")
-		t := engine.NewTor(s.cfg.TorBinPath, dataDir, torSOCKSPort)
-		log.Println("No Tor detected — starting a managed Tor process…")
-		if err := t.Start(90 * time.Second); err != nil {
-			log.Printf("managed Tor unavailable (%v); trying the system Tor service…", err)
-		} else {
-			s.tor = t
-			log.Println("Tor ready.")
-			return
+		// Locate a tor binary; download a verified copy if there isn't one.
+		torBin, err := engine.FindTor(s.cfg.TorBinPath)
+		if err != nil {
+			if p, derr := autoinstall.EnsureTor(autoinstall.BinDir()); derr == nil {
+				torBin = p
+			} else {
+				log.Printf("could not obtain tor: %v", derr)
+			}
+		}
+		if torBin != "" {
+			dataDir := filepath.Join(autoinstall.BinDir(), "tor-data")
+			t := engine.NewTor(torBin, dataDir, torSOCKSPort)
+			log.Println("No Tor detected — starting a managed Tor process…")
+			if err := t.Start(90 * time.Second); err != nil {
+				log.Printf("managed Tor unavailable (%v); trying the system Tor service…", err)
+			} else {
+				s.tor = t
+				log.Println("Tor ready.")
+				return
+			}
 		}
 	}
 	if nodes.EnsureTor() {

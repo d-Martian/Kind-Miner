@@ -7,6 +7,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -315,4 +317,128 @@ func p2poolAsset(version string) (string, bool) {
 	default:
 		return base + fmt.Sprintf("p2pool-v%s-linux-x64.tar.gz", version), false
 	}
+}
+
+// ---- Tor Expert Bundle ----
+
+// torVersion pins the Tor Expert Bundle release. The per-platform SHA256 sums
+// below come from the build manifest at:
+//   archive.torproject.org/tor-package-archive/torbrowser/15.0.15/sha256sums-unsigned-build.txt
+// Tor is security-critical, so unlike XMRig/p2pool its download is verified
+// against these pinned hashes.
+const torVersion = "15.0.15"
+
+type torDist struct {
+	file   string
+	sha256 string
+}
+
+func torDistFor() (torDist, bool) {
+	v := torVersion
+	switch {
+	case runtime.GOOS == "linux" && runtime.GOARCH == "amd64":
+		return torDist{"tor-expert-bundle-linux-x86_64-" + v + ".tar.gz", "ffc4528394442c3b33a9ccece3536511a3992c78e704756693bed7a2297ef0e7"}, true
+	case runtime.GOOS == "darwin" && runtime.GOARCH == "arm64":
+		return torDist{"tor-expert-bundle-macos-aarch64-" + v + ".tar.gz", "9afb993d5d505a1cfb62d3119c25cf07674d7e9305a9a87116dcdff36c64e054"}, true
+	case runtime.GOOS == "darwin" && runtime.GOARCH == "amd64":
+		return torDist{"tor-expert-bundle-macos-x86_64-" + v + ".tar.gz", "664ba99389b73bc4264b0ec1dfec247b444e4ce664ea7e19d4b58081bc87cf3c"}, true
+	case runtime.GOOS == "windows" && runtime.GOARCH == "amd64":
+		return torDist{"tor-expert-bundle-windows-x86_64-" + v + ".tar.gz", "8d3daf579192f3f128c0f42553dd994c640501b4b98682216d807c88004f7a96"}, true
+	}
+	return torDist{}, false
+}
+
+// EnsureTor downloads and verifies the Tor Expert Bundle into binDir/tor on
+// first use, returning the path to the tor binary. The download is checked
+// against a pinned SHA256 (see torVersion).
+func EnsureTor(binDir string) (string, error) {
+	torDir := filepath.Join(binDir, "tor")
+	dest := filepath.Join(torDir, binName("tor"))
+	if _, err := os.Stat(dest); err == nil {
+		return dest, nil // already present
+	}
+
+	dist, ok := torDistFor()
+	if !ok {
+		return "", fmt.Errorf("no Tor Expert Bundle for %s/%s — install tor and put it on PATH", runtime.GOOS, runtime.GOARCH)
+	}
+
+	url := "https://archive.torproject.org/tor-package-archive/torbrowser/" + torVersion + "/" + dist.file
+	data, err := downloadWithProgress(fmt.Sprintf("  ↓ %-8s  v%s", "tor", torVersion), url)
+	if err != nil {
+		fmt.Println()
+		return "", fmt.Errorf("downloading tor: %w", err)
+	}
+
+	sum := sha256.Sum256(data)
+	if got := hex.EncodeToString(sum[:]); got != dist.sha256 {
+		fmt.Println()
+		return "", fmt.Errorf("tor download failed verification:\n  got  %s\n  want %s", got, dist.sha256)
+	}
+
+	if err := extractTorBundle(data, torDir); err != nil {
+		fmt.Println()
+		return "", fmt.Errorf("extracting tor: %w", err)
+	}
+
+	printStatus("tor", torVersion, fmtSize(int64(len(data))), true)
+	return dest, nil
+}
+
+// extractTorBundle writes the `tor/` subtree of the Expert Bundle (the binary
+// plus its bundled libraries and pluggable transports) into destDir. The tor
+// binary finds its sibling libraries through an $ORIGIN rpath.
+func extractTorBundle(data []byte, destDir string) error {
+	gr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	defer gr.Close()
+
+	cleanDest := filepath.Clean(destDir)
+	tr := tar.NewReader(gr)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		rel := strings.TrimPrefix(hdr.Name, "tor/")
+		if rel == hdr.Name || rel == "" {
+			continue // keep only the tor/ subtree
+		}
+		target := filepath.Join(destDir, rel)
+		if !strings.HasPrefix(filepath.Clean(target), cleanDest+string(os.PathSeparator)) {
+			continue // guard against path traversal in the archive
+		}
+		if hdr.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		mode := os.FileMode(hdr.Mode).Perm()
+		if mode == 0 {
+			mode = 0o644
+		}
+		f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(f, tr); err != nil {
+			f.Close()
+			return err
+		}
+		f.Close()
+	}
+
+	if err := os.Chmod(filepath.Join(destDir, binName("tor")), 0o755); err != nil {
+		return fmt.Errorf("tor binary missing from bundle: %w", err)
+	}
+	return nil
 }
