@@ -30,6 +30,8 @@ kind-miner-v*
 *.sig
 *.tar.gz
 *.zip
+*.AppImage
+*.AppImage.sha256
 
 # Build / reproducibility artifacts
 build/
