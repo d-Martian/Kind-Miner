@@ -28,7 +28,8 @@ echo "Building kind-miner ${VERSION} for linux/${ARCH}…"
 #   sudo dnf install libXxf86vm-devel libX11-devel mesa-libGL-devel \
 #                    libxkbcommon-devel wayland-devel
 CGO_ENABLED=1 go build \
-    -ldflags "-X main.version=${VERSION} -s -w" \
+    -trimpath -buildvcs=false \
+    -ldflags "-s -w -buildid= -X main.version=${VERSION}" \
     -o "build/kind-miner-linux-${ARCH}" \
     ./cmd/kind-miner
 
@@ -60,6 +61,37 @@ SELF="$(readlink -f "$0")"
 HERE="${SELF%/*}"
 export PATH="${HERE}/usr/bin:${PATH}"
 export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+
+# First-run desktop integration: GNOME (and most desktops without
+# AppImageLauncher) won't launch a raw AppImage on double-click, so install a
+# launcher + icon pointing back at this AppImage the first time it runs. Skipped
+# if already integrated or not running as an AppImage.
+if [ -n "${APPIMAGE}" ]; then
+    data="${XDG_DATA_HOME:-$HOME/.local/share}"
+    desktop="${data}/applications/kind-miner.desktop"
+    if [ ! -e "${desktop}" ]; then
+        mkdir -p "${data}/applications" "${data}/icons/hicolor/512x512/apps"
+        cp "${HERE}/kind-miner.png" "${data}/icons/hicolor/512x512/apps/kind-miner.png" 2>/dev/null || true
+        cat > "${desktop}" <<DESK
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=kind-miner
+GenericName=Monero Miner
+Comment=Idle Monero CPU mining for always-on machines
+Exec=${APPIMAGE}
+Icon=kind-miner
+Categories=Network;
+Keywords=monero;mining;cryptocurrency;xmr;p2pool;
+Terminal=false
+StartupNotify=false
+DESK
+        chmod +x "${desktop}" 2>/dev/null || true
+        command -v update-desktop-database >/dev/null 2>&1 && \
+            update-desktop-database "${data}/applications" >/dev/null 2>&1 || true
+    fi
+fi
+
 exec "${HERE}/usr/bin/kind-miner" "$@"
 APPRUN
 chmod +x "${APPDIR}/AppRun"
