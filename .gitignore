@@ -36,6 +36,9 @@ kind-miner-v*
 # Build / reproducibility artifacts
 build/
 
+# Vendored Go modules (regenerate with `go mod vendor` for Flatpak builds)
+vendor/
+
 # Managed Tor: downloaded Expert Bundle + runtime data (repo-root runs)
 bin/tor/
 bin/tor-data/

@@ -1,6 +1,6 @@
 app-id: org.codeberg.dMartian.KindMiner
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.golang
@@ -42,7 +42,8 @@ modules:
       - |
         . /usr/lib/sdk/golang/enable.sh
         go build \
-          -ldflags "-X main.version=${FLATPAK_BRANCH:-dev} -s -w" \
+          -trimpath -buildvcs=false \
+          -ldflags "-s -w -buildid= -X main.version=${FLATPAK_BRANCH:-dev}" \
           -o /app/bin/kind-miner \
           ./cmd/kind-miner
       # Desktop integration
@@ -55,13 +56,18 @@ modules:
       - install -Dm644 assets/icons/app.png
           /app/share/icons/hicolor/256x256/apps/org.codeberg.dMartian.KindMiner.png
     sources:
-      - type: git
-        url: https://codeberg.org/dMartian/kind-miner.git
-        tag: v0.1.0
-      # Go modules — generate with:
-      #   go mod vendor
-      # Then replace the git source above with:
-      #   - type: dir
-      #     path: ..
-      # For Flathub submission use flatpak-go-vendor-generator to produce
-      # individual module sources from go.sum.
+      # Build from the current working tree. Go dependencies are vendored
+      # (run `go mod vendor`) so the build needs no network — GOFLAGS above
+      # selects -mod=vendor. skip keeps runtime data and build artifacts out of
+      # the sandbox copy. For a Flathub submission, swap this for a tagged git
+      # source plus generated module sources (flatpak-go-vendor-generator).
+      - type: dir
+        path: ..
+        skip:
+          - .git
+          - .claude
+          - build
+          - dist
+          - bin
+          - p2pool.cache
+          - p2pool.log
