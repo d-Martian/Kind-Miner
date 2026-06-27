@@ -38,7 +38,9 @@ rm -rf "${APPDIR}"
 mkdir -p "${APPDIR}/usr/bin"
 
 cp "build/kind-miner-linux-${ARCH}" "${APPDIR}/usr/bin/kind-miner"
-cp assets/icons/app.png "${APPDIR}/kind-miner.png"
+# Top-level AppImage icon. app-512.png is correctly sized for the 512x512
+# hicolor slot the AppRun installs into on first run (app.png is 1024x1024).
+cp assets/icons/app-512.png "${APPDIR}/kind-miner.png"
 cp kind-miner.desktop "${APPDIR}/kind-miner.desktop"
 
 # Bundle the GUI's shared-library dependencies (X11/Wayland/xkbcommon, …) so the

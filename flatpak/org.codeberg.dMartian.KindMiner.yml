@@ -51,9 +51,9 @@ modules:
           /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
       - sed -i 's/^Icon=.*/Icon=org.codeberg.dMartian.KindMiner/'
           /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
-      - install -Dm644 assets/icons/app.png
+      - install -Dm644 assets/icons/app-512.png
           /app/share/icons/hicolor/512x512/apps/org.codeberg.dMartian.KindMiner.png
-      - install -Dm644 assets/icons/app.png
+      - install -Dm644 assets/icons/app-256.png
           /app/share/icons/hicolor/256x256/apps/org.codeberg.dMartian.KindMiner.png
     sources:
       # Build from the current working tree. Go dependencies are vendored
