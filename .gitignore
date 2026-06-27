@@ -32,9 +32,16 @@ kind-miner-v*
 *.zip
 *.AppImage
 *.AppImage.sha256
+*.flatpak
+*.flatpak.sha256
 
 # Build / reproducibility artifacts
 build/
+
+# Flatpak local build artifacts (flatpak-builder state + CI command outputs)
+.flatpak-builder/
+build-dir/
+/repo/
 
 # Vendored Go modules (regenerate with `go mod vendor` for Flatpak builds)
 vendor/
