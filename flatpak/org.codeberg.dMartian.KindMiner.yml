@@ -55,6 +55,10 @@ modules:
           /app/share/icons/hicolor/512x512/apps/org.codeberg.dMartian.KindMiner.png
       - install -Dm644 assets/icons/app-256.png
           /app/share/icons/hicolor/256x256/apps/org.codeberg.dMartian.KindMiner.png
+      # AppStream metadata (required for Flathub; silences the build's
+      # "No appstream data" warning and feeds software-center listings)
+      - install -Dm644 org.codeberg.dMartian.KindMiner.metainfo.xml
+          /app/share/metainfo/org.codeberg.dMartian.KindMiner.metainfo.xml
     sources:
       # Build from the current working tree. Go dependencies are vendored
       # (run `go mod vendor`) so the build needs no network — GOFLAGS above
