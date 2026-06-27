@@ -42,9 +42,10 @@
 
   <!--
     Screenshots are fetched at Flathub build time, so these raw URLs must
-    resolve on the default branch. Regenerate the images with:
-      KM_SHOT_DIR=assets/screenshots go test -mod=mod ./internal/gui \
-        -run TestCaptureScreenshots
+    resolve on the default branch. Regenerate the images from the repo root
+    (absolute path — go test runs in the package directory):
+      KM_SHOT_DIR="$PWD/assets/screenshots" go test -mod=mod \
+        ./internal/gui -run TestCaptureScreenshots
   -->
   <screenshots>
     <screenshot type="default">
