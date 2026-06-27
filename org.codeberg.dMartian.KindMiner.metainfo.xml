@@ -40,6 +40,23 @@
     <name>dMartian</name>
   </developer>
 
+  <!--
+    Screenshots are fetched at Flathub build time, so these raw URLs must
+    resolve on the default branch. Regenerate the images with:
+      KM_SHOT_DIR=assets/screenshots go test -mod=mod ./internal/gui \
+        -run TestCaptureScreenshots
+  -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://codeberg.org/dMartian/kind-miner/raw/branch/main/assets/screenshots/onboarding-welcome.png</image>
+      <caption>Idle Monero mining that pays straight to your wallet</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://codeberg.org/dMartian/kind-miner/raw/branch/main/assets/screenshots/onboarding-wallet.png</image>
+      <caption>One-step setup: paste your Monero wallet address</caption>
+    </screenshot>
+  </screenshots>
+
   <!-- No adult/violent/gambling content. Mining is not gambling. -->
   <content_rating type="oars-1.1" />
 
