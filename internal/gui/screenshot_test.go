@@ -16,9 +16,10 @@ import (
 // stays out of normal `go test` runs. Software-rendered via Fyne's test driver,
 // so it needs no display and has no side effects (no supervisor, no network).
 //
-// Regenerate with (FYNE_SCALE bumps the pixel density for crisper output):
+// Regenerate from the repo root — the path must be absolute because `go test`
+// runs in the package directory, not where you invoked it:
 //
-//	KM_SHOT_DIR=assets/screenshots FYNE_SCALE=2 \
+//	KM_SHOT_DIR="$PWD/assets/screenshots" \
 //	    go test -mod=mod ./internal/gui -run TestCaptureScreenshots
 func TestCaptureScreenshots(t *testing.T) {
 	dir := os.Getenv("KM_SHOT_DIR")
