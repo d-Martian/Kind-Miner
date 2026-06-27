@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -142,7 +143,9 @@ func parseURL(raw string) *url.URL {
 	return u
 }
 
-// layoutSpacer returns a flexible spacer for centering content.
+// layoutSpacer returns a flexible spacer that absorbs extra space in a box
+// container — used to centre (HBox/VBox spacers on both sides) or right-align
+// (a single leading spacer) content. An empty widget.Label would not expand.
 func layoutSpacer() fyne.CanvasObject {
-	return widget.NewLabel("")
+	return layout.NewSpacer()
 }
