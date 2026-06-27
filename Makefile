@@ -17,7 +17,8 @@ DIST := dist
 
 .PHONY: all deps build build-all reproduce verify-repro test clean \
         download-xmrig download-p2pool \
-        bundle-linux bundle-darwin bundle-windows appimage vendor
+        bundle-linux bundle-darwin bundle-windows appimage vendor \
+        vendor-tarball
 
 all: deps build
 
@@ -90,6 +91,11 @@ appimage:
 
 vendor:
 	go mod vendor
+
+# Reproducible vendored source tarball for the Flathub manifest
+# (flatpak/flathub/). Upload the output as a release asset and pin its sha256.
+vendor-tarball:
+	bash scripts/vendor-tarball.sh $(VERSION)
 
 clean:
 	rm -rf $(DIST) $(BINARY) build/ AppDir/

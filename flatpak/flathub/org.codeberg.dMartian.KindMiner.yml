@@ -1,3 +1,15 @@
+# Flathub submission manifest.
+#
+# Differs from ../org.codeberg.dMartian.KindMiner.yml (the dev/CI manifest,
+# which builds the local working tree) only in its source: Flathub builds run
+# offline and from a fixed, hashed artifact, so this consumes the reproducible
+# vendored source tarball produced by scripts/vendor-tarball.sh. The Go modules
+# travel inside that tarball's vendor/ tree and are selected with -mod=vendor —
+# no network, no committed vendor tree, no third-party source generator.
+#
+# Per release: run `make vendor-tarball`, upload dist/*-vendored-src.tar.gz as a
+# release asset, then set `url` + `sha256` below. The tarball is deterministic,
+# so the sha256 is stable for a given tag.
 app-id: org.codeberg.dMartian.KindMiner
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
@@ -29,6 +41,7 @@ finish-args:
 build-options:
   env:
     - GOPATH=/run/build/kind-miner/gopath
+    # Modules come from the bundled vendor/ tree; the build needs no network.
     - GOFLAGS=-mod=vendor
     # The GUI needs cgo (Fyne's GLFW/OpenGL driver). The freedesktop SDK
     # provides the GL/X11/Wayland headers required to build it.
@@ -55,23 +68,13 @@ modules:
           /app/share/icons/hicolor/512x512/apps/org.codeberg.dMartian.KindMiner.png
       - install -Dm644 assets/icons/app-256.png
           /app/share/icons/hicolor/256x256/apps/org.codeberg.dMartian.KindMiner.png
-      # AppStream metadata (required for Flathub; silences the build's
-      # "No appstream data" warning and feeds software-center listings)
+      # AppStream metadata
       - install -Dm644 org.codeberg.dMartian.KindMiner.metainfo.xml
           /app/share/metainfo/org.codeberg.dMartian.KindMiner.metainfo.xml
     sources:
-      # Build from the current working tree. Go dependencies are vendored
-      # (run `go mod vendor`) so the build needs no network — GOFLAGS above
-      # selects -mod=vendor. skip keeps runtime data and build artifacts out of
-      # the sandbox copy. For a Flathub submission use flathub/<this app-id>.yml,
-      # which builds the reproducible vendored source tarball instead.
-      - type: dir
-        path: ..
-        skip:
-          - .git
-          - .claude
-          - build
-          - dist
-          - bin
-          - p2pool.cache
-          - p2pool.log
+      # Reproducible vendored source tarball (see header). strip-components
+      # defaults to 1, removing the kind-miner-<version>/ prefix so paths above
+      # resolve at the build root. Replace url + sha256 at release time.
+      - type: archive
+        url: https://codeberg.org/dMartian/kind-miner/releases/download/vX.Y.Z/kind-miner-vX.Y.Z-vendored-src.tar.gz
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
