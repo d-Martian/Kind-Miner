@@ -1,0 +1,25 @@
+# Adapt this template before copying it to .forgejo/workflows/pages.yml.
+# Required Codeberg setup: enable repository Actions and configure Codeberg Pages.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: docker
+    container:
+      image: node:22-alpine
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+      - uses: https://codeberg.org/git-pages/action@v2
+        if: ${{ forge.ref == 'refs/heads/main' }}
+        with:
+          site: 'https://${{ forge.repository_owner }}.codeberg.page/repository-name/'
+          token: ${{ forge.token }}
+          source: public/
+

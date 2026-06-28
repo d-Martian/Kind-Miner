@@ -15,6 +15,14 @@ GO_BUILD_FLAGS := -trimpath -buildvcs=false -ldflags "$(GO_LDFLAGS)"
 
 DIST := dist
 
+# Deterministic archive flags (GNU tar): sorted member names, fixed mtime, uid/
+# gid 0, and no volatile pax atime/ctime headers. Always pipe the result through
+# `gzip -n` so the gzip header carries no filename/mtime. Without these, the tar
+# stream embeds the build-time mtimes and the archive is not reproducible even
+# when the files inside it are. See REPRODUCIBLE.md / reproducible-builds.org.
+TAR_REPRO := --sort=name --mtime=@$(SOURCE_DATE_EPOCH) --owner=0 --group=0 --numeric-owner \
+             --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime
+
 .PHONY: all deps build build-all reproduce verify-repro test clean \
         download-xmrig download-p2pool \
         bundle-linux bundle-darwin bundle-windows appimage flatpak vendor \
@@ -72,19 +80,23 @@ bundle-linux: $(DIST)/linux-amd64/$(BINARY)
 	cp -n $(DIST)/linux-amd64/bin/xmrig $(DIST)/linux-amd64/bin/ 2>/dev/null || true
 	cp -n $(DIST)/linux-amd64/bin/p2pool $(DIST)/linux-amd64/bin/ 2>/dev/null || true
 	cp config.example.yaml $(DIST)/linux-amd64/
-	tar -czf $(DIST)/kind-miner-$(VERSION)-linux-amd64.tar.gz -C $(DIST)/linux-amd64 .
+	tar $(TAR_REPRO) -cf - -C $(DIST)/linux-amd64 . | gzip -9 -n > $(DIST)/kind-miner-$(VERSION)-linux-amd64.tar.gz
 
 bundle-darwin:
 	for arch in amd64 arm64; do \
 	  mkdir -p $(DIST)/darwin-$$arch/bin; \
 	  cp config.example.yaml $(DIST)/darwin-$$arch/; \
-	  tar -czf $(DIST)/kind-miner-$(VERSION)-darwin-$$arch.tar.gz -C $(DIST)/darwin-$$arch .; \
+	  tar $(TAR_REPRO) -cf - -C $(DIST)/darwin-$$arch . | gzip -9 -n > $(DIST)/kind-miner-$(VERSION)-darwin-$$arch.tar.gz; \
 	done
 
 bundle-windows: $(DIST)/windows-amd64/$(BINARY).exe
 	mkdir -p $(DIST)/windows-amd64/bin
 	cp config.example.yaml $(DIST)/windows-amd64/
-	cd $(DIST) && zip -r kind-miner-$(VERSION)-windows-amd64.zip windows-amd64/
+	# Deterministic zip: pin every member mtime, feed a sorted file list, and
+	# drop extra attributes (-X) and directory entries (-D) so the archive is
+	# byte-identical across builds.
+	cd $(DIST) && find windows-amd64 -type f -exec touch -d @$(SOURCE_DATE_EPOCH) {} + && \
+	  find windows-amd64 -type f | LC_ALL=C sort | zip -X -D -q kind-miner-$(VERSION)-windows-amd64.zip -@
 
 appimage:
 	bash scripts/build-appimage.sh $(VERSION)
