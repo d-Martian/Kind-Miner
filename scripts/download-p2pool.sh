@@ -14,12 +14,14 @@ declare -A URLS=(
   ["windows-amd64"]="${GITHUB}/p2pool-v${P2POOL_VERSION}-windows-x64.zip"
 )
 
+# SHA256 checksums for v4.15.1 — update when bumping P2POOL_VERSION.
+# Kept in sync with internal/autoinstall/deps.json (the runtime pin manifest).
 declare -A SUMS=(
-  ["linux-amd64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["linux-arm64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["darwin-amd64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["darwin-arm64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["windows-amd64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
+  ["linux-amd64"]="efd8b23579774711a5b86743da980e0936b7c220894063296719116d7f9ba254"
+  ["linux-arm64"]="90b2481c04d42487178f5169b3dfe7dc46287f3b0fb2c6cf8b5672a682ad855e"
+  ["darwin-amd64"]="0e113c9beff21001ded4a15a3ae2f5ce8a151d18457476923026b322113bc1de"
+  ["darwin-arm64"]="391c55474c3f08994340df2824a0b452dac8e0d18ee43cf3b361ce80f00dcd5b"
+  ["windows-amd64"]="97b4ba97e65d766ecf223694168b5739e65156390707fbf50f9979054cba52d3"
 )
 
 download_and_extract() {

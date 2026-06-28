@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,34 +49,69 @@ func xdgDataBin() string {
 	return filepath.Join(dataHome, "kind-miner", "bin")
 }
 
-// EnsureXMRig ensures the xmrig binary is present in binDir.
+// EnsureXMRig ensures the xmrig binary is present in binDir, downloading the
+// pinned release and verifying it against the SHA256 in deps.json.
 func EnsureXMRig(binDir string) (string, error) {
-	return ensure(binDir, dep{
-		name:    "xmrig",
-		repo:    "xmrig/xmrig",
-		asset:   xmrigAsset,
-		extract: extractFirstMatch,
-	})
+	return ensurePinned(binDir, "xmrig", deps.XMRig)
 }
 
-// EnsureP2Pool ensures the p2pool binary is present in binDir.
+// EnsureP2Pool ensures the p2pool binary is present in binDir, downloading the
+// pinned release and verifying it against the SHA256 in deps.json.
 func EnsureP2Pool(binDir string) (string, error) {
-	return ensure(binDir, dep{
-		name:    "p2pool",
-		repo:    "SChernykh/p2pool",
-		asset:   p2poolAsset,
-		extract: extractFirstMatch,
-	})
+	return ensurePinned(binDir, "p2pool", deps.P2Pool)
+}
+
+// ---- pinned dependency manifest (deps.json) ----
+
+// XMRig and p2pool are downloaded at runtime (the Flatpak/AppImage ship no
+// bundled copy), so — like the Tor Expert Bundle — their archives are pinned to
+// a specific version and verified against a known SHA256. deps.json is the
+// single source of truth for those pins, shared with the release packaging
+// scripts and maintained by the monero-miner-dependency-updater skill.
+
+//go:embed deps.json
+var depsJSON []byte
+
+type depAsset struct {
+	File   string `json:"file"`
+	SHA256 string `json:"sha256"`
+}
+
+type depSpec struct {
+	Repo        string              `json:"repo"`
+	Version     string              `json:"version"`
+	URLTemplate string              `json:"url_template"`
+	Assets      map[string]depAsset `json:"assets"`
+}
+
+type depManifest struct {
+	XMRig  depSpec `json:"xmrig"`
+	P2Pool depSpec `json:"p2pool"`
+}
+
+// deps is parsed once at init so a malformed deps.json fails fast and loudly at
+// startup rather than at first download.
+var deps = mustParseDeps()
+
+func mustParseDeps() depManifest {
+	var m depManifest
+	if err := json.Unmarshal(depsJSON, &m); err != nil {
+		panic("autoinstall: invalid deps.json: " + err.Error())
+	}
+	return m
+}
+
+func platformKey() string {
+	return runtime.GOOS + "-" + runtime.GOARCH
+}
+
+// assetURL renders a dependency's download URL from its url_template, filling
+// the {version} and {file} placeholders.
+func assetURL(spec depSpec, asset depAsset) string {
+	return strings.NewReplacer("{version}", spec.Version, "{file}", asset.File).Replace(spec.URLTemplate)
 }
 
 // ---- internals ----
-
-type dep struct {
-	name    string
-	repo    string
-	asset   func(version string) (url string, isZip bool)
-	extract func(data []byte, name string, isZip bool) ([]byte, error)
-}
 
 func binName(name string) string {
 	if runtime.GOOS == "windows" {
@@ -83,34 +120,38 @@ func binName(name string) string {
 	return name
 }
 
-func ensure(binDir string, d dep) (string, error) {
-	dest := filepath.Join(binDir, binName(d.name))
+// ensurePinned downloads, verifies, and extracts a pinned dependency binary
+// into binDir if it is not already present. The archive is checked against the
+// SHA256 pinned in deps.json before extraction — the same tamper-evident,
+// reproducible pattern used for the Tor Expert Bundle.
+func ensurePinned(binDir, name string, spec depSpec) (string, error) {
+	dest := filepath.Join(binDir, binName(name))
 	if _, err := os.Stat(dest); err == nil {
 		return dest, nil // already present — silent
 	}
 
-	// Print initial status on a single line; subsequent updates overwrite it.
-	printStatus(d.name, "", "  checking…", false)
-
-	version, err := latestRelease(d.repo)
-	if err != nil {
-		fmt.Println()
-		return "", fmt.Errorf("could not check latest %s release: %w\nInstall %s manually and place it in %s", d.name, err, d.name, binDir)
+	key := platformKey()
+	asset, ok := spec.Assets[key]
+	if !ok {
+		return "", fmt.Errorf("no pinned %s build for %s — install %s manually and place it in %s", name, key, name, binDir)
 	}
 
-	url, isZip := d.asset(version)
-	label := fmt.Sprintf("  ↓ %-8s  v%s", d.name, version)
+	// Print initial status on a single line; subsequent updates overwrite it.
+	printStatus(name, "", "  checking…", false)
+
+	url := assetURL(spec, asset)
+	label := fmt.Sprintf("  ↓ %-8s  v%s", name, spec.Version)
 
 	data, err := downloadWithProgress(label, url)
 	if err != nil {
 		fmt.Println()
-		return "", fmt.Errorf("downloading %s: %w\nInstall %s manually and place the binary in %s", d.name, err, d.name, binDir)
+		return "", fmt.Errorf("downloading %s: %w\nInstall %s manually and place the binary in %s", name, err, name, binDir)
 	}
 
-	binary, err := d.extract(data, binName(d.name), isZip)
+	binary, err := verifyAndExtract(data, binName(name), asset.SHA256, strings.HasSuffix(asset.File, ".zip"))
 	if err != nil {
 		fmt.Println()
-		return "", fmt.Errorf("extracting %s: %w", d.name, err)
+		return "", fmt.Errorf("%s: %w", name, err)
 	}
 
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
@@ -119,11 +160,22 @@ func ensure(binDir string, d dep) (string, error) {
 	}
 	if err := os.WriteFile(dest, binary, 0o755); err != nil {
 		fmt.Println()
-		return "", fmt.Errorf("saving %s: %w", d.name, err)
+		return "", fmt.Errorf("saving %s: %w", name, err)
 	}
 
-	printStatus(d.name, version, fmtSize(int64(len(binary))), true)
+	printStatus(name, spec.Version, fmtSize(int64(len(binary))), true)
 	return dest, nil
+}
+
+// verifyAndExtract checks data against wantSHA (a hex-encoded SHA256) and, on a
+// match, returns the named binary extracted from the archive. A mismatch is a
+// hard error — the download is never trusted on the strength of its URL alone.
+func verifyAndExtract(data []byte, name, wantSHA string, isZip bool) ([]byte, error) {
+	sum := sha256.Sum256(data)
+	if got := hex.EncodeToString(sum[:]); got != wantSHA {
+		return nil, fmt.Errorf("download failed verification:\n  got  %s\n  want %s", got, wantSHA)
+	}
+	return extractFirstMatch(data, name, isZip)
 }
 
 // printStatus overwrites the current terminal line with a status entry.
@@ -214,28 +266,6 @@ func fmtSize(b int64) string {
 	}
 }
 
-// latestRelease follows the GitHub /releases/latest redirect and returns the
-// version tag without the leading "v" (e.g. "6.21.3").
-func latestRelease(repo string) (string, error) {
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	resp, err := client.Get("https://github.com/" + repo + "/releases/latest")
-	if err != nil {
-		return "", err
-	}
-	resp.Body.Close()
-	loc := resp.Header.Get("Location")
-	if loc == "" {
-		return "", fmt.Errorf("no redirect from GitHub releases/latest")
-	}
-	parts := strings.Split(loc, "/")
-	return strings.TrimPrefix(parts[len(parts)-1], "v"), nil
-}
-
 // extractFirstMatch finds the first file whose base name matches `name`
 // inside a tar.gz or zip archive.
 func extractFirstMatch(data []byte, name string, isZip bool) ([]byte, error) {
@@ -283,40 +313,6 @@ func extractZip(data []byte, name string) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("%s not found in zip archive", name)
-}
-
-// ---- asset URL builders ----
-
-func xmrigAsset(version string) (string, bool) {
-	base := fmt.Sprintf("https://github.com/xmrig/xmrig/releases/download/v%s/", version)
-	switch {
-	case runtime.GOOS == "windows":
-		return base + fmt.Sprintf("xmrig-%s-msvc-win64.zip", version), true
-	case runtime.GOOS == "darwin" && runtime.GOARCH == "arm64":
-		return base + fmt.Sprintf("xmrig-%s-macos-arm64.tar.gz", version), false
-	case runtime.GOOS == "darwin":
-		return base + fmt.Sprintf("xmrig-%s-macos-x64.tar.gz", version), false
-	case runtime.GOARCH == "arm64":
-		return base + fmt.Sprintf("xmrig-%s-linux-static-aarch64.tar.gz", version), false
-	default:
-		return base + fmt.Sprintf("xmrig-%s-linux-static-x64.tar.gz", version), false
-	}
-}
-
-func p2poolAsset(version string) (string, bool) {
-	base := fmt.Sprintf("https://github.com/SChernykh/p2pool/releases/download/v%s/", version)
-	switch {
-	case runtime.GOOS == "windows":
-		return base + fmt.Sprintf("p2pool-v%s-windows-x64.zip", version), true
-	case runtime.GOOS == "darwin" && runtime.GOARCH == "arm64":
-		return base + fmt.Sprintf("p2pool-v%s-macos-aarch64.tar.gz", version), false
-	case runtime.GOOS == "darwin":
-		return base + fmt.Sprintf("p2pool-v%s-macos-x64.tar.gz", version), false
-	case runtime.GOARCH == "arm64":
-		return base + fmt.Sprintf("p2pool-v%s-linux-aarch64.tar.gz", version), false
-	default:
-		return base + fmt.Sprintf("p2pool-v%s-linux-x64.tar.gz", version), false
-	}
 }
 
 // ---- Tor Expert Bundle ----
