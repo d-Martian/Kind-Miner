@@ -17,7 +17,7 @@ DIST := dist
 
 .PHONY: all deps build build-all reproduce verify-repro test clean \
         download-xmrig download-p2pool \
-        bundle-linux bundle-darwin bundle-windows appimage vendor \
+        bundle-linux bundle-darwin bundle-windows appimage flatpak vendor \
         vendor-tarball
 
 all: deps build
@@ -88,6 +88,11 @@ bundle-windows: $(DIST)/windows-amd64/$(BINARY).exe
 
 appimage:
 	bash scripts/build-appimage.sh $(VERSION)
+
+# Single-file Flatpak bundle from the working tree (dist/*.flatpak). Shareable;
+# install with `flatpak install --user dist/kind-miner-*.flatpak`.
+flatpak:
+	bash scripts/build-flatpak.sh $(VERSION)
 
 vendor:
 	go mod vendor

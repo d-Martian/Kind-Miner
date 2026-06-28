@@ -37,6 +37,10 @@ kind-miner-v*
 
 # Build / reproducibility artifacts
 build/
+# Transient version stamp written by scripts/build-flatpak.sh
+/VERSION
+# Dependency-update report written by the monero-miner-dependency-updater skill
+dependency-update-report/
 
 # Flatpak local build artifacts (flatpak-builder state + CI command outputs)
 .flatpak-builder/
@@ -52,3 +56,7 @@ bin/tor-data/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Python bytecode caches (skill helper scripts)
+__pycache__/
+*.pyc
