@@ -1,0 +1,40 @@
+# Codeberg Woodpecker CI — reproducibility check on push / PR.
+#
+# Builds the kind-miner binary twice and fails if the two SHA256 differ. Build B
+# runs from a DIFFERENT filesystem path; scripts/reproduce.sh already fixes the
+# locale/timezone/toolchain internally, so this isolates the one input that path
+# variation exposes: -trimpath erasing the build directory (including any path
+# leaked through cgo debug info). A pass means the binary is reproducible across
+# build locations on this image; a failure points at the cgo path-leakage caveat
+# documented in REPRODUCIBLE.md (fix: a digest-pinned build container).
+#
+# Gated to push/PR/manual — never tags — so it can never block a release.
+# GOTOOLCHAIN=local uses the image's stock Go (offline, fast), mirroring
+# `make verify-repro`. The image tag should be pinned by @sha256 for a hard
+# cross-host claim.
+
+when:
+  - event: [push, pull_request, manual]
+
+steps:
+  - name: verify-reproducible
+    image: golang:1.25-bookworm
+    commands:
+      # Same cgo GUI deps as the release build (Fyne/GLFW + AppIndicator).
+      - apt-get update
+      - apt-get install -y --no-install-recommends
+          libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev
+          libayatana-appindicator3-dev git ca-certificates
+      - export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+      - VER="$(git describe --tags --always)"
+      # Build A — in the checkout.
+      - GOTOOLCHAIN=local bash scripts/reproduce.sh "$VER" /tmp/app-a
+      # Build B — same source, different path.
+      - cp -r . /tmp/src-b
+      - cd /tmp/src-b && GOTOOLCHAIN=local bash scripts/reproduce.sh "$VER" /tmp/app-b
+      - a="$(sha256sum /tmp/app-a | cut -d' ' -f1)"
+      - b="$(sha256sum /tmp/app-b | cut -d' ' -f1)"
+      - echo "build A $a"
+      - echo "build B $b"
+      - 'test "$a" = "$b" || { echo "NOT reproducible across build paths — see REPRODUCIBLE.md cgo caveat"; exit 1; }'
+      - echo "reproducible across build-path variation"

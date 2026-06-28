@@ -1,0 +1,21 @@
+# Adapt before copying to .woodpecker/release-check.yml.
+# This checks release readiness on tag pushes. Prefer local GPG signing unless
+# the maintainer explicitly accepts CI private-key handling.
+
+steps:
+  - name: test
+    image: golang:1.25
+    commands:
+      - go test ./...
+    when:
+      - event: [push, pull_request]
+
+  - name: release-repro-check
+    image: golang:1.25
+    commands:
+      - test -n "$CI_COMMIT_TAG"
+      - make verify-repro
+    when:
+      - event: tag
+        ref: refs/tags/v*
+

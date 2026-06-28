@@ -1,0 +1,28 @@
+# Adapt this template before copying it to .woodpecker/pages.yml.
+# For Codeberg Pages, many projects prefer Forgejo Actions plus git-pages/action.
+# Use Woodpecker for static site builds when deployment is handled by another service or webhook.
+
+steps:
+  - name: build-pages
+    image: node:22-alpine
+    commands:
+      - npm ci
+      - npm run build
+      - test -d public
+    when:
+      - event: push
+        branch: main
+
+  - name: notify-deploy-hook
+    image: alpine:3.20
+    environment:
+      DEPLOY_WEBHOOK:
+        from_secret: deploy_webhook
+    commands:
+      - apk add --no-cache curl
+      - test -n "$DEPLOY_WEBHOOK"
+      - curl --fail --silent --show-error --request POST "$DEPLOY_WEBHOOK"
+    when:
+      - event: push
+        branch: main
+
