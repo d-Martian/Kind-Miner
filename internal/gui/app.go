@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/kind-miner/kind-miner/internal/config"
@@ -44,6 +45,10 @@ type uiApp struct {
 	app fyne.App
 	win fyne.Window
 	sup *core.Supervisor
+
+	// settingsWin holds the open settings window so repeat invocations focus the
+	// existing one instead of spawning duplicates. nil when no window is open.
+	settingsWin fyne.Window
 
 	// hasTray records whether a system-tray / menu-bar host exists. It drives
 	// close-to-tray vs close-to-quit, and whether a tray icon is registered.
@@ -103,7 +108,7 @@ func newUIApp(sup *core.Supervisor) *uiApp {
 	currentApp = a
 
 	w := a.NewWindow("kind-miner")
-	w.Resize(fyne.NewSize(440, 320))
+	w.Resize(fyne.NewSize(360, 320))
 	w.CenterOnScreen()
 
 	u := &uiApp{app: a, win: w, sup: sup, refreshStop: make(chan struct{}), hasTray: systemTrayAvailable()}
@@ -172,8 +177,19 @@ func (u *uiApp) progressScreen(step core.Step) fyne.CanvasObject {
 	line := canvas.NewText(step.String()+"…", colorAccent)
 	line.TextSize = 15
 
-	blurb := canvas.NewText(stepBlurb(step), colorMuted)
-	blurb.TextSize = 12
+	// The step blurbs are full paragraphs, so they must wrap: a non-wrapping
+	// canvas.Text would size this screen to the blurb's single-line width
+	// (~1600px) and Fyne never shrinks the window back, leaving every later
+	// screen stretched. RichText wraps within the window while keeping the
+	// muted styling (ColorNamePlaceHolder maps to colorMuted in kindTheme).
+	blurb := widget.NewRichText(&widget.TextSegment{
+		Text: stepBlurb(step),
+		Style: widget.RichTextStyle{
+			ColorName: theme.ColorNamePlaceHolder,
+			SizeName:  theme.SizeNameCaptionText,
+		},
+	})
+	blurb.Wrapping = fyne.TextWrapWord
 
 	bar := widget.NewProgressBarInfinite()
 
