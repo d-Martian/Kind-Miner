@@ -1,0 +1,13 @@
+# Adapt before copying to .woodpecker/dependency-watch.yml.
+# In Codeberg Woodpecker, create a cron job named miner_dependency_watch.
+
+steps:
+  - name: check-miner-dependencies
+    image: python:3.13-alpine
+    commands:
+      - python3 .claude/skills/monero-miner-dependency-updater/scripts/check_upstream_releases.py --report-dir dependency-update-report --fail-on-update
+    when:
+      - event: cron
+        cron: miner_dependency_watch
+      - event: manual
+

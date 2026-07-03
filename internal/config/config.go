@@ -62,6 +62,11 @@ type Config struct {
 	// xmrig
 	XMRigBinPath string `yaml:"xmrig_path"`
 
+	// tor — kind-miner runs its own Tor process when none is reachable, so
+	// users don't need to install or start the Tor service themselves.
+	ManageTor  bool   `yaml:"manage_tor"`
+	TorBinPath string `yaml:"tor_path"`
+
 	// throttle
 	MaxThreads          int         `yaml:"max_threads"`
 	ThrottleSensitivity Sensitivity `yaml:"throttle_sensitivity"`
@@ -76,6 +81,7 @@ func Defaults() *Config {
 		Mode:                ModeP2PoolRemote,
 		P2PoolChain:         "mini",
 		ManageP2Pool:        true,
+		ManageTor:           true,
 		ThrottleSensitivity: SensitivityMedium,
 		PauseOnBattery:      true,
 		TempLimitCelsius:    95,
@@ -83,7 +89,17 @@ func Defaults() *Config {
 	}
 }
 
+// pathOverride, when set via SetPath, replaces the default config location.
+var pathOverride string
+
+// SetPath overrides the config file path (used by the --config flag). Pass an
+// empty string to restore the default location.
+func SetPath(p string) { pathOverride = p }
+
 func Dir() string {
+	if pathOverride != "" {
+		return filepath.Dir(pathOverride)
+	}
 	if runtime.GOOS == "windows" {
 		dir, _ := os.UserConfigDir()
 		return filepath.Join(dir, "kind-miner")
@@ -93,6 +109,9 @@ func Dir() string {
 }
 
 func Path() string {
+	if pathOverride != "" {
+		return pathOverride
+	}
 	return filepath.Join(Dir(), "config.yaml")
 }
 

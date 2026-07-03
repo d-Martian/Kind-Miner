@@ -1,0 +1,63 @@
+# Reproducible builds
+
+<PROJECT> aims for [reproducible builds](https://reproducible-builds.org): anyone
+should be able to rebuild a published binary from source and get **the same bytes**.
+
+<!-- One or two sentences on WHY this matters for THIS project. The stronger the
+trust requirement (wallets, networking, security tools), the more this matters.
+Signed checksums prove *we* built a file; reproducibility lets *you* prove that
+file is what the public source compiles to, with nothing added. -->
+
+## Reproduce a release
+
+```sh
+git clone <CLONE-URL>
+cd <PROJECT>
+git checkout <TAG>            # the exact tag you are verifying
+
+<REPRODUCE COMMAND>           # e.g. make reproduce
+sha256sum <ARTIFACT>         # compare against the published SHA256SUMS
+```
+
+A matching SHA256 means your binary is byte-for-byte identical to the release.
+
+## Verify determinism locally
+
+```sh
+<VERIFY COMMAND>             # e.g. make verify-repro — builds twice, compares hashes
+```
+
+## What is controlled
+
+<!-- List every input that is pinned or normalized. Keep this honest and current. -->
+
+| Input | How it's pinned |
+|---|---|
+| Toolchain | <e.g. GOTOOLCHAIN=go1.X.Y — a *stock* release, never locally patched> |
+| Filesystem paths | <e.g. -trimpath / -ffile-prefix-map — no /home/you/... in the binary> |
+| Build metadata | <e.g. -buildvcs=false, -buildid= — no dirty flag / build id> |
+| Local env overrides | <e.g. GOENV=off, cleared CGO_* — no host paths baked in> |
+| Dependencies | <e.g. go.sum / Cargo.lock / hashed lockfile — every dep pinned by hash> |
+| Timestamps | `SOURCE_DATE_EPOCH` (the commit time) for any packaging step |
+| Locale / timezone | `LC_ALL=C LANG=C TZ=UTC` |
+
+## Scope and caveats (honest status)
+
+<!-- State the reproducibility LADDER rung you actually reach, and what you don't.
+Underclaiming is fine; overclaiming destroys trust. -->
+
+- **What is reproducible:** <which artifacts, on which OS/arch, with which toolchain>.
+- **Native/cgo code:** <if applicable> byte-identical results across *different* hosts
+  also require the same C toolchain and system headers. <State whether a
+  digest-pinned build container guarantees this yet, or that it's still tracked.>
+- **Cross-compiling:** <state whether cross-compiled artifacts are reproducible from
+  a single host, or built natively per OS/arch>.
+- **Signing is outside reproducibility:** a notarized/Authenticode-signed artifact
+  embeds a unique signature and can never be bit-identical. Reproduce the **unsigned
+  payload**; verify the signature as a separate, detached layer.
+
+## Build-flag parity
+
+The same build flags appear in <list the places: Makefile, build script, CI>. They
+**must stay in sync** — a change to one without the others silently breaks
+reproducibility. Prefer a single source of truth (one script the others call).

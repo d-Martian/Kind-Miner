@@ -44,10 +44,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # systray uses CGo on Linux; needs the AppIndicator dev headers
+      # The GUI uses cgo: Fyne/GLFW needs the GL/X11/Wayland dev headers, and
+      # the system tray needs the AppIndicator headers.
       - name: Install Linux build deps
         if: matrix.goos == 'linux'
-        run: sudo apt-get install -y libayatana-appindicator3-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev \
+            libayatana-appindicator3-dev
 
       - name: Build
         shell: bash
@@ -58,8 +63,11 @@ jobs:
         run: |
           EXT=""
           [[ "${{ matrix.goos }}" == "windows" ]] && EXT=".exe"
+          # Reproducible build flags — keep in sync with scripts/reproduce.sh
+          # and REPRODUCIBLE.md.
           go build \
-            -ldflags "-X main.version=${GITHUB_REF_NAME} -s -w" \
+            -trimpath -buildvcs=false \
+            -ldflags "-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
             -o "kind-miner${EXT}" \
             ./cmd/kind-miner
 
@@ -98,3 +106,100 @@ jobs:
           files: |
             ${{ env.ASSET }}
             ${{ env.CHECKSUM }}
+
+  # ---------------------------------------------------------------------------
+  # Linux desktop packages. Separate jobs (not the matrix above) because each
+  # needs its own toolchain — appimagetool for one, flatpak-builder for the
+  # other — and produces a single linux/amd64 artifact.
+  # ---------------------------------------------------------------------------
+  appimage:
+    name: linux/amd64 AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Same cgo GUI deps as the matrix build job above.
+      - name: Install Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev \
+            libayatana-appindicator3-dev
+
+      - name: Install appimagetool
+        run: |
+          wget -q -O appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          sudo mv appimagetool /usr/local/bin/appimagetool
+
+      - name: Build AppImage
+        # APPIMAGE_EXTRACT_AND_RUN lets appimagetool run without FUSE, which the
+        # GitHub runner doesn't provide.
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: bash scripts/build-appimage.sh "${GITHUB_REF_NAME}"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            *.AppImage
+            *.AppImage.sha256
+
+  flatpak:
+    name: linux/amd64 Flatpak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The Flatpak build runs offline in its sandbox, so Go modules must be
+      # vendored on the host first (vendor/ is gitignored — see the manifest).
+      - name: Vendor Go modules
+        run: go mod vendor
+
+      - name: Install flatpak-builder + runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          # Derive the runtime version from the manifest so the two can't drift.
+          RTV=$(grep "^runtime-version:" flatpak/org.codeberg.dMartian.KindMiner.yml \
+            | sed "s/.*'\(.*\)'.*/\1/")
+          flatpak install --user -y flathub \
+            "org.freedesktop.Platform//${RTV}" \
+            "org.freedesktop.Sdk//${RTV}" \
+            "org.freedesktop.Sdk.Extension.golang//${RTV}"
+
+      - name: Build + bundle Flatpak
+        run: |
+          flatpak-builder --user --force-clean --disable-rofiles-fuse \
+            --default-branch="${GITHUB_REF_NAME}" \
+            --repo=repo build-dir \
+            flatpak/org.codeberg.dMartian.KindMiner.yml
+          BUNDLE="kind-miner-${GITHUB_REF_NAME}-linux-amd64.flatpak"
+          flatpak build-bundle repo "$BUNDLE" \
+            org.codeberg.dMartian.KindMiner "${GITHUB_REF_NAME}"
+          sha256sum "$BUNDLE" > "${BUNDLE}.sha256"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            *.flatpak
+            *.flatpak.sha256

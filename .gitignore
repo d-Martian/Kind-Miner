@@ -5,8 +5,8 @@ p2pool_i2p_peers.txt
 p2pool_onion_peers.txt
 p2pool_peers.txt
 
-# Compiled binaries
-kind-miner
+# Compiled binaries (anchored to repo root so it doesn't match cmd/kind-miner/)
+/kind-miner
 bin/p2pool
 bin/xmrig
 
@@ -30,3 +30,33 @@ kind-miner-v*
 *.sig
 *.tar.gz
 *.zip
+*.AppImage
+*.AppImage.sha256
+*.flatpak
+*.flatpak.sha256
+
+# Build / reproducibility artifacts
+build/
+# Transient version stamp written by scripts/build-flatpak.sh
+/VERSION
+# Dependency-update report written by the monero-miner-dependency-updater skill
+dependency-update-report/
+
+# Flatpak local build artifacts (flatpak-builder state + CI command outputs)
+.flatpak-builder/
+build-dir/
+/repo/
+
+# Vendored Go modules (regenerate with `go mod vendor` for Flatpak builds)
+vendor/
+
+# Managed Tor: downloaded Expert Bundle + runtime data (repo-root runs)
+bin/tor/
+bin/tor-data/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Python bytecode caches (skill helper scripts)
+__pycache__/
+*.pyc

@@ -43,6 +43,17 @@ manage_p2pool: true
 # Path to the p2pool binary. Leave blank to use the bundled binary.
 p2pool_path: ""
 
+# --- Tor ---
+
+# In p2pool-remote mode, traffic to the .onion node is routed over Tor. If no
+# Tor is reachable at 127.0.0.1:9050, kind-miner starts and manages its own Tor
+# process (no system service or root required). Set to false to require that a
+# system Tor already be running.
+manage_tor: true
+
+# Path to the tor binary. Leave blank to use a bundled tor, then search PATH.
+tor_path: ""
+
 # --- pool mode settings ---
 
 # Stratum pool URL (used when mode: pool).

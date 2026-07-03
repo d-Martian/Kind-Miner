@@ -1,0 +1,21 @@
+# Adapt before copying to .forgejo/workflows/release-check.yml.
+# This checks release readiness on tag pushes. Prefer local GPG signing unless
+# the maintainer explicitly accepts CI private-key handling.
+
+name: Release Check
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release-check:
+    runs-on: docker
+    container:
+      image: golang:1.25
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - run: go test ./...
+      - run: make verify-repro
+

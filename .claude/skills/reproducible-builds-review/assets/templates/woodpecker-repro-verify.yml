@@ -1,0 +1,33 @@
+# Adapt before copying to .woodpecker.yml or .woodpecker/repro.yml.
+# Self-contained reproducibility check: builds the artifact twice and compares
+# SHA256. Build B runs from a DIFFERENT path with a varied locale/timezone, so a
+# pass exercises -trimpath (path leakage) and locale variation, not just a rerun.
+# Adjust the image, build command, and ./cmd/app for your project.
+
+steps:
+  - name: reproducible-build
+    image: golang:1.25
+    commands:
+      - export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+      # Build A — in the checkout.
+      - go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/app-a ./cmd/app
+      # Build B — different path + different locale/timezone.
+      - cp -r . /tmp/src-b
+      - cd /tmp/src-b && TZ=Pacific/Kiritimati LC_ALL=C LANG=C
+        go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/app-b ./cmd/app
+      - a="$(sha256sum /tmp/app-a | cut -d' ' -f1)"
+      - b="$(sha256sum /tmp/app-b | cut -d' ' -f1)"
+      - echo "build A $a"
+      - echo "build B $b"
+      - test "$a" = "$b" || { echo "NOT reproducible — builds differ"; exit 1; }
+      - echo "reproducible across build-path and locale variation"
+    when:
+      - event: [push, pull_request]
+
+# Notes:
+# - For a project with a `make verify-repro` / `make reproduce` target, call that
+#   instead of inlining the build, but keep the path/locale variation above —
+#   two identical runners only prove rung-1 determinism.
+# - cgo/native builds also need a pinned C toolchain to reproduce across hosts;
+#   pin it via the container image digest (image: golang@sha256:...).
+# - On mismatch, run diffoscope locally on the two binaries to locate the diff.

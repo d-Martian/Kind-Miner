@@ -8,22 +8,22 @@ XMRIG_VERSION="6.21.3"
 GITHUB="https://github.com/xmrig/xmrig/releases/download/v${XMRIG_VERSION}"
 DIST="$(dirname "$0")/../dist"
 
+# XMRig publishes no Linux ARM64 prebuilt, so that platform is not packaged.
 declare -A URLS=(
   ["linux-amd64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-linux-static-x64.tar.gz"
-  ["linux-arm64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-linux-static-aarch64.tar.gz"
   ["darwin-amd64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-macos-x64.tar.gz"
   ["darwin-arm64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-macos-arm64.tar.gz"
   ["windows-amd64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-msvc-win64.zip"
 )
 
 # SHA256 checksums for v6.21.3 — update when bumping XMRIG_VERSION.
-# Obtain with: shasum -a 256 <archive>
+# Obtain with: shasum -a 256 <archive>. Kept in sync with
+# internal/autoinstall/deps.json (the runtime pin manifest).
 declare -A SUMS=(
-  ["linux-amd64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["linux-arm64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["darwin-amd64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["darwin-arm64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
-  ["windows-amd64"]="PLACEHOLDER_UPDATE_WHEN_PINNING_VERSION"
+  ["linux-amd64"]="a0eefd7a5c0efd1cac153a075b4fdead443a04f11cc587a09bd5ac09e174f10f"
+  ["darwin-amd64"]="4f6c7aa6d5d8ffa1429021db6d6104f42c2691abbab2e01d123356192bcf06fa"
+  ["darwin-arm64"]="d7badde96309772bd219503bce91a239ed83dae042d426ef7aa663fce007dccf"
+  ["windows-amd64"]="713263085499ae626a6148fab67932c9a69611b21ac3d04cf52a5e23495f902e"
 )
 
 download_and_extract() {
