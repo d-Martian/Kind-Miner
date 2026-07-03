@@ -1,0 +1,19 @@
+# Adapt before copying to .forgejo/workflows/dependency-watch.yml.
+# Requires repository Actions and an available Forgejo runner.
+
+name: Miner Dependency Watch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 10 * * 1'
+
+jobs:
+  check:
+    runs-on: docker
+    container:
+      image: python:3.13-alpine
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - run: python3 .claude/skills/monero-miner-dependency-updater/scripts/check_upstream_releases.py --report-dir dependency-update-report --fail-on-update
+

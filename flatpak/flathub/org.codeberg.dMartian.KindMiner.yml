@@ -1,0 +1,84 @@
+# Flathub submission manifest.
+#
+# Differs from ../org.codeberg.dMartian.KindMiner.yml (the dev/CI manifest,
+# which builds the local working tree) only in its source: Flathub builds run
+# offline and from a fixed, hashed artifact, so this consumes the reproducible
+# vendored source tarball produced by scripts/vendor-tarball.sh. The Go modules
+# travel inside that tarball's vendor/ tree and are selected with -mod=vendor —
+# no network, no committed vendor tree, no third-party source generator.
+#
+# Per release: run `make vendor-tarball`, upload dist/*-vendored-src.tar.gz as a
+# release asset, then set `url` + `sha256` below AND bump BUILD_VERSION in the
+# build's -ldflags to the same tag. The tarball is deterministic, so the sha256
+# is stable for a given tag.
+app-id: org.codeberg.dMartian.KindMiner
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.golang
+command: kind-miner
+
+finish-args:
+  # Network access for mining traffic and Tor SOCKS at 127.0.0.1:9050
+  - --share=network
+  # Graphical display for the Fyne window (Wayland preferred, X11 fallback).
+  # --share=ipc is needed for X11 MIT-SHM; --device=dri for OpenGL rendering.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # D-Bus session bus — Fyne's system tray uses godbus for the status notifier
+  - --socket=session-bus
+  # Config file location (~/.config/kind-miner/)
+  - --filesystem=xdg-config/kind-miner:create
+  # Downloaded XMRig / p2pool binaries (~/.local/share/kind-miner/bin/)
+  - --filesystem=xdg-data/kind-miner:create
+  # System tray — covers both KDE and GNOME/freedesktop implementations
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.StatusNotifierWatcher
+  - --talk-name=com.canonical.AppMenu.Registrar
+
+build-options:
+  env:
+    - GOPATH=/run/build/kind-miner/gopath
+    # Modules come from the bundled vendor/ tree; the build needs no network.
+    - GOFLAGS=-mod=vendor
+    # The GUI needs cgo (Fyne's GLFW/OpenGL driver). The freedesktop SDK
+    # provides the GL/X11/Wayland headers required to build it.
+    - CGO_ENABLED=1
+
+modules:
+  - name: kind-miner
+    buildsystem: simple
+    build-commands:
+      # Activate the Go SDK extension and build. BUILD_VERSION is pinned to the
+      # release tag (not FLATPAK_BRANCH, which on Flathub is the channel name
+      # e.g. "stable" — that would mislabel the binary). Bump it per release.
+      - |
+        BUILD_VERSION=vX.Y.Z
+        . /usr/lib/sdk/golang/enable.sh
+        go build \
+          -trimpath -buildvcs=false \
+          -ldflags "-s -w -buildid= -X main.version=${BUILD_VERSION}" \
+          -o /app/bin/kind-miner \
+          ./cmd/kind-miner
+      # Desktop integration
+      - install -Dm644 kind-miner.desktop
+          /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
+      - sed -i 's/^Icon=.*/Icon=org.codeberg.dMartian.KindMiner/'
+          /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
+      - install -Dm644 assets/icons/app-512.png
+          /app/share/icons/hicolor/512x512/apps/org.codeberg.dMartian.KindMiner.png
+      - install -Dm644 assets/icons/app-256.png
+          /app/share/icons/hicolor/256x256/apps/org.codeberg.dMartian.KindMiner.png
+      # AppStream metadata
+      - install -Dm644 org.codeberg.dMartian.KindMiner.metainfo.xml
+          /app/share/metainfo/org.codeberg.dMartian.KindMiner.metainfo.xml
+    sources:
+      # Reproducible vendored source tarball (see header). strip-components
+      # defaults to 1, removing the kind-miner-<version>/ prefix so paths above
+      # resolve at the build root. Replace url + sha256 at release time.
+      - type: archive
+        url: https://codeberg.org/dMartian/kind-miner/releases/download/vX.Y.Z/kind-miner-vX.Y.Z-vendored-src.tar.gz
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'

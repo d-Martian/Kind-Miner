@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.codeberg.dMartian.KindMiner</id>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>kind-miner</name>
+  <summary>Idle Monero CPU mining for always-on machines</summary>
+
+  <description>
+    <p>
+      kind-miner turns the idle cycles of an always-on desktop into Monero
+      hashrate. There is no account, no pool operator, and no fee — payouts
+      arrive directly in your own wallet via P2Pool's coinbase output.
+    </p>
+    <p>
+      It stays out of your way: every few seconds it measures CPU usage
+      (excluding its own threads) and throttles or suspends mining the moment
+      you start doing real work, resuming automatically when you stop. Mining
+      traffic is routed over Tor by default, so the node operator never sees
+      your IP.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Disappears under load via a four-gear scheduler (Full, Reduced, Minimal, Paused)</li>
+      <li>Configurable temperature ceiling and battery awareness</li>
+      <li>Tor-native: routes through Tor by default</li>
+      <li>Zero setup: XMRig and P2Pool are downloaded and SHA256-verified on first run</li>
+      <li>Graphical window that tucks into the system tray, or a terminal-only mode</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">org.codeberg.dMartian.KindMiner.desktop</launchable>
+
+  <url type="homepage">https://codeberg.org/dMartian/kind-miner</url>
+  <url type="bugtracker">https://codeberg.org/dMartian/kind-miner/issues</url>
+
+  <developer id="org.codeberg.dmartian">
+    <name>dMartian</name>
+  </developer>
+
+  <!--
+    Screenshots are fetched at Flathub build time, so these raw URLs must
+    resolve on the default branch. Regenerate the images from the repo root
+    (absolute path — go test runs in the package directory):
+      KM_SHOT_DIR="$PWD/assets/screenshots" go test -mod=mod \
+        ./internal/gui -run TestCaptureScreenshots
+  -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://codeberg.org/dMartian/kind-miner/raw/branch/main/assets/screenshots/onboarding-welcome.png</image>
+      <caption>Idle Monero mining that pays straight to your wallet</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://codeberg.org/dMartian/kind-miner/raw/branch/main/assets/screenshots/onboarding-wallet.png</image>
+      <caption>One-step setup: paste your Monero wallet address</caption>
+    </screenshot>
+  </screenshots>
+
+  <!-- No adult/violent/gambling content. Mining is not gambling. -->
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-05-27"/>
+  </releases>
+</component>

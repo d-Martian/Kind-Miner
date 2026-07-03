@@ -27,8 +27,8 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
 - **Tor-native.** Routes through a Tor hidden service by default. Your IP is not visible to the node operator.
 - **Zero-setup dependencies.** XMRig and P2Pool are downloaded automatically on first run (SHA256-verified). You need: a Monero wallet address, and Tor running.
-- **System tray.** Icon reflects current state. Tooltip shows live hashrate. Right-click to pause, open config, or quit.
-- **Single static binary.** No installer, no runtime, no Python, no Electron. `./kind-miner` and you're done.
+- **Graphical or terminal.** Double-click for a full window — onboarding, live status, pause/resume, and an in-app settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.
+- **Single native binary.** No installer, no runtime, no Python, no Electron. `./kind-miner` and you're done.
 
 ---
 
@@ -71,14 +71,19 @@ To confirm Tor is running: `systemctl is-active tor` should print `active`.
 # Make executable (Linux/macOS)
 chmod +x kind-miner
 
-# Run — wizard will ask for your wallet address on first launch
+# Double-click the app, or run it from a terminal:
 ./kind-miner
+#   • From a desktop (double-click / .desktop): opens the full GUI window.
+#   • From a terminal: shows a system-tray icon and logs to stdout.
 
-# Or headless (no system tray, logs to stdout)
-./kind-miner --no-tray
+# Force the graphical window, even from a terminal:
+./kind-miner --gui
+
+# Headless — no GUI at all, logs to stdout (servers, SSH):
+./kind-miner --no-tray        # --headless is an alias
 ```
 
-On first run with no config file, kind-miner opens a short setup wizard that asks for your wallet address and connection mode, then writes `~/.config/kind-miner/config.yaml` and starts mining.
+On first run with no config file, kind-miner collects your wallet address — through a graphical onboarding window when launched from the desktop, or a short text wizard when launched from a terminal — then writes `~/.config/kind-miner/config.yaml` and starts mining. A headless launch with no display writes a config template for you to edit instead.
 
 ---
 
@@ -230,7 +235,18 @@ cd kind-miner
 go build -o kind-miner ./cmd/kind-miner
 ```
 
-Requires Go 1.25+. The build embeds the tray icons statically — no assets need to be shipped alongside the binary.
+Requires Go 1.25+. The GUI uses [Fyne](https://fyne.io), which builds with cgo and
+OpenGL, so the build host needs the GL/X11/Wayland development headers. On Fedora:
+
+```sh
+sudo dnf install gcc libXxf86vm-devel libX11-devel libXcursor-devel \
+                 libXrandr-devel libXinerama-devel libXi-devel \
+                 mesa-libGL-devel libxkbcommon-devel wayland-devel
+```
+
+(On Debian/Ubuntu the equivalents are `libgl1-mesa-dev xorg-dev libxxf86vm-dev
+libxkbcommon-dev`.) The tray icons are embedded statically — no assets need to be
+shipped alongside the binary.
 
 ```sh
 # Run tests

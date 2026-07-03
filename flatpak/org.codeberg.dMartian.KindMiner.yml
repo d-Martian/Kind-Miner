@@ -1,6 +1,6 @@
 app-id: org.codeberg.dMartian.KindMiner
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.golang
@@ -9,7 +9,13 @@ command: kind-miner
 finish-args:
   # Network access for mining traffic and Tor SOCKS at 127.0.0.1:9050
   - --share=network
-  # D-Bus session bus — fyne.io/systray uses godbus for the status notifier
+  # Graphical display for the Fyne window (Wayland preferred, X11 fallback).
+  # --share=ipc is needed for X11 MIT-SHM; --device=dri for OpenGL rendering.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # D-Bus session bus — Fyne's system tray uses godbus for the status notifier
   - --socket=session-bus
   # Config file location (~/.config/kind-miner/)
   - --filesystem=xdg-config/kind-miner:create
@@ -24,17 +30,23 @@ build-options:
   env:
     - GOPATH=/run/build/kind-miner/gopath
     - GOFLAGS=-mod=vendor
-    - CGO_ENABLED=0
+    # The GUI needs cgo (Fyne's GLFW/OpenGL driver). The freedesktop SDK
+    # provides the GL/X11/Wayland headers required to build it.
+    - CGO_ENABLED=1
 
 modules:
   - name: kind-miner
     buildsystem: simple
     build-commands:
-      # Activate the Go SDK extension and build
+      # Activate the Go SDK extension and build. The version is read from a
+      # VERSION file that scripts/build-flatpak.sh drops in the source root
+      # (flatpak-builder does not export FLATPAK_BRANCH into the build sandbox).
+      # Falls back to "dev" when building this manifest directly.
       - |
         . /usr/lib/sdk/golang/enable.sh
         go build \
-          -ldflags "-X main.version=${FLATPAK_BRANCH:-dev} -s -w" \
+          -trimpath -buildvcs=false \
+          -ldflags "-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
           -o /app/bin/kind-miner \
           ./cmd/kind-miner
       # Desktop integration
@@ -42,18 +54,27 @@ modules:
           /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
       - sed -i 's/^Icon=.*/Icon=org.codeberg.dMartian.KindMiner/'
           /app/share/applications/org.codeberg.dMartian.KindMiner.desktop
-      - install -Dm644 assets/icons/app.png
+      - install -Dm644 assets/icons/app-512.png
           /app/share/icons/hicolor/512x512/apps/org.codeberg.dMartian.KindMiner.png
-      - install -Dm644 assets/icons/app.png
+      - install -Dm644 assets/icons/app-256.png
           /app/share/icons/hicolor/256x256/apps/org.codeberg.dMartian.KindMiner.png
+      # AppStream metadata (required for Flathub; silences the build's
+      # "No appstream data" warning and feeds software-center listings)
+      - install -Dm644 org.codeberg.dMartian.KindMiner.metainfo.xml
+          /app/share/metainfo/org.codeberg.dMartian.KindMiner.metainfo.xml
     sources:
-      - type: git
-        url: https://codeberg.org/dMartian/kind-miner.git
-        tag: v0.1.0
-      # Go modules — generate with:
-      #   go mod vendor
-      # Then replace the git source above with:
-      #   - type: dir
-      #     path: ..
-      # For Flathub submission use flatpak-go-vendor-generator to produce
-      # individual module sources from go.sum.
+      # Build from the current working tree. Go dependencies are vendored
+      # (run `go mod vendor`) so the build needs no network — GOFLAGS above
+      # selects -mod=vendor. skip keeps runtime data and build artifacts out of
+      # the sandbox copy. For a Flathub submission use flathub/<this app-id>.yml,
+      # which builds the reproducible vendored source tarball instead.
+      - type: dir
+        path: ..
+        skip:
+          - .git
+          - .claude
+          - build
+          - dist
+          - bin
+          - p2pool.cache
+          - p2pool.log

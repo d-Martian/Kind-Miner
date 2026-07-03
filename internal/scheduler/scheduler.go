@@ -54,8 +54,13 @@ type Scheduler struct {
 	battery *monitor.Battery
 	temp    *monitor.Temp
 
-	maxThreads int
-	profile    config.ThresholdProfile
+	// Live-tunable settings, guarded by mu. They are seeded from the config in
+	// New and can be changed at runtime via UpdateRuntime (e.g. from the GUI
+	// settings window) without restarting the miner.
+	maxThreads     int
+	profile        config.ThresholdProfile
+	pauseOnBattery bool
+	tempLimit      float64
 
 	mu        sync.Mutex
 	state     State
@@ -73,16 +78,18 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 	}
 	profile := config.SensitivityProfiles[cfg.ThrottleSensitivity]
 	return &Scheduler{
-		cfg:        cfg,
-		xmrig:      xmrig,
-		cpu:        monitor.NewCPU(),
-		battery:    monitor.NewBattery(),
-		temp:       monitor.NewTemp(),
-		maxThreads: maxThreads,
-		profile:    profile,
-		state:      StatePaused,
-		stopCh:     make(chan struct{}),
-		Events:     make(chan StateChange, 16),
+		cfg:            cfg,
+		xmrig:          xmrig,
+		cpu:            monitor.NewCPU(),
+		battery:        monitor.NewBattery(),
+		temp:           monitor.NewTemp(),
+		maxThreads:     maxThreads,
+		profile:        profile,
+		pauseOnBattery: cfg.PauseOnBattery,
+		tempLimit:      cfg.TempLimitCelsius,
+		state:          StatePaused,
+		stopCh:         make(chan struct{}),
+		Events:         make(chan StateChange, 16),
 	}
 }
 
@@ -139,14 +146,39 @@ func (s *Scheduler) IsManuallyPaused() bool {
 	return s.pausedBy == "manual pause"
 }
 
+// UpdateRuntime applies live-tunable settings from cfg — throttle sensitivity,
+// max threads, pause-on-battery, and the temperature limit — taking effect on
+// the next tick without restarting the miner. Changes that require relaunching
+// a subprocess (wallet, mode, node) are not handled here.
+func (s *Scheduler) UpdateRuntime(cfg *config.Config) {
+	maxThreads := cfg.MaxThreads
+	if maxThreads <= 0 {
+		maxThreads = int(math.Max(1, float64(runtime.NumCPU())/2))
+	}
+	s.mu.Lock()
+	s.maxThreads = maxThreads
+	s.profile = config.SensitivityProfiles[cfg.ThrottleSensitivity]
+	s.pauseOnBattery = cfg.PauseOnBattery
+	s.tempLimit = cfg.TempLimitCelsius
+	s.mu.Unlock()
+}
+
 func (s *Scheduler) tick() {
 	if s.IsManuallyPaused() {
 		s.applyState(StatePaused, "manual pause")
 		return
 	}
 
+	// Snapshot live-tunable settings under the lock so a concurrent
+	// UpdateRuntime (from the GUI) can't race with this tick.
+	s.mu.Lock()
+	pauseOnBattery := s.pauseOnBattery
+	tempLimit := s.tempLimit
+	profile := s.profile
+	s.mu.Unlock()
+
 	// Battery check — hard pause, user chose to protect battery life.
-	if s.cfg.PauseOnBattery {
+	if pauseOnBattery {
 		onBat, err := s.battery.OnBattery()
 		if err != nil {
 			log.Printf("battery check error: %v", err)
@@ -157,12 +189,12 @@ func (s *Scheduler) tick() {
 	}
 
 	// Temperature guard — always enforced regardless of sensitivity setting.
-	if s.cfg.TempLimitCelsius > 0 {
+	if tempLimit > 0 {
 		t, err := s.temp.MaxCPU()
 		if err != nil {
 			log.Printf("temp check error: %v", err)
-		} else if t > 0 && t >= s.cfg.TempLimitCelsius {
-			s.applyState(StatePaused, fmt.Sprintf("CPU temp %.0f°C ≥ limit %.0f°C", t, s.cfg.TempLimitCelsius))
+		} else if t > 0 && t >= tempLimit {
+			s.applyState(StatePaused, fmt.Sprintf("CPU temp %.0f°C ≥ limit %.0f°C", t, tempLimit))
 			return
 		}
 	}
@@ -175,9 +207,9 @@ func (s *Scheduler) tick() {
 	}
 
 	switch {
-	case usage >= s.profile.PauseAt:
+	case usage >= profile.PauseAt:
 		s.applyState(StatePaused, fmt.Sprintf("system CPU %.0f%%", usage*100))
-	case usage >= s.profile.ReduceAt:
+	case usage >= profile.ReduceAt:
 		s.applyState(StateReduced, fmt.Sprintf("system CPU %.0f%%", usage*100))
 	default:
 		s.applyState(StateFull, "")
@@ -189,6 +221,7 @@ func (s *Scheduler) applyState(desired State, reason string) {
 	prev := s.state
 	s.state = desired
 	s.pausedBy = reason
+	maxThreads := s.maxThreads
 	s.mu.Unlock()
 
 	switch desired {
@@ -204,7 +237,7 @@ func (s *Scheduler) applyState(desired State, reason string) {
 			log.Printf("set threads error: %v", err)
 		}
 	case StateReduced:
-		half := int(math.Max(1, float64(s.maxThreads)/2))
+		half := int(math.Max(1, float64(maxThreads)/2))
 		if err := s.xmrig.Resume(); err != nil {
 			log.Printf("resume error: %v", err)
 		}
@@ -215,7 +248,7 @@ func (s *Scheduler) applyState(desired State, reason string) {
 		if err := s.xmrig.Resume(); err != nil {
 			log.Printf("resume error: %v", err)
 		}
-		if err := s.xmrig.SetThreads(s.maxThreads); err != nil {
+		if err := s.xmrig.SetThreads(maxThreads); err != nil {
 			log.Printf("set threads error: %v", err)
 		}
 	}

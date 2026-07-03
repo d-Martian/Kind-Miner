@@ -1,0 +1,31 @@
+# Adapt this template before copying it to .woodpecker.yml or .woodpecker/ci.yml.
+# Required Codeberg setup: activate the repo in https://ci.codeberg.org.
+
+steps:
+  - name: test
+    image: golang:1.25
+    commands:
+      - go test ./...
+    when:
+      - event: [push, pull_request]
+
+  - name: build
+    image: golang:1.25
+    commands:
+      - go build -trimpath -buildvcs=false -o build/app ./cmd/app
+    when:
+      - event: push
+        branch: main
+
+  - name: release-archive
+    image: golang:1.25
+    commands:
+      - test -n "$CI_COMMIT_TAG"
+      - mkdir -p dist
+      - go build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X main.version=$CI_COMMIT_TAG" -o dist/app ./cmd/app
+      - tar -czf "dist/app-$CI_COMMIT_TAG-linux-amd64.tar.gz" -C dist app
+      - sha256sum "dist/app-$CI_COMMIT_TAG-linux-amd64.tar.gz" > "dist/app-$CI_COMMIT_TAG-linux-amd64.tar.gz.sha256"
+    when:
+      - event: tag
+        ref: refs/tags/v*
+

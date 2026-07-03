@@ -1,0 +1,42 @@
+# Adapt before copying to .forgejo/workflows/repro-verify.yml
+# (works on GitHub Actions too: swap the action host prefixes).
+# Builds the artifact twice — once from a different path with a varied
+# locale/timezone — and fails if the SHA256 differ. The path/locale variation is
+# what makes this a real reproducibility check rather than two identical reruns.
+
+name: Reproducibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  reproducible-build:
+    runs-on: docker
+    container:
+      image: golang:1.25   # pin by @sha256:... for cgo/native cross-host claims
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+
+      # If the project already has the targets, this is the whole job:
+      #   - run: make verify-repro
+      # The steps below are the self-contained equivalent with env variation.
+
+      - name: build twice and compare
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/app-a ./cmd/app
+          cp -r . /tmp/src-b
+          ( cd /tmp/src-b && TZ=Pacific/Kiritimati LC_ALL=C LANG=C \
+              go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/app-b ./cmd/app )
+          a="$(sha256sum /tmp/app-a | cut -d' ' -f1)"
+          b="$(sha256sum /tmp/app-b | cut -d' ' -f1)"
+          echo "build A $a"
+          echo "build B $b"
+          test "$a" = "$b" || { echo "NOT reproducible — builds differ"; exit 1; }
+          echo "reproducible across build-path and locale variation"
+
+      # Optional: on failure, locate the difference.
+      # - run: diffoscope /tmp/app-a /tmp/app-b
+      #   if: failure()
