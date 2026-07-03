@@ -17,11 +17,19 @@ import (
 // Scheduler.UpdateRuntime; wallet and mode changes are saved but take effect on
 // the next restart.
 func (u *uiApp) showSettings() {
+	if u.settingsWin != nil {
+		u.settingsWin.Show()
+		u.settingsWin.RequestFocus()
+		return
+	}
+
 	cfg := u.sup.Config()
 
 	w := u.app.NewWindow("kind-miner — settings")
 	w.Resize(fyne.NewSize(480, 440))
 	w.CenterOnScreen()
+	u.settingsWin = w
+	w.SetOnClosed(func() { u.settingsWin = nil })
 
 	wallet := widget.NewEntry()
 	wallet.SetText(cfg.Wallet)
