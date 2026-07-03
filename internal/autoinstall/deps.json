@@ -1,0 +1,53 @@
+{
+  "_comment": "Source of truth for runtime-downloaded miner dependencies. Each entry pins a version and the per-platform archive SHA256, verified at download time (see autoinstall.go), matching the hash-pinned pattern already used for Tor. Platforms with no upstream prebuilt are omitted (e.g. XMRig publishes no linux-arm64 static build). Maintained by the monero-miner-dependency-updater skill (apply_dependency_update.py); keep in sync with scripts/download-{xmrig,p2pool}.sh.",
+  "xmrig": {
+    "repo": "xmrig/xmrig",
+    "version": "6.21.3",
+    "url_template": "https://github.com/xmrig/xmrig/releases/download/v{version}/{file}",
+    "assets": {
+      "linux-amd64": {
+        "file": "xmrig-6.21.3-linux-static-x64.tar.gz",
+        "sha256": "a0eefd7a5c0efd1cac153a075b4fdead443a04f11cc587a09bd5ac09e174f10f"
+      },
+      "darwin-amd64": {
+        "file": "xmrig-6.21.3-macos-x64.tar.gz",
+        "sha256": "4f6c7aa6d5d8ffa1429021db6d6104f42c2691abbab2e01d123356192bcf06fa"
+      },
+      "darwin-arm64": {
+        "file": "xmrig-6.21.3-macos-arm64.tar.gz",
+        "sha256": "d7badde96309772bd219503bce91a239ed83dae042d426ef7aa663fce007dccf"
+      },
+      "windows-amd64": {
+        "file": "xmrig-6.21.3-msvc-win64.zip",
+        "sha256": "713263085499ae626a6148fab67932c9a69611b21ac3d04cf52a5e23495f902e"
+      }
+    }
+  },
+  "p2pool": {
+    "repo": "SChernykh/p2pool",
+    "version": "4.15.1",
+    "url_template": "https://github.com/SChernykh/p2pool/releases/download/v{version}/{file}",
+    "assets": {
+      "linux-amd64": {
+        "file": "p2pool-v4.15.1-linux-x64.tar.gz",
+        "sha256": "efd8b23579774711a5b86743da980e0936b7c220894063296719116d7f9ba254"
+      },
+      "linux-arm64": {
+        "file": "p2pool-v4.15.1-linux-aarch64.tar.gz",
+        "sha256": "90b2481c04d42487178f5169b3dfe7dc46287f3b0fb2c6cf8b5672a682ad855e"
+      },
+      "darwin-amd64": {
+        "file": "p2pool-v4.15.1-macos-x64.tar.gz",
+        "sha256": "0e113c9beff21001ded4a15a3ae2f5ce8a151d18457476923026b322113bc1de"
+      },
+      "darwin-arm64": {
+        "file": "p2pool-v4.15.1-macos-aarch64.tar.gz",
+        "sha256": "391c55474c3f08994340df2824a0b452dac8e0d18ee43cf3b361ce80f00dcd5b"
+      },
+      "windows-amd64": {
+        "file": "p2pool-v4.15.1-windows-x64.zip",
+        "sha256": "97b4ba97e65d766ecf223694168b5739e65156390707fbf50f9979054cba52d3"
+      }
+    }
+  }
+}
