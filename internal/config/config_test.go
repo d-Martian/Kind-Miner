@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -40,6 +42,23 @@ func TestValidate(t *testing.T) {
 			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, ThrottleSensitivity: "extreme"},
 			wantErr: true,
 		},
+		{
+			name:    "explicit mini chain",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, ThrottleSensitivity: SensitivityMedium, P2PoolChain: ChainMini},
+			wantErr: false,
+		},
+		{
+			name:    "explicit main chain",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, ThrottleSensitivity: SensitivityMedium, P2PoolChain: ChainMain},
+			wantErr: false,
+		},
+		{
+			// Without this check a typo joins the main chain, where a desktop
+			// miner may never accumulate a payout.
+			name:    "misspelled chain is rejected",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, ThrottleSensitivity: SensitivityMedium, P2PoolChain: "minni"},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,6 +89,38 @@ func TestDefaults(t *testing.T) {
 	}
 	if cfg.TempLimitCelsius != 95 {
 		t.Errorf("default temp_limit_celsius = %v, want 95", cfg.TempLimitCelsius)
+	}
+}
+
+// A config that omits p2pool_chain, or leaves the key empty, must still mine on
+// the mini sidechain — anything else silently moves the user to the main chain.
+func TestLoadChainDefaults(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{"key absent", "wallet: 4ABC\n", ChainMini},
+		{"key present but empty", "wallet: 4ABC\np2pool_chain:\n", ChainMini},
+		{"explicit main is kept", "wallet: 4ABC\np2pool_chain: main\n", ChainMain},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte(tt.yaml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			SetPath(path)
+			defer SetPath("")
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if cfg.P2PoolChain != tt.want {
+				t.Errorf("p2pool_chain = %q, want %q", cfg.P2PoolChain, tt.want)
+			}
+		})
 	}
 }
 
