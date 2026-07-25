@@ -26,29 +26,60 @@ type P2Pool struct {
 	stratumPort int    // local Stratum port XMRig connects to
 	socks5Proxy string // e.g. "127.0.0.1:9050" for Tor; empty = direct
 	workDir     string // p2pool's cwd — it writes p2pool.cache/log/peer lists there
+	dataAPIDir  string // --data-api target; empty disables the JSON statistics
 
 	mu       sync.Mutex
 	cmd      *exec.Cmd
 	cancel   context.CancelFunc
 	ready    bool
 	lastLine string // most recent output line, for early-exit diagnostics
+
+	statsState
+	statsStop chan struct{}
 }
 
-// NewP2Pool creates a manager. binPath may be empty to auto-locate.
-// socks5Proxy is the SOCKS5 proxy address for Tor .onion nodes; pass "" for direct connections.
-// workDir is where p2pool keeps its cache and logs (it writes them to its cwd);
-// pass "" to inherit the parent's cwd.
-func NewP2Pool(binPath, wallet, nodeHost string, rpcPort, zmqPort int, chain string, stratumPort int, socks5Proxy, workDir string) *P2Pool {
+// P2PoolOptions configures a P2Pool manager.
+type P2PoolOptions struct {
+	// BinPath may be empty to auto-locate the binary.
+	BinPath string
+	Wallet  string
+
+	// NodeHost is the monerod to follow, with its RPC and ZMQ ports.
+	NodeHost string
+	RPCPort  int
+	ZMQPort  int
+
+	// Chain is "mini" or "main" (see config.ChainMini).
+	Chain string
+
+	// StratumPort is the local port XMRig connects to.
+	StratumPort int
+
+	// SOCKS5Proxy routes p2pool through Tor for .onion nodes; "" is direct.
+	SOCKS5Proxy string
+
+	// WorkDir is where p2pool keeps its cache and logs (it writes them to its
+	// cwd); "" inherits the parent's cwd.
+	WorkDir string
+
+	// DataAPIDir makes p2pool write its JSON statistics there. Empty disables
+	// them, in which case Stats reports nothing.
+	DataAPIDir string
+}
+
+// NewP2Pool creates a manager.
+func NewP2Pool(o P2PoolOptions) *P2Pool {
 	return &P2Pool{
-		binPath:     binPath,
-		wallet:      wallet,
-		nodeHost:    nodeHost,
-		rpcPort:     rpcPort,
-		zmqPort:     zmqPort,
-		chain:       chain,
-		stratumPort: stratumPort,
-		socks5Proxy: socks5Proxy,
-		workDir:     workDir,
+		binPath:     o.BinPath,
+		wallet:      o.Wallet,
+		nodeHost:    o.NodeHost,
+		rpcPort:     o.RPCPort,
+		zmqPort:     o.ZMQPort,
+		chain:       o.Chain,
+		stratumPort: o.StratumPort,
+		socks5Proxy: o.SOCKS5Proxy,
+		workDir:     o.WorkDir,
+		dataAPIDir:  o.DataAPIDir,
 	}
 }
 
@@ -90,6 +121,17 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 	if p.chain == "mini" {
 		args = append(args, "--mini")
 	}
+	// --data-api writes the JSON stat files; --local-api adds the local/ ones
+	// (our own hashrate and shares). Both are needed for the reward estimate.
+	// --data-api is deliberately not affected by p2pool's --data-dir.
+	if p.dataAPIDir != "" {
+		if err := os.MkdirAll(p.dataAPIDir, 0o755); err != nil {
+			log.Printf("p2pool: cannot create stats dir %s: %v", p.dataAPIDir, err)
+			p.dataAPIDir = ""
+		} else {
+			args = append(args, "--data-api", p.dataAPIDir, "--local-api")
+		}
+	}
 	if log.Writer() == io.Discard {
 		args = append(args, "--loglevel", "0")
 	}
@@ -128,6 +170,11 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 	readyCh := make(chan struct{}, 1)
 	exitCh := make(chan struct{})
 	go p.readOutput(stdout, readyCh, exitCh)
+
+	if p.dataAPIDir != "" {
+		p.statsStop = make(chan struct{})
+		go p.pollStats(p.statsStop)
+	}
 	p.mu.Unlock() // release before blocking — readOutput needs the lock to set p.ready
 
 	select {
@@ -155,6 +202,10 @@ func (p *P2Pool) Stop() {
 	defer p.mu.Unlock()
 	if p.cmd == nil {
 		return
+	}
+	if p.statsStop != nil {
+		close(p.statsStop)
+		p.statsStop = nil
 	}
 	p.cancel()
 	_ = p.cmd.Wait()
