@@ -23,8 +23,24 @@ mode: p2pool-remote
 # Leave blank to auto-select from the built-in community node list.
 remote_node: ""
 
-# P2Pool sidechain: "mini" (recommended for <50 kH/s) or "main"
+# P2Pool sidechain — the only accepted values are "mini" and "main"; anything
+# else is rejected at startup, and leaving it blank falls back to "mini".
+# "mini" is the default and the right choice for a desktop CPU: its share
+# difficulty is far lower, so you land shares (and get paid) regularly instead
+# of waiting a very long time between payouts on the main chain.
 p2pool_chain: mini
+
+# Start kind-miner automatically when you log in. Changing this from the
+# settings window also creates or removes the login entry your OS uses (an XDG
+# autostart file, a LaunchAgent, or a registry Run value). Editing it here only
+# takes effect the next time the app starts.
+run_at_startup: false
+
+# How long the keyboard and mouse must be quiet before mining is allowed to use
+# every configured thread (seconds). Before that it runs at reduced speed, so a
+# machine you are sitting at never has all its cores taken. Set to 0 to go to
+# full speed as soon as the CPU is free, without waiting for you to step away.
+idle_full_after_seconds: 300
 
 # --- p2pool-local settings ---
 

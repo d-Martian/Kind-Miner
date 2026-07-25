@@ -26,7 +26,7 @@ func fakeP2Pool(t *testing.T, script string) string {
 
 func TestP2PoolStartReady(t *testing.T) {
 	bin := fakeP2Pool(t, `echo "StratumServer event loop started"; sleep 60`)
-	p := NewP2Pool(bin, "wallet", "127.0.0.1", 18081, 18083, "mini", 3333, "", "")
+	p := NewP2Pool(P2PoolOptions{BinPath: bin, Wallet: "wallet", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "mini", StratumPort: 3333})
 	defer p.Stop()
 
 	start := time.Now()
@@ -43,7 +43,7 @@ func TestP2PoolStartReady(t *testing.T) {
 
 func TestP2PoolStartFailsFastOnExit(t *testing.T) {
 	bin := fakeP2Pool(t, `echo "ZMQReader failed to connect"; exit 1`)
-	p := NewP2Pool(bin, "wallet", "127.0.0.1", 18081, 18083, "mini", 3333, "", "")
+	p := NewP2Pool(P2PoolOptions{BinPath: bin, Wallet: "wallet", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "mini", StratumPort: 3333})
 	defer p.Stop()
 
 	start := time.Now()
@@ -67,7 +67,7 @@ func TestP2PoolWorkDir(t *testing.T) {
 	// configured work dir, creating the dir if needed.
 	bin := fakeP2Pool(t, `pwd > owd.txt; echo "StratumServer event loop started"; sleep 60`)
 	workDir := filepath.Join(t.TempDir(), "p2pool-data")
-	p := NewP2Pool(bin, "wallet", "127.0.0.1", 18081, 18083, "mini", 3333, "", workDir)
+	p := NewP2Pool(P2PoolOptions{BinPath: bin, Wallet: "wallet", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "mini", StratumPort: 3333, WorkDir: workDir})
 	defer p.Stop()
 
 	if err := p.Start(10 * time.Second); err != nil {

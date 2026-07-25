@@ -148,17 +148,19 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		// whatever cwd we inherited — in a Flatpak that cwd is a throwaway tmpfs
 		// (the ~450 MB p2pool.cache would live in RAM and vanish on exit).
 		p2poolWorkDir := filepath.Join(filepath.Dir(autoinstall.BinDir()), "p2pool")
-		s.p2pool = engine.NewP2Pool(
-			s.cfg.P2PoolBinPath,
-			s.cfg.Wallet,
-			node.Host,
-			node.RPCPort,
-			node.ZMQPort,
-			s.cfg.P2PoolChain,
-			stratumPort,
-			socks5Proxy,
-			p2poolWorkDir,
-		)
+		s.p2pool = engine.NewP2Pool(engine.P2PoolOptions{
+			BinPath:     s.cfg.P2PoolBinPath,
+			Wallet:      s.cfg.Wallet,
+			NodeHost:    node.Host,
+			RPCPort:     node.RPCPort,
+			ZMQPort:     node.ZMQPort,
+			Chain:       s.cfg.P2PoolChain,
+			StratumPort: stratumPort,
+			SOCKS5Proxy: socks5Proxy,
+			WorkDir:     p2poolWorkDir,
+			// Statistics feed the reward estimate in the tray.
+			DataAPIDir: filepath.Join(p2poolWorkDir, "api"),
+		})
 		log.Println("Starting p2pool (syncing sidechain…)")
 		if err := s.p2pool.Start(3 * time.Minute); err != nil {
 			return err
@@ -184,6 +186,10 @@ func (s *Supervisor) Scheduler() *scheduler.Scheduler { return s.sched }
 
 // XMRig returns the running miner, or nil before Start succeeds.
 func (s *Supervisor) XMRig() *engine.XMRig { return s.xmrig }
+
+// P2Pool returns the running p2pool manager, or nil in pool mode or before
+// Start succeeds.
+func (s *Supervisor) P2Pool() *engine.P2Pool { return s.p2pool }
 
 // Config returns the active configuration.
 func (s *Supervisor) Config() *config.Config { return s.cfg }

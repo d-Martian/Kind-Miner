@@ -40,6 +40,16 @@ var SensitivityProfiles = map[Sensitivity]ThresholdProfile{
 	SensitivityHigh:   {ReduceAt: 0.20, PauseAt: 0.40},
 }
 
+// P2Pool sidechains. mini is the default: its share difficulty is roughly 100x
+// lower than the main chain, so a desktop-sized miner finds shares — and
+// therefore earns — often enough to matter. Anything that is not exactly
+// ChainMini makes p2pool join the main chain, which is why the value is
+// validated rather than passed through.
+const (
+	ChainMini = "mini"
+	ChainMain = "main"
+)
+
 type Config struct {
 	Wallet  string `yaml:"wallet"`
 	Mode    Mode   `yaml:"mode"`
@@ -67,11 +77,22 @@ type Config struct {
 	ManageTor  bool   `yaml:"manage_tor"`
 	TorBinPath string `yaml:"tor_path"`
 
+	// RunAtStartup mirrors the OS login item managed by internal/autostart. The
+	// OS registration is the thing that actually works; this is the record of
+	// what the user asked for, used to re-register if the entry goes missing.
+	RunAtStartup bool `yaml:"run_at_startup"`
+
 	// throttle
 	MaxThreads          int         `yaml:"max_threads"`
 	ThrottleSensitivity Sensitivity `yaml:"throttle_sensitivity"`
 	PauseOnBattery      bool        `yaml:"pause_on_battery"`
 	TempLimitCelsius    float64     `yaml:"temp_limit_celsius"`
+
+	// IdleFullAfterSeconds is how long the keyboard and mouse must be quiet
+	// before mining is allowed to use every configured thread. Until then it
+	// stays at reduced speed. 0 disables the wait and mines at full speed
+	// whenever the CPU is free.
+	IdleFullAfterSeconds int `yaml:"idle_full_after_seconds"`
 
 	LogLevel string `yaml:"log_level"`
 }
@@ -79,13 +100,14 @@ type Config struct {
 func Defaults() *Config {
 	return &Config{
 		Mode:                ModeP2PoolRemote,
-		P2PoolChain:         "mini",
+		P2PoolChain:         ChainMini,
 		ManageP2Pool:        true,
 		ManageTor:           true,
-		ThrottleSensitivity: SensitivityMedium,
-		PauseOnBattery:      true,
-		TempLimitCelsius:    95,
-		LogLevel:            "info",
+		ThrottleSensitivity:  SensitivityMedium,
+		PauseOnBattery:       true,
+		TempLimitCelsius:     95,
+		IdleFullAfterSeconds: 300,
+		LogLevel:             "info",
 	}
 }
 
@@ -124,6 +146,12 @@ func Load() (*Config, error) {
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
+	// A key present but empty (`p2pool_chain:` with nothing after it) overwrites
+	// the default with "", which downstream reads as the main chain. Restore the
+	// default instead of silently switching sidechains.
+	if cfg.P2PoolChain == "" {
+		cfg.P2PoolChain = ChainMini
+	}
 	return cfg, nil
 }
 
@@ -152,6 +180,16 @@ func (c *Config) Validate() error {
 	}
 	if _, ok := SensitivityProfiles[c.ThrottleSensitivity]; !ok {
 		return fmt.Errorf("throttle_sensitivity must be low, medium, or high")
+	}
+	if c.IdleFullAfterSeconds < 0 {
+		return fmt.Errorf("idle_full_after_seconds cannot be negative")
+	}
+	// Empty means "unset" and Load normalises it to mini. A typo must not fall
+	// through to the main chain, where a small miner may never earn a payout.
+	switch c.P2PoolChain {
+	case "", ChainMini, ChainMain:
+	default:
+		return fmt.Errorf("p2pool_chain must be %q or %q, got %q", ChainMini, ChainMain, c.P2PoolChain)
 	}
 	return nil
 }
