@@ -69,7 +69,7 @@ const ReasonWaitingForIdle = "waiting for you to go idle"
 // Scheduler orchestrates the XMRig engine based on system conditions.
 type Scheduler struct {
 	cfg     *config.Config
-	xmrig   *engine.XMRig
+	xmrig   miner
 	cpu     *monitor.CPU
 	battery *monitor.Battery
 	temp    *monitor.Temp
@@ -97,6 +97,17 @@ type Scheduler struct {
 // an interface so tests can drive the idle gate without a real desktop session.
 type idleSource interface {
 	IdleTime() (time.Duration, bool)
+}
+
+// miner is the slice of the XMRig engine the scheduler drives. Depending on the
+// behaviour rather than the concrete type lets the state machine be tested
+// without launching a mining subprocess.
+type miner interface {
+	Pause() error
+	Resume() error
+	SetThreads(int) error
+	Stop()
+	PID() int
 }
 
 // New creates a Scheduler. It does not start the mining loop.

@@ -55,13 +55,15 @@ type uiApp struct {
 	hasTray bool
 
 	// dashboard widgets (created when the dashboard screen is shown)
-	status *canvas.Text
-	detail *canvas.Text
-	toggle *widget.Button
+	status  *canvas.Text
+	detail  *canvas.Text
+	toggle  *widget.Button
+	mineNow *widget.Button
 
 	// system tray
 	trayMenu   *fyne.Menu
 	mToggle    *fyne.MenuItem
+	mMineNow   *fyne.MenuItem
 	mCountdown *fyne.MenuItem
 
 	refreshStop chan struct{}
@@ -212,10 +214,11 @@ func (u *uiApp) dashboardScreen() fyne.CanvasObject {
 	u.detail.TextSize = 14
 
 	u.toggle = widget.NewButton("Pause", u.onToggle)
+	u.mineNow = widget.NewButton("Mine now", u.onMineNowToggle)
 	settings := widget.NewButton("Settings", u.onSettings)
 	quit := widget.NewButton("Quit", u.confirmQuit)
 
-	buttons := container.NewHBox(u.toggle, settings, widget.NewLabel(""), quit)
+	buttons := container.NewHBox(u.toggle, u.mineNow, settings, widget.NewLabel(""), quit)
 	body := container.NewVBox(u.status, u.detail)
 
 	u.updateDashboard()
@@ -247,9 +250,27 @@ func (u *uiApp) onToggle() {
 		return
 	}
 	if s.IsManuallyPaused() {
-		s.ManualResume()
+		s.SetOverride(scheduler.OverrideNone)
 	} else {
-		s.ManualPause()
+		s.SetOverride(scheduler.OverridePause)
+	}
+	u.updateDashboard()
+}
+
+// onMineNowToggle switches between mining on request and waiting for idle.
+//
+// Turning it on only skips the wait for the user to step away; the CPU, battery,
+// and temperature backoff all stay in force, so mining still gets out of the way
+// of whatever else the machine is doing.
+func (u *uiApp) onMineNowToggle() {
+	s := u.sup.Scheduler()
+	if s == nil {
+		return
+	}
+	if s.Override() == scheduler.OverrideMine {
+		s.SetOverride(scheduler.OverrideNone)
+	} else {
+		s.SetOverride(scheduler.OverrideMine)
 	}
 	u.updateDashboard()
 }
@@ -313,10 +334,12 @@ func (u *uiApp) updateDashboard() {
 		return
 	}
 	state, reason := s.CurrentState()
-	paused := s.IsManuallyPaused()
+	override := s.Override()
+	paused := override == scheduler.OverridePause
+	mineNow := override == scheduler.OverrideMine
 	icon, statusText, detailText := visuals(state, reason, x.Hashrate())
 
-	countdown := countdownLabel(s.IdleCountdown())
+	countdown := trayStatusLine(s.IdleCountdown, override, state, reason)
 	// While the only thing holding mining back is the wait for idle, the detail
 	// line should say how long is left rather than repeat the reason.
 	if reason == scheduler.ReasonWaitingForIdle {
@@ -337,7 +360,14 @@ func (u *uiApp) updateDashboard() {
 			u.toggle.SetText("Pause")
 		}
 	}
-	u.refreshTray(icon, paused, countdown)
+	if u.mineNow != nil {
+		if mineNow {
+			u.mineNow.SetText("Wait for idle")
+		} else {
+			u.mineNow.SetText("Mine now")
+		}
+	}
+	u.refreshTray(icon, paused, mineNow, countdown)
 }
 
 // ---- system tray ----
@@ -351,12 +381,14 @@ func (u *uiApp) installTray() {
 		return // not a desktop driver (shouldn't happen on supported platforms)
 	}
 	u.mToggle = fyne.NewMenuItem("Pause", u.onToggle)
+	u.mMineNow = fyne.NewMenuItem(labelMineNow, u.onMineNowToggle)
 	// A status line rather than an action: it shows why mining is holding back.
 	u.mCountdown = fyne.NewMenuItem(statusIdle, nil)
 	u.mCountdown.Disabled = true
 	u.trayMenu = fyne.NewMenu("kind-miner",
 		u.mCountdown,
 		fyne.NewMenuItem("Open kind-miner", u.showWindow),
+		u.mMineNow,
 		u.mToggle,
 		fyne.NewMenuItem("Settings", u.onSettings),
 	)
@@ -366,7 +398,7 @@ func (u *uiApp) installTray() {
 
 // refreshTray updates the tray icon and the dynamic menu labels, re-applying the
 // menu only when the rendered text changed. See lastMenuKey.
-func (u *uiApp) refreshTray(icon fyne.Resource, paused bool, countdown string) {
+func (u *uiApp) refreshTray(icon fyne.Resource, paused, mineNow bool, countdown string) {
 	desk, ok := u.app.(desktop.App)
 	if !ok {
 		return
@@ -377,7 +409,11 @@ func (u *uiApp) refreshTray(icon fyne.Resource, paused bool, countdown string) {
 	if paused {
 		toggleLabel = "Resume"
 	}
-	key := toggleLabel + "\x00" + countdown
+	mineNowLabel := labelMineNow
+	if mineNow {
+		mineNowLabel = labelMineAuto
+	}
+	key := toggleLabel + "\x00" + mineNowLabel + "\x00" + countdown
 	if key == u.lastMenuKey {
 		return
 	}
@@ -385,6 +421,9 @@ func (u *uiApp) refreshTray(icon fyne.Resource, paused bool, countdown string) {
 
 	if u.mToggle != nil {
 		u.mToggle.Label = toggleLabel
+	}
+	if u.mMineNow != nil {
+		u.mMineNow.Label = mineNowLabel
 	}
 	if u.mCountdown != nil {
 		u.mCountdown.Label = countdown
