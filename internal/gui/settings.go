@@ -67,11 +67,17 @@ func (u *uiApp) showSettings() {
 	threads := widget.NewEntry()
 	threads.SetText(strconv.Itoa(cfg.MaxThreads))
 
+	idleAfter := widget.NewEntry()
+	idleAfter.SetText(strconv.Itoa(cfg.IdleFullAfterSeconds))
+
 	chainItem := widget.NewFormItem("P2Pool sidechain", chain)
 	chainItem.HintText = "mini suits most desktops (< ~50 kH/s); main is for higher-hashrate machines"
 
 	startupItem := widget.NewFormItem("Run at startup", startup)
 	startupItem.HintText = "kind-miner only earns while it is running"
+
+	idleItem := widget.NewFormItem("Full speed after idle (s)", idleAfter)
+	idleItem.HintText = "wait this long after your last keypress before using all threads; 0 = don't wait"
 
 	form := widget.NewForm(
 		widget.NewFormItem("Monero wallet", wallet),
@@ -82,6 +88,7 @@ func (u *uiApp) showSettings() {
 		widget.NewFormItem("Pause on battery", battery),
 		widget.NewFormItem("Temp limit (°C)", temp),
 		widget.NewFormItem("Max threads (0 = auto)", threads),
+		idleItem,
 	)
 
 	status := canvas.NewText("", colorMuted)
@@ -107,6 +114,11 @@ func (u *uiApp) showSettings() {
 			fail("Max threads must be a whole number")
 			return
 		}
+		idleVal, err := strconv.Atoi(strings.TrimSpace(idleAfter.Text))
+		if err != nil || idleVal < 0 {
+			fail("Full speed after idle must be 0 or more seconds")
+			return
+		}
 
 		// Register with the OS before saving, so a stored preference never
 		// claims a login entry the system refused to create.
@@ -129,6 +141,7 @@ func (u *uiApp) showSettings() {
 		cfg.TempLimitCelsius = tempVal
 		cfg.MaxThreads = threadsVal
 		cfg.RunAtStartup = startup.Checked
+		cfg.IdleFullAfterSeconds = idleVal
 
 		if err := cfg.Validate(); err != nil {
 			fail(err.Error())
