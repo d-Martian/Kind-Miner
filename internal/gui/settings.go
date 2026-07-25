@@ -58,6 +58,9 @@ func (u *uiApp) showSettings() {
 	battery := widget.NewCheck("", nil)
 	battery.SetChecked(cfg.PauseOnBattery)
 
+	startup := widget.NewCheck("", nil)
+	startup.SetChecked(cfg.RunAtStartup)
+
 	temp := widget.NewEntry()
 	temp.SetText(strconv.FormatFloat(cfg.TempLimitCelsius, 'f', -1, 64))
 
@@ -67,10 +70,14 @@ func (u *uiApp) showSettings() {
 	chainItem := widget.NewFormItem("P2Pool sidechain", chain)
 	chainItem.HintText = "mini suits most desktops (< ~50 kH/s); main is for higher-hashrate machines"
 
+	startupItem := widget.NewFormItem("Run at startup", startup)
+	startupItem.HintText = "kind-miner only earns while it is running"
+
 	form := widget.NewForm(
 		widget.NewFormItem("Monero wallet", wallet),
 		widget.NewFormItem("Mode", mode),
 		chainItem,
+		startupItem,
 		widget.NewFormItem("Throttle sensitivity", sensitivity),
 		widget.NewFormItem("Pause on battery", battery),
 		widget.NewFormItem("Temp limit (°C)", temp),
@@ -101,6 +108,15 @@ func (u *uiApp) showSettings() {
 			return
 		}
 
+		// Register with the OS before saving, so a stored preference never
+		// claims a login entry the system refused to create.
+		if startup.Checked != cfg.RunAtStartup {
+			if err := SetAutostart(startup.Checked); err != nil {
+				fail("Could not change the startup setting: " + err.Error())
+				return
+			}
+		}
+
 		needRestart := wallet.Text != cfg.Wallet ||
 			string(cfg.Mode) != mode.Selected ||
 			cfg.P2PoolChain != chain.Selected
@@ -112,6 +128,7 @@ func (u *uiApp) showSettings() {
 		cfg.PauseOnBattery = battery.Checked
 		cfg.TempLimitCelsius = tempVal
 		cfg.MaxThreads = threadsVal
+		cfg.RunAtStartup = startup.Checked
 
 		if err := cfg.Validate(); err != nil {
 			fail(err.Error())
