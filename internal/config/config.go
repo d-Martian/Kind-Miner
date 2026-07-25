@@ -77,6 +77,11 @@ type Config struct {
 	ManageTor  bool   `yaml:"manage_tor"`
 	TorBinPath string `yaml:"tor_path"`
 
+	// RunAtStartup mirrors the OS login item managed by internal/autostart. The
+	// OS registration is the thing that actually works; this is the record of
+	// what the user asked for, used to re-register if the entry goes missing.
+	RunAtStartup bool `yaml:"run_at_startup"`
+
 	// throttle
 	MaxThreads          int         `yaml:"max_threads"`
 	ThrottleSensitivity Sensitivity `yaml:"throttle_sensitivity"`
