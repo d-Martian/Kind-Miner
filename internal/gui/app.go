@@ -60,12 +60,18 @@ type uiApp struct {
 	toggle *widget.Button
 
 	// system tray
-	trayMenu *fyne.Menu
-	mToggle  *fyne.MenuItem
+	trayMenu   *fyne.Menu
+	mToggle    *fyne.MenuItem
+	mCountdown *fyne.MenuItem
 
 	refreshStop chan struct{}
 	stopOnce    sync.Once
-	lastPaused  bool
+
+	// lastMenuKey holds the rendered text of every dynamic menu item. Fyne 2.5.3
+	// cannot refresh a single item, so changing a label means re-applying the
+	// whole menu — which closes it if the user has it open. Re-applying only when
+	// the rendered text actually changed keeps that rare.
+	lastMenuKey string
 }
 
 // RunGraphical owns the full GUI lifecycle: optional first-run onboarding, an
@@ -310,6 +316,13 @@ func (u *uiApp) updateDashboard() {
 	paused := s.IsManuallyPaused()
 	icon, statusText, detailText := visuals(state, reason, x.Hashrate())
 
+	countdown := countdownLabel(s.IdleCountdown())
+	// While the only thing holding mining back is the wait for idle, the detail
+	// line should say how long is left rather than repeat the reason.
+	if reason == scheduler.ReasonWaitingForIdle {
+		detailText = countdown
+	}
+
 	if u.status != nil {
 		u.status.Text = statusText
 		u.status.Color = statusColor(state)
@@ -324,7 +337,7 @@ func (u *uiApp) updateDashboard() {
 			u.toggle.SetText("Pause")
 		}
 	}
-	u.setTrayIcon(icon, paused)
+	u.refreshTray(icon, paused, countdown)
 }
 
 // ---- system tray ----
@@ -338,7 +351,11 @@ func (u *uiApp) installTray() {
 		return // not a desktop driver (shouldn't happen on supported platforms)
 	}
 	u.mToggle = fyne.NewMenuItem("Pause", u.onToggle)
+	// A status line rather than an action: it shows why mining is holding back.
+	u.mCountdown = fyne.NewMenuItem(statusIdle, nil)
+	u.mCountdown.Disabled = true
 	u.trayMenu = fyne.NewMenu("kind-miner",
+		u.mCountdown,
 		fyne.NewMenuItem("Open kind-miner", u.showWindow),
 		u.mToggle,
 		fyne.NewMenuItem("Settings", u.onSettings),
@@ -347,21 +364,32 @@ func (u *uiApp) installTray() {
 	desk.SetSystemTrayIcon(resMining)
 }
 
-func (u *uiApp) setTrayIcon(icon fyne.Resource, paused bool) {
+// refreshTray updates the tray icon and the dynamic menu labels, re-applying the
+// menu only when the rendered text changed. See lastMenuKey.
+func (u *uiApp) refreshTray(icon fyne.Resource, paused bool, countdown string) {
 	desk, ok := u.app.(desktop.App)
 	if !ok {
 		return
 	}
 	desk.SetSystemTrayIcon(icon)
-	if u.mToggle != nil && paused != u.lastPaused {
-		if paused {
-			u.mToggle.Label = "Resume"
-		} else {
-			u.mToggle.Label = "Pause"
-		}
-		u.lastPaused = paused
-		desk.SetSystemTrayMenu(u.trayMenu) // re-apply to reflect the new label
+
+	toggleLabel := "Pause"
+	if paused {
+		toggleLabel = "Resume"
 	}
+	key := toggleLabel + "\x00" + countdown
+	if key == u.lastMenuKey {
+		return
+	}
+	u.lastMenuKey = key
+
+	if u.mToggle != nil {
+		u.mToggle.Label = toggleLabel
+	}
+	if u.mCountdown != nil {
+		u.mCountdown.Label = countdown
+	}
+	desk.SetSystemTrayMenu(u.trayMenu) // re-apply to reflect the new labels
 }
 
 // ---- presentation helpers (ported from the old systray Tray) ----
