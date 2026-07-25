@@ -19,28 +19,39 @@ func NewCPU() *CPU { return &CPU{} }
 // given PID. The sample window is 500ms. Returns a value in [0.0, 1.0].
 // If pid is 0, it returns total CPU usage.
 func (c *CPU) OtherUsage(pid int) (float64, error) {
+	other, _, err := c.Usage(pid)
+	return other, err
+}
+
+// Usage returns the CPU split between the given PID and everything else, both
+// as fractions in [0.0, 1.0] of total capacity. The sample window is 500ms.
+//
+// The miner's own share is what makes the two series comparable on a chart: it
+// is the difference between "the machine is busy" and "the miner is what's
+// making it busy".
+func (c *CPU) Usage(pid int) (other, miner float64, err error) {
 	pcts, err := cpu.Percent(500*time.Millisecond, false)
 	if err != nil || len(pcts) == 0 {
-		return 0, err
+		return 0, 0, err
 	}
 	total := pcts[0] / 100.0
 
 	if pid == 0 {
-		return total, nil
+		return total, 0, nil
 	}
 
-	// Subtract the miner's own CPU share.
 	minerPct, err := processCPUFraction(pid)
 	if err != nil {
-		// If we can't read the miner's CPU (e.g., it just restarted), return
-		// total — it's a conservative over-estimate which is safe.
-		return total, nil
+		// If we can't read the miner's CPU (e.g., it just restarted), report
+		// the total as "other" — a conservative over-estimate, which is safe
+		// because it only makes the scheduler back off sooner.
+		return total, 0, nil
 	}
-	other := total - minerPct
+	other = total - minerPct
 	if other < 0 {
 		other = 0
 	}
-	return other, nil
+	return other, minerPct, nil
 }
 
 func processCPUFraction(pid int) (float64, error) {

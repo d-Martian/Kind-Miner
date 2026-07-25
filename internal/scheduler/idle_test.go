@@ -3,6 +3,8 @@ package scheduler
 import (
 	"testing"
 	"time"
+
+	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
 // fakeIdle drives the idle gate without a desktop session.
@@ -178,5 +180,38 @@ func TestOverridesAreExclusive(t *testing.T) {
 	s.SetOverride(OverrideNone)
 	if got := s.Override(); got != OverrideNone {
 		t.Errorf("Override() = %v, want OverrideNone", got)
+	}
+}
+
+// The chart this feeds is the answer to "is the miner what's slowing my
+// machine?", so the two CPU series must be recorded separately.
+func TestHistoryRecordsBothCPUSeries(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{ok: false})
+	s.history = stats.NewRing(4)
+
+	s.record(0.30, 0.10)
+	s.record(0.55, 0.05)
+
+	got := s.History()
+	if len(got) != 2 {
+		t.Fatalf("History() length = %d, want 2", len(got))
+	}
+	if got[0].OtherCPU != 0.30 || got[0].MinerCPU != 0.10 {
+		t.Errorf("sample 0 = other %.2f miner %.2f, want 0.30 / 0.10", got[0].OtherCPU, got[0].MinerCPU)
+	}
+	if got[1].OtherCPU != 0.55 || got[1].MinerCPU != 0.05 {
+		t.Errorf("sample 1 = other %.2f miner %.2f, want 0.55 / 0.05", got[1].OtherCPU, got[1].MinerCPU)
+	}
+	if got[0].At.IsZero() {
+		t.Error("sample has no timestamp; a chart cannot place it on an axis")
+	}
+}
+
+// A scheduler built without a history (as the test helper does) must not panic.
+func TestHistoryAbsentIsSafe(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{ok: false})
+	s.record(0.5, 0.1)
+	if got := s.History(); got != nil {
+		t.Errorf("History() = %v, want nil", got)
 	}
 }
