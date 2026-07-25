@@ -65,6 +65,7 @@ func runGUI(cfg *config.Config, loadErr error, firstRun bool) {
 		}
 	}
 	setupLogging(cfg)
+	gui.EnsureAutostart(cfg)
 
 	sup := core.New(cfg)
 
@@ -108,6 +109,7 @@ func runTerminal(mode uiMode, cfg *config.Config, loadErr error, firstRun bool) 
 		os.Exit(1)
 	}
 	setupLogging(cfg)
+	gui.EnsureAutostart(cfg)
 
 	sup := core.New(cfg)
 	// Deferred (not just called at the end) so the subprocesses die with us on

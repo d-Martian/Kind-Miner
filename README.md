@@ -23,6 +23,10 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 
 - **Disappears under load.** Every 5 seconds the scheduler measures your CPU usage, excluding the miner's own threads. If you start compiling, gaming, or rendering, XMRig is throttled or suspended within one tick. When you stop, it resumes automatically.
 - **Four-gear state machine.** Full → Reduced (half threads) → Minimal (1 thread) → Paused. Transitions are smooth and fast (~500 ms for a thread count change).
+- **Waits for you to step away.** Full-speed mining only starts once your keyboard and mouse have been quiet for a while (5 minutes by default, configurable). The tray counts down to it. Reading a page or watching a video barely touches the CPU, so idle detection — not CPU load alone — is what decides.
+- **Mine now, kindly.** A tray toggle skips the wait when you want to mine on purpose. It skips *only* the wait: the CPU, battery, and temperature backoff all stay in force, so browsing and video stay smooth.
+- **Tells you what it's doing.** The tray shows whether mining is backing off for you, and roughly how long until your share of the next block reward arrives.
+- **Starts with your machine.** Optional login-item registration on Linux, macOS, and Windows.
 - **Temperature ceiling.** Configurable hard limit; mining suspends if any core exceeds it.
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
 - **Tor-native.** Routes through a Tor hidden service by default. Your IP is not visible to the node operator.
@@ -267,6 +271,22 @@ RPC  18089   ZMQ  18083
 It runs `monerod` with ZMQ enabled — a requirement for p2pool that most public nodes skip. It is the only node in kind-miner's default list because we don't advertise nodes we can't verify. If it is temporarily unreachable, kind-miner retries automatically before giving up.
 
 You can substitute any monerod node that has ZMQ enabled by setting `remote_node` in your config. If you run your own node on a home server, this is the cleanest option.
+
+---
+
+## Planned: a resource chart
+
+The scheduler already keeps a rolling hour of samples — miner CPU, everything
+else's CPU, and hashrate, at 5-second resolution (`internal/stats`,
+`Scheduler.History()`). Nothing draws it yet.
+
+The intended use is a line chart in the app showing the miner's CPU falling as
+other processes claim theirs. kind-miner is meant to be set-and-forget, and the
+failure mode that costs a user the most is deciding some unrelated slowdown is
+the miner's fault and uninstalling it. Being able to see the miner stepping
+aside is a better answer to that than any status line.
+
+Fyne 2.5.3 has no chart widget, so this means drawing onto a canvas.
 
 ---
 

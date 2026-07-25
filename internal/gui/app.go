@@ -55,17 +55,27 @@ type uiApp struct {
 	hasTray bool
 
 	// dashboard widgets (created when the dashboard screen is shown)
-	status *canvas.Text
-	detail *canvas.Text
-	toggle *widget.Button
+	status  *canvas.Text
+	detail  *canvas.Text
+	reward  *canvas.Text
+	toggle  *widget.Button
+	mineNow *widget.Button
 
 	// system tray
-	trayMenu *fyne.Menu
-	mToggle  *fyne.MenuItem
+	trayMenu   *fyne.Menu
+	mToggle    *fyne.MenuItem
+	mMineNow   *fyne.MenuItem
+	mCountdown *fyne.MenuItem
+	mReward    *fyne.MenuItem
 
 	refreshStop chan struct{}
 	stopOnce    sync.Once
-	lastPaused  bool
+
+	// lastMenuKey holds the rendered text of every dynamic menu item. Fyne 2.5.3
+	// cannot refresh a single item, so changing a label means re-applying the
+	// whole menu — which closes it if the user has it open. Re-applying only when
+	// the rendered text actually changed keeps that rare.
+	lastMenuKey string
 }
 
 // RunGraphical owns the full GUI lifecycle: optional first-run onboarding, an
@@ -205,12 +215,16 @@ func (u *uiApp) dashboardScreen() fyne.CanvasObject {
 	u.detail = canvas.NewText("", colorMuted)
 	u.detail.TextSize = 14
 
+	u.reward = canvas.NewText("", colorMuted)
+	u.reward.TextSize = 12
+
 	u.toggle = widget.NewButton("Pause", u.onToggle)
+	u.mineNow = widget.NewButton("Mine now", u.onMineNowToggle)
 	settings := widget.NewButton("Settings", u.onSettings)
 	quit := widget.NewButton("Quit", u.confirmQuit)
 
-	buttons := container.NewHBox(u.toggle, settings, widget.NewLabel(""), quit)
-	body := container.NewVBox(u.status, u.detail)
+	buttons := container.NewHBox(u.toggle, u.mineNow, settings, widget.NewLabel(""), quit)
+	body := container.NewVBox(u.status, u.detail, u.reward)
 
 	u.updateDashboard()
 	return container.NewBorder(nil, buttons, nil, nil, container.NewPadded(body))
@@ -241,9 +255,27 @@ func (u *uiApp) onToggle() {
 		return
 	}
 	if s.IsManuallyPaused() {
-		s.ManualResume()
+		s.SetOverride(scheduler.OverrideNone)
 	} else {
-		s.ManualPause()
+		s.SetOverride(scheduler.OverridePause)
+	}
+	u.updateDashboard()
+}
+
+// onMineNowToggle switches between mining on request and waiting for idle.
+//
+// Turning it on only skips the wait for the user to step away; the CPU, battery,
+// and temperature backoff all stay in force, so mining still gets out of the way
+// of whatever else the machine is doing.
+func (u *uiApp) onMineNowToggle() {
+	s := u.sup.Scheduler()
+	if s == nil {
+		return
+	}
+	if s.Override() == scheduler.OverrideMine {
+		s.SetOverride(scheduler.OverrideNone)
+	} else {
+		s.SetOverride(scheduler.OverrideMine)
 	}
 	u.updateDashboard()
 }
@@ -307,8 +339,17 @@ func (u *uiApp) updateDashboard() {
 		return
 	}
 	state, reason := s.CurrentState()
-	paused := s.IsManuallyPaused()
+	override := s.Override()
+	paused := override == scheduler.OverridePause
+	mineNow := override == scheduler.OverrideMine
 	icon, statusText, detailText := visuals(state, reason, x.Hashrate())
+
+	countdown := trayStatusLine(s.IdleCountdown, override, state, reason)
+	// While the only thing holding mining back is the wait for idle, the detail
+	// line should say how long is left rather than repeat the reason.
+	if reason == scheduler.ReasonWaitingForIdle {
+		detailText = countdown
+	}
 
 	if u.status != nil {
 		u.status.Text = statusText
@@ -317,6 +358,15 @@ func (u *uiApp) updateDashboard() {
 		u.detail.Text = detailText
 		u.detail.Refresh()
 	}
+	if u.reward != nil {
+		u.reward.Text = ""
+		if p := u.sup.P2Pool(); p != nil {
+			if stats, ok := p.Stats(); ok {
+				u.reward.Text = rewardDetail(stats)
+			}
+		}
+		u.reward.Refresh()
+	}
 	if u.toggle != nil {
 		if paused {
 			u.toggle.SetText("Resume")
@@ -324,7 +374,19 @@ func (u *uiApp) updateDashboard() {
 			u.toggle.SetText("Pause")
 		}
 	}
-	u.setTrayIcon(icon, paused)
+	if u.mineNow != nil {
+		if mineNow {
+			u.mineNow.SetText("Wait for idle")
+		} else {
+			u.mineNow.SetText("Mine now")
+		}
+	}
+
+	reward := rewardEstimating
+	if p := u.sup.P2Pool(); p != nil {
+		reward = rewardLabel(p.Stats())
+	}
+	u.refreshTray(icon, paused, mineNow, countdown, reward)
 }
 
 // ---- system tray ----
@@ -338,30 +400,68 @@ func (u *uiApp) installTray() {
 		return // not a desktop driver (shouldn't happen on supported platforms)
 	}
 	u.mToggle = fyne.NewMenuItem("Pause", u.onToggle)
-	u.trayMenu = fyne.NewMenu("kind-miner",
+	u.mMineNow = fyne.NewMenuItem(labelMineNow, u.onMineNowToggle)
+	// Status lines rather than actions: they show why mining is holding back and
+	// what it is working towards.
+	u.mCountdown = fyne.NewMenuItem(statusIdle, nil)
+	u.mCountdown.Disabled = true
+	u.mReward = fyne.NewMenuItem(rewardEstimating, nil)
+	u.mReward.Disabled = true
+
+	items := []*fyne.MenuItem{u.mCountdown}
+	// In pool mode there is no p2pool sidechain, so there is nothing to estimate.
+	if u.sup.Config() != nil && u.sup.Config().Mode != config.ModePool {
+		items = append(items, u.mReward)
+	} else {
+		u.mReward = nil
+	}
+	items = append(items,
 		fyne.NewMenuItem("Open kind-miner", u.showWindow),
+		u.mMineNow,
 		u.mToggle,
 		fyne.NewMenuItem("Settings", u.onSettings),
 	)
+	u.trayMenu = fyne.NewMenu("kind-miner", items...)
 	desk.SetSystemTrayMenu(u.trayMenu) // Fyne appends a Quit item automatically
 	desk.SetSystemTrayIcon(resMining)
 }
 
-func (u *uiApp) setTrayIcon(icon fyne.Resource, paused bool) {
+// refreshTray updates the tray icon and the dynamic menu labels, re-applying the
+// menu only when the rendered text changed. See lastMenuKey.
+func (u *uiApp) refreshTray(icon fyne.Resource, paused, mineNow bool, countdown, reward string) {
 	desk, ok := u.app.(desktop.App)
 	if !ok {
 		return
 	}
 	desk.SetSystemTrayIcon(icon)
-	if u.mToggle != nil && paused != u.lastPaused {
-		if paused {
-			u.mToggle.Label = "Resume"
-		} else {
-			u.mToggle.Label = "Pause"
-		}
-		u.lastPaused = paused
-		desk.SetSystemTrayMenu(u.trayMenu) // re-apply to reflect the new label
+
+	toggleLabel := "Pause"
+	if paused {
+		toggleLabel = "Resume"
 	}
+	mineNowLabel := labelMineNow
+	if mineNow {
+		mineNowLabel = labelMineAuto
+	}
+	key := toggleLabel + "\x00" + mineNowLabel + "\x00" + countdown + "\x00" + reward
+	if key == u.lastMenuKey {
+		return
+	}
+	u.lastMenuKey = key
+
+	if u.mToggle != nil {
+		u.mToggle.Label = toggleLabel
+	}
+	if u.mMineNow != nil {
+		u.mMineNow.Label = mineNowLabel
+	}
+	if u.mCountdown != nil {
+		u.mCountdown.Label = countdown
+	}
+	if u.mReward != nil {
+		u.mReward.Label = reward
+	}
+	desk.SetSystemTrayMenu(u.trayMenu) // re-apply to reflect the new labels
 }
 
 // ---- presentation helpers (ported from the old systray Tray) ----
