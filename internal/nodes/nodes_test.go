@@ -23,7 +23,7 @@ func TestParseAddr(t *testing.T) {
 			input:    "node.example.com:18081",
 			wantHost: "node.example.com",
 			wantRPC:  18081,
-			wantZMQ:  18084,
+			wantZMQ:  18083, // conventional p2pool pairing, same as local mode
 		},
 		{
 			input:    "node.example.com:18085",

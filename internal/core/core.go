@@ -144,6 +144,10 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		}
 
 		emit(StepStartP2Pool)
+		// Keep p2pool's cache/log/peer files in a persistent data dir instead of
+		// whatever cwd we inherited — in a Flatpak that cwd is a throwaway tmpfs
+		// (the ~450 MB p2pool.cache would live in RAM and vanish on exit).
+		p2poolWorkDir := filepath.Join(filepath.Dir(autoinstall.BinDir()), "p2pool")
 		s.p2pool = engine.NewP2Pool(
 			s.cfg.P2PoolBinPath,
 			s.cfg.Wallet,
@@ -153,6 +157,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			s.cfg.P2PoolChain,
 			stratumPort,
 			socks5Proxy,
+			p2poolWorkDir,
 		)
 		log.Println("Starting p2pool (syncing sidechain…)")
 		if err := s.p2pool.Start(3 * time.Minute); err != nil {
