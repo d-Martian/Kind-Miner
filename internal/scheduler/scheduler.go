@@ -14,6 +14,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/monitor"
+	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
 // State represents the current mining activity level.
@@ -74,6 +75,7 @@ type Scheduler struct {
 	battery *monitor.Battery
 	temp    *monitor.Temp
 	idle    idleSource
+	history *stats.Ring
 
 	// Live-tunable settings, guarded by mu. They are seeded from the config in
 	// New and can be changed at runtime via UpdateRuntime (e.g. from the GUI
@@ -110,6 +112,17 @@ type miner interface {
 	PID() int
 }
 
+// hashrateReporter is implemented by engines that can report a hashrate. It is
+// separate from miner so a test stub does not have to provide one.
+type hashrateReporter interface {
+	Hashrate() float64
+}
+
+// historyCapacity is how many samples the rolling history keeps: one hour at
+// the 5-second tick. Enough to show the miner reacting to a burst of work
+// without holding data nobody will look at.
+const historyCapacity = 720
+
 // New creates a Scheduler. It does not start the mining loop.
 func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 	maxThreads := cfg.MaxThreads
@@ -124,6 +137,7 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 		battery:        monitor.NewBattery(),
 		temp:           monitor.NewTemp(),
 		idle:           monitor.NewIdle(),
+		history:        stats.NewRing(historyCapacity),
 		maxThreads:     maxThreads,
 		profile:        profile,
 		pauseOnBattery: cfg.PauseOnBattery,
@@ -276,11 +290,12 @@ func (s *Scheduler) tick() {
 	}
 
 	// CPU load — drive the throttle tiers.
-	usage, err := s.cpu.OtherUsage(s.xmrig.PID())
+	usage, minerUsage, err := s.cpu.Usage(s.xmrig.PID())
 	if err != nil {
 		log.Printf("cpu usage error: %v", err)
 		return
 	}
+	s.record(usage, minerUsage)
 
 	switch {
 	case usage >= profile.PauseAt:
@@ -298,6 +313,34 @@ func (s *Scheduler) tick() {
 		}
 		s.applyState(StateFull, "")
 	}
+}
+
+// record appends one observation to the rolling history. The hashrate comes
+// from the engine's own reading, so the three series in a Sample are all taken
+// at the same moment.
+func (s *Scheduler) record(otherCPU, minerCPU float64) {
+	if s.history == nil {
+		return
+	}
+	var hr float64
+	if h, ok := s.xmrig.(hashrateReporter); ok {
+		hr = h.Hashrate()
+	}
+	s.history.Add(stats.Sample{
+		At:       time.Now(),
+		MinerCPU: minerCPU,
+		OtherCPU: otherCPU,
+		Hashrate: hr,
+	})
+}
+
+// History returns the rolling history of CPU and hashrate samples, oldest
+// first. Intended for a chart showing the miner yielding to other work.
+func (s *Scheduler) History() []stats.Sample {
+	if s.history == nil {
+		return nil
+	}
+	return s.history.Snapshot()
 }
 
 // idleGate reports whether full-speed mining should be held back because the
