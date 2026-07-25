@@ -66,7 +66,7 @@ To confirm Tor is running: `systemctl is-active tor` should print `active`.
 
 ```sh
 # Download the latest release for your platform from:
-# https://codeberg.org/dMartian/kind-miner/releases
+# https://github.com/kind-miner/kind-miner/releases
 
 # Make executable (Linux/macOS)
 chmod +x kind-miner

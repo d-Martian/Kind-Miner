@@ -1,0 +1,97 @@
+name: Dependency watch
+
+# Stage 1 dependency watch (detect + notify, no AI).
+#
+# Polls upstream XMRig/P2Pool for new releases and, when one appears, opens a
+# single tracking issue on this repo. It does NOT edit code or open a PR — the
+# review/update/PR (Stage 2) is done by a human running the
+# monero-miner-dependency-updater skill, so a person always vets a miner
+# dependency before it ships.
+#
+# No setup required: GITHUB_TOKEN is provided by Actions. Run it on demand from
+# the Actions tab (Run workflow) or let the weekly cron fire.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-and-notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # Detect: compares the pins in scripts/download-*.sh against the latest
+      # upstream releases and writes dependency-update-report/latest.json.
+      - name: Check upstream releases
+        run: |
+          python3 .claude/skills/monero-miner-dependency-updater/scripts/check_upstream_releases.py \
+            --report-dir dependency-update-report
+
+      # Render the issue title/body from the report. The title encodes the target
+      # versions so repeated cron runs dedupe; a newer upstream version yields a
+      # new title and therefore a fresh issue.
+      - name: Render issue text
+        id: render
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          report = json.loads(pathlib.Path("dependency-update-report/latest.json").read_text())
+          updates = {n: d for n, d in report["dependencies"].items() if d.get("update_available")}
+          out = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          if not updates:
+              out.write_text("needed=false\n")
+              print("No dependency updates; no issue needed.")
+              raise SystemExit(0)
+
+          parts = [f"{n} {d['current_version']}->{d['latest_version']}" for n, d in updates.items()]
+          title = "[deps] update available: " + ", ".join(parts)
+
+          lines = ["Automated dependency watch found new upstream release(s).", ""]
+          for name, dep in updates.items():
+              lines.append(f"### {name}: `{dep['current_version']}` → `{dep['latest_version']}`")
+              release = dep.get("release") or {}
+              if release.get("html_url"):
+                  lines.append(f"- Release: {release['html_url']}")
+              if dep.get("compare"):
+                  lines.append(f"- Compare: {dep['compare'].get('html_url')}")
+              if dep.get("missing_platforms"):
+                  lines.append(f"- ⚠ Missing platform assets: {', '.join(dep['missing_platforms'])}")
+              lines.append("")
+          lines += [
+              "---",
+              "Review + update with the `monero-miner-dependency-updater` skill:",
+              "security & compatibility review against the hard gates, then",
+              "`apply_dependency_update.py`, `run_update_validation.sh`, and open a PR.",
+              "Do not auto-merge — a human approves miner dependency changes.",
+          ]
+          pathlib.Path("issue-body.md").write_text("\n".join(lines))
+          with out.open("a") as fh:
+              fh.write("needed=true\n")
+              fh.write(f"title={title}\n")
+          PY
+
+      - name: Open tracking issue
+        if: steps.render.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: ${{ steps.render.outputs.title }}
+        run: |
+          # Dedupe on the exact title — an identical open issue means the same
+          # upstream versions were already reported.
+          existing=$(gh issue list --state open --limit 100 \
+            --json title,url --jq ".[] | select(.title == \"$TITLE\") | .url")
+          if [ -n "$existing" ]; then
+            echo "Issue already open: $existing"
+            exit 0
+          fi
+          gh issue create --title "$TITLE" --body-file issue-body.md

@@ -11,7 +11,7 @@ checksums (see `dMartian.pub`) prove *we* built a given file; reproducibility le
 ## Reproduce a release
 
 ```sh
-git clone https://codeberg.org/dMartian/kind-miner
+git clone https://github.com/kind-miner/kind-miner
 cd kind-miner
 git checkout v0.1.0            # the exact tag you are verifying
 
@@ -66,6 +66,20 @@ make verify-repro
 
 ## Build-flag parity
 
-The same flags are used in three places and must stay in sync:
+The same compiler flags are used in three places and must stay in sync:
 `Makefile` (`GO_BUILD_FLAGS`), `scripts/reproduce.sh`, and the CI build step in
 `.github/workflows/release.yml`.
+
+Archive flags have a single source of truth: `scripts/package.sh`. The Makefile
+`bundle-*` targets, `scripts/vendor-tarball.sh`, and the CI packaging step all
+call it, so a release tarball built locally and one built by CI are byte-identical.
+
+## CI
+
+All CI runs on GitHub Actions:
+
+| Workflow | Trigger | What it guards |
+|---|---|---|
+| `.github/workflows/repro-verify.yml` | push, PR, manual | Rebuilds the binary from two different paths and fails if the SHA256 differ |
+| `.github/workflows/release.yml` | `v*` tag | Native per-OS builds + deterministic archives, uploaded to a draft release |
+| `.github/workflows/dependency-watch.yml` | weekly cron, manual | Opens a tracking issue when XMRig/P2Pool publish a new release |
