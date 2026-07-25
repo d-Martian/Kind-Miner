@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
-APP_ID="org.codeberg.dMartian.KindMiner"
+APP_ID="io.github.kind_miner.KindMiner"
 MANIFEST="flatpak/${APP_ID}.yml"
 VERSION="${1:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
 ARCH="$(uname -m)"
