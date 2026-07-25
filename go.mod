@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	fyne.io/fyne/v2 v2.5.3
+	github.com/BurntSushi/xgb v0.0.0-20210121224620-deaf085860bc
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/shirou/gopsutil/v3 v3.23.11
 	golang.org/x/net v0.55.0
