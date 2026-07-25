@@ -13,10 +13,33 @@ type fakeIdle struct {
 
 func (f fakeIdle) IdleTime() (time.Duration, bool) { return f.dur, f.ok }
 
-// newTestScheduler builds a Scheduler with only the fields the idle gate reads,
-// avoiding the monitors and the XMRig process New would otherwise wire up.
+// stubMiner records what the scheduler asked the engine to do, standing in for
+// the real XMRig subprocess.
+type stubMiner struct {
+	paused  bool
+	threads int
+}
+
+func (m *stubMiner) Pause() error  { m.paused = true; return nil }
+func (m *stubMiner) Resume() error { m.paused = false; return nil }
+func (m *stubMiner) SetThreads(n int) error {
+	m.threads = n
+	return nil
+}
+func (m *stubMiner) Stop()    {}
+func (m *stubMiner) PID() int { return 0 }
+
+// newTestScheduler builds a Scheduler with the fields the state machine reads,
+// avoiding the monitors and the mining subprocess New would otherwise wire up.
 func newTestScheduler(after time.Duration, override Override, idle idleSource) *Scheduler {
-	return &Scheduler{idleFullAfter: after, override: override, idle: idle}
+	return &Scheduler{
+		idleFullAfter: after,
+		override:      override,
+		idle:          idle,
+		xmrig:         &stubMiner{},
+		maxThreads:    4,
+		Events:        make(chan StateChange, 16),
+	}
 }
 
 func TestIdleGate(t *testing.T) {
