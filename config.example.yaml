@@ -30,6 +30,12 @@ remote_node: ""
 # of waiting a very long time between payouts on the main chain.
 p2pool_chain: mini
 
+# Start kind-miner automatically when you log in. Changing this from the
+# settings window also creates or removes the login entry your OS uses (an XDG
+# autostart file, a LaunchAgent, or a registry Run value). Editing it here only
+# takes effect the next time the app starts.
+run_at_startup: false
+
 # --- p2pool-local settings ---
 
 # Set to true to have kind-miner start/stop monerod for you.
