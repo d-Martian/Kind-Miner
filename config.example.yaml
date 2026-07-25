@@ -23,7 +23,11 @@ mode: p2pool-remote
 # Leave blank to auto-select from the built-in community node list.
 remote_node: ""
 
-# P2Pool sidechain: "mini" (recommended for <50 kH/s) or "main"
+# P2Pool sidechain — the only accepted values are "mini" and "main"; anything
+# else is rejected at startup, and leaving it blank falls back to "mini".
+# "mini" is the default and the right choice for a desktop CPU: its share
+# difficulty is far lower, so you land shares (and get paid) regularly instead
+# of waiting a very long time between payouts on the main chain.
 p2pool_chain: mini
 
 # --- p2pool-local settings ---
