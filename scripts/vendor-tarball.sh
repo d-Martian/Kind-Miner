@@ -48,17 +48,10 @@ cp -a vendor "${STAGE}/${PREFIX}/vendor"
 
 mkdir -p "${OUTDIR}"
 # Normalise every source of nondeterminism: stable sort, fixed mtime/owner,
-# no pax atime/ctime headers, and gzip without its mtime byte.
-LC_ALL=C tar \
-    --sort=name \
-    --format=posix \
-    --pax-option='exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime' \
-    --mtime="@${SOURCE_DATE_EPOCH}" \
-    --owner=0 --group=0 --numeric-owner \
-    -C "${STAGE}" -cf - "${PREFIX}" \
-    | gzip -9 -n > "${OUTPUT}"
-
-sha256sum "${OUTPUT}" > "${OUTPUT}.sha256"
+# no pax atime/ctime headers, and gzip without its mtime byte. The recipe lives
+# in scripts/package.sh so this script, the Makefile, and CI share one copy.
+bash "$(dirname "$0")/package.sh" tar "${OUTPUT}" "${STAGE}" "${PREFIX}"
+bash "$(dirname "$0")/package.sh" sha256 "${OUTPUT}"
 
 echo ""
 echo "✓ ${OUTPUT}"

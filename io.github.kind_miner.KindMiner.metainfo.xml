@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.codeberg.dMartian.KindMiner</id>
+  <id>io.github.kind_miner.KindMiner</id>
 
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
@@ -31,12 +31,12 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">org.codeberg.dMartian.KindMiner.desktop</launchable>
+  <launchable type="desktop-id">io.github.kind_miner.KindMiner.desktop</launchable>
 
-  <url type="homepage">https://codeberg.org/dMartian/kind-miner</url>
-  <url type="bugtracker">https://codeberg.org/dMartian/kind-miner/issues</url>
+  <url type="homepage">https://github.com/kind-miner/kind-miner</url>
+  <url type="bugtracker">https://github.com/kind-miner/kind-miner/issues</url>
 
-  <developer id="org.codeberg.dmartian">
+  <developer id="io.github.kind_miner">
     <name>dMartian</name>
   </developer>
 
@@ -49,11 +49,11 @@
   -->
   <screenshots>
     <screenshot type="default">
-      <image>https://codeberg.org/dMartian/kind-miner/raw/branch/main/assets/screenshots/onboarding-welcome.png</image>
+      <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/onboarding-welcome.png</image>
       <caption>Idle Monero mining that pays straight to your wallet</caption>
     </screenshot>
     <screenshot>
-      <image>https://codeberg.org/dMartian/kind-miner/raw/branch/main/assets/screenshots/onboarding-wallet.png</image>
+      <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/onboarding-wallet.png</image>
       <caption>One-step setup: paste your Monero wallet address</caption>
     </screenshot>
   </screenshots>
