@@ -38,6 +38,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the Makefile derives VERSION from `git describe` and
+          # SOURCE_DATE_EPOCH from the commit time. A shallow clone has neither.
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
@@ -71,32 +75,37 @@ jobs:
             -o "kind-miner${EXT}" \
             ./cmd/kind-miner
 
-      - name: Package (Linux / macOS)
-        if: matrix.goos != 'windows'
+      # macOS ships bsdtar as `tar`, which lacks the --sort/--mtime flags the
+      # deterministic recipe needs. scripts/package.sh prefers gtar when present.
+      - name: Install GNU tar (macOS)
+        if: matrix.goos == 'darwin'
+        run: brew install gnu-tar
+
+      # Packaging goes through scripts/package.sh — the same recipe the Makefile
+      # bundle-* targets use — so release archives are byte-reproducible and the
+      # flags can't drift between local builds and CI. Windows runs it under bash
+      # (Git Bash provides find/sort/zip); Compress-Archive has no way to pin
+      # member mtimes and is not reproducible.
+      - name: Package
         shell: bash
         run: |
           NAME="kind-miner-${GITHUB_REF_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          EXT=""
+          [[ "${{ matrix.goos }}" == "windows" ]] && EXT=".exe"
           mkdir "$NAME"
-          mv kind-miner "$NAME/"
+          mv "kind-miner${EXT}" "$NAME/"
           cp README.md config.example.yaml "$NAME/"
-          tar czf "${NAME}.tar.gz" "$NAME"
-          sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
-          echo "ASSET=${NAME}.tar.gz"         >> "$GITHUB_ENV"
-          echo "CHECKSUM=${NAME}.tar.gz.sha256" >> "$GITHUB_ENV"
-
-      - name: Package (Windows)
-        if: matrix.goos == 'windows'
-        shell: pwsh
-        run: |
-          $name = "kind-miner-$env:GITHUB_REF_NAME-windows-amd64"
-          New-Item -ItemType Directory $name | Out-Null
-          Move-Item "kind-miner.exe" "$name/"
-          Copy-Item README.md, config.example.yaml "$name/"
-          Compress-Archive "$name" "${name}.zip"
-          $hash = (Get-FileHash "${name}.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  ${name}.zip" | Out-File -Encoding ascii "${name}.zip.sha256"
-          "ASSET=${name}.zip"           | Out-File -Append $env:GITHUB_ENV
-          "CHECKSUM=${name}.zip.sha256" | Out-File -Append $env:GITHUB_ENV
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            ASSET="${NAME}.zip"
+            bash scripts/package.sh zip "$ASSET" . "$NAME"
+          else
+            ASSET="${NAME}.tar.gz"
+            bash scripts/package.sh tar "$ASSET" . "$NAME"
+          fi
+          bash scripts/package.sh sha256 "$ASSET"
+          echo "ASSET=$ASSET"             >> "$GITHUB_ENV"
+          echo "CHECKSUM=$ASSET.sha256"   >> "$GITHUB_ENV"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -177,7 +186,7 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub \
             https://flathub.org/repo/flathub.flatpakrepo
           # Derive the runtime version from the manifest so the two can't drift.
-          RTV=$(grep "^runtime-version:" flatpak/org.codeberg.dMartian.KindMiner.yml \
+          RTV=$(grep "^runtime-version:" flatpak/io.github.kind_miner.KindMiner.yml \
             | sed "s/.*'\(.*\)'.*/\1/")
           flatpak install --user -y flathub \
             "org.freedesktop.Platform//${RTV}" \
@@ -189,10 +198,10 @@ jobs:
           flatpak-builder --user --force-clean --disable-rofiles-fuse \
             --default-branch="${GITHUB_REF_NAME}" \
             --repo=repo build-dir \
-            flatpak/org.codeberg.dMartian.KindMiner.yml
+            flatpak/io.github.kind_miner.KindMiner.yml
           BUNDLE="kind-miner-${GITHUB_REF_NAME}-linux-amd64.flatpak"
           flatpak build-bundle repo "$BUNDLE" \
-            org.codeberg.dMartian.KindMiner "${GITHUB_REF_NAME}"
+            io.github.kind_miner.KindMiner "${GITHUB_REF_NAME}"
           sha256sum "$BUNDLE" > "${BUNDLE}.sha256"
 
       - name: Upload to GitHub Release
