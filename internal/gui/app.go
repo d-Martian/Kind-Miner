@@ -20,7 +20,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/scheduler"
 )
 
-const appID = "org.codeberg.dMartian.KindMiner"
+const appID = "io.github.kind_miner.KindMiner"
 
 // currentApp holds the running Fyne app so Quit can be invoked from a signal
 // handler in package main. Only one app exists per process.
