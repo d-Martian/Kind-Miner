@@ -57,6 +57,7 @@ type uiApp struct {
 	// dashboard widgets (created when the dashboard screen is shown)
 	status  *canvas.Text
 	detail  *canvas.Text
+	reward  *canvas.Text
 	toggle  *widget.Button
 	mineNow *widget.Button
 
@@ -65,6 +66,7 @@ type uiApp struct {
 	mToggle    *fyne.MenuItem
 	mMineNow   *fyne.MenuItem
 	mCountdown *fyne.MenuItem
+	mReward    *fyne.MenuItem
 
 	refreshStop chan struct{}
 	stopOnce    sync.Once
@@ -213,13 +215,16 @@ func (u *uiApp) dashboardScreen() fyne.CanvasObject {
 	u.detail = canvas.NewText("", colorMuted)
 	u.detail.TextSize = 14
 
+	u.reward = canvas.NewText("", colorMuted)
+	u.reward.TextSize = 12
+
 	u.toggle = widget.NewButton("Pause", u.onToggle)
 	u.mineNow = widget.NewButton("Mine now", u.onMineNowToggle)
 	settings := widget.NewButton("Settings", u.onSettings)
 	quit := widget.NewButton("Quit", u.confirmQuit)
 
 	buttons := container.NewHBox(u.toggle, u.mineNow, settings, widget.NewLabel(""), quit)
-	body := container.NewVBox(u.status, u.detail)
+	body := container.NewVBox(u.status, u.detail, u.reward)
 
 	u.updateDashboard()
 	return container.NewBorder(nil, buttons, nil, nil, container.NewPadded(body))
@@ -353,6 +358,15 @@ func (u *uiApp) updateDashboard() {
 		u.detail.Text = detailText
 		u.detail.Refresh()
 	}
+	if u.reward != nil {
+		u.reward.Text = ""
+		if p := u.sup.P2Pool(); p != nil {
+			if stats, ok := p.Stats(); ok {
+				u.reward.Text = rewardDetail(stats)
+			}
+		}
+		u.reward.Refresh()
+	}
 	if u.toggle != nil {
 		if paused {
 			u.toggle.SetText("Resume")
@@ -367,7 +381,12 @@ func (u *uiApp) updateDashboard() {
 			u.mineNow.SetText("Mine now")
 		}
 	}
-	u.refreshTray(icon, paused, mineNow, countdown)
+
+	reward := rewardEstimating
+	if p := u.sup.P2Pool(); p != nil {
+		reward = rewardLabel(p.Stats())
+	}
+	u.refreshTray(icon, paused, mineNow, countdown, reward)
 }
 
 // ---- system tray ----
@@ -382,23 +401,34 @@ func (u *uiApp) installTray() {
 	}
 	u.mToggle = fyne.NewMenuItem("Pause", u.onToggle)
 	u.mMineNow = fyne.NewMenuItem(labelMineNow, u.onMineNowToggle)
-	// A status line rather than an action: it shows why mining is holding back.
+	// Status lines rather than actions: they show why mining is holding back and
+	// what it is working towards.
 	u.mCountdown = fyne.NewMenuItem(statusIdle, nil)
 	u.mCountdown.Disabled = true
-	u.trayMenu = fyne.NewMenu("kind-miner",
-		u.mCountdown,
+	u.mReward = fyne.NewMenuItem(rewardEstimating, nil)
+	u.mReward.Disabled = true
+
+	items := []*fyne.MenuItem{u.mCountdown}
+	// In pool mode there is no p2pool sidechain, so there is nothing to estimate.
+	if u.sup.Config() != nil && u.sup.Config().Mode != config.ModePool {
+		items = append(items, u.mReward)
+	} else {
+		u.mReward = nil
+	}
+	items = append(items,
 		fyne.NewMenuItem("Open kind-miner", u.showWindow),
 		u.mMineNow,
 		u.mToggle,
 		fyne.NewMenuItem("Settings", u.onSettings),
 	)
+	u.trayMenu = fyne.NewMenu("kind-miner", items...)
 	desk.SetSystemTrayMenu(u.trayMenu) // Fyne appends a Quit item automatically
 	desk.SetSystemTrayIcon(resMining)
 }
 
 // refreshTray updates the tray icon and the dynamic menu labels, re-applying the
 // menu only when the rendered text changed. See lastMenuKey.
-func (u *uiApp) refreshTray(icon fyne.Resource, paused, mineNow bool, countdown string) {
+func (u *uiApp) refreshTray(icon fyne.Resource, paused, mineNow bool, countdown, reward string) {
 	desk, ok := u.app.(desktop.App)
 	if !ok {
 		return
@@ -413,7 +443,7 @@ func (u *uiApp) refreshTray(icon fyne.Resource, paused, mineNow bool, countdown 
 	if mineNow {
 		mineNowLabel = labelMineAuto
 	}
-	key := toggleLabel + "\x00" + mineNowLabel + "\x00" + countdown
+	key := toggleLabel + "\x00" + mineNowLabel + "\x00" + countdown + "\x00" + reward
 	if key == u.lastMenuKey {
 		return
 	}
@@ -427,6 +457,9 @@ func (u *uiApp) refreshTray(icon fyne.Resource, paused, mineNow bool, countdown 
 	}
 	if u.mCountdown != nil {
 		u.mCountdown.Label = countdown
+	}
+	if u.mReward != nil {
+		u.mReward.Label = reward
 	}
 	desk.SetSystemTrayMenu(u.trayMenu) // re-apply to reflect the new labels
 }
