@@ -9,18 +9,24 @@ command: kind-miner
 finish-args:
   # Network access for mining traffic and Tor SOCKS at 127.0.0.1:9050
   - --share=network
-  # Graphical display for the Fyne window (Wayland preferred, X11 fallback).
+  # Graphical display: Fyne's GLFW driver is built for X11 only (no
+  # `-tags wayland`), so the app needs a real X11 socket — on Wayland sessions
+  # that means XWayland. fallback-x11 would hide DISPLAY whenever Wayland is
+  # present and crash the GUI (GLFW "NotInitialized" panic).
   # --share=ipc is needed for X11 MIT-SHM; --device=dri for OpenGL rendering.
-  - --socket=wayland
-  - --socket=fallback-x11
+  - --socket=x11
   - --share=ipc
   - --device=dri
   # D-Bus session bus — Fyne's system tray uses godbus for the status notifier
   - --socket=session-bus
-  # Config file location (~/.config/kind-miner/)
+  # Config: config.Dir() hardcodes ~/.config/kind-miner on Linux (it does not
+  # consult XDG_CONFIG_HOME), so this grant is what lets the sandboxed app see
+  # the same config as host builds (AppImage, go run). Do not remove it without
+  # also changing config.Dir().
   - --filesystem=xdg-config/kind-miner:create
-  # Downloaded XMRig / p2pool binaries (~/.local/share/kind-miner/bin/)
-  - --filesystem=xdg-data/kind-miner:create
+  # Downloaded binaries (xmrig/p2pool/tor) and p2pool state need no grant:
+  # autoinstall.BinDir() follows XDG_DATA_HOME, which Flatpak points at the
+  # app-private ~/.var/app/<app-id>/data.
   # System tray — covers both KDE and GNOME/freedesktop implementations
   - --talk-name=org.kde.StatusNotifierWatcher
   - --talk-name=org.freedesktop.StatusNotifierWatcher

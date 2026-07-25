@@ -78,8 +78,11 @@ func runGUI(cfg *config.Config, loadErr error, firstRun bool) {
 		gui.Quit()
 	}()
 
+	// Deferred so subprocesses are also stopped when the GUI panics (e.g. a
+	// display/GL init failure) — a plain call after RunGraphical would be
+	// skipped during unwind, leaving p2pool and XMRig running headless.
+	defer sup.Shutdown()
 	gui.RunGraphical(sup, firstRun)
-	sup.Shutdown()
 }
 
 // runTerminal handles the tray and headless launch paths. It preserves the
@@ -107,7 +110,12 @@ func runTerminal(mode uiMode, cfg *config.Config, loadErr error, firstRun bool) 
 	setupLogging(cfg)
 
 	sup := core.New(cfg)
+	// Deferred (not just called at the end) so the subprocesses die with us on
+	// a GUI panic; the explicit call before fatal() is needed because os.Exit
+	// skips deferred functions.
+	defer sup.Shutdown()
 	if err := sup.Start(nil); err != nil {
+		sup.Shutdown() // Start doesn't tear down what it already launched
 		fatal(err)
 	}
 
@@ -136,7 +144,6 @@ func runTerminal(mode uiMode, cfg *config.Config, loadErr error, firstRun bool) 
 		log.Println("kind-miner running (headless). Press Ctrl+C to stop.")
 		<-sigCh
 	}
-	sup.Shutdown()
 }
 
 // firstRunTerminal runs the text wizard when a terminal is attached. With no

@@ -275,12 +275,12 @@ func parseAddr(addr string) (Node, error) {
 		return Node{}, err
 	}
 	isTor := strings.HasSuffix(host, ".onion")
-	// Infer ZMQ port: if RPC is 18089 → ZMQ is 18083; else RPC+3 is a reasonable guess.
+	// Infer ZMQ port: the conventional p2pool pairing is ZMQ 18083 for both
+	// standard RPC ports (18081 unrestricted, 18089 restricted) — the same
+	// pairing the local mode uses. Anything else falls back to RPC+3.
 	zmq := port + 3
-	if port == 18089 {
+	if port == 18089 || port == 18081 {
 		zmq = 18083
-	} else if port == 18081 {
-		zmq = 18084
 	}
 	return Node{Host: host, RPCPort: port, ZMQPort: zmq, TorOnly: isTor}, nil
 }
