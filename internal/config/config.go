@@ -88,6 +88,12 @@ type Config struct {
 	PauseOnBattery      bool        `yaml:"pause_on_battery"`
 	TempLimitCelsius    float64     `yaml:"temp_limit_celsius"`
 
+	// IdleFullAfterSeconds is how long the keyboard and mouse must be quiet
+	// before mining is allowed to use every configured thread. Until then it
+	// stays at reduced speed. 0 disables the wait and mines at full speed
+	// whenever the CPU is free.
+	IdleFullAfterSeconds int `yaml:"idle_full_after_seconds"`
+
 	LogLevel string `yaml:"log_level"`
 }
 
@@ -97,10 +103,11 @@ func Defaults() *Config {
 		P2PoolChain:         ChainMini,
 		ManageP2Pool:        true,
 		ManageTor:           true,
-		ThrottleSensitivity: SensitivityMedium,
-		PauseOnBattery:      true,
-		TempLimitCelsius:    95,
-		LogLevel:            "info",
+		ThrottleSensitivity:  SensitivityMedium,
+		PauseOnBattery:       true,
+		TempLimitCelsius:     95,
+		IdleFullAfterSeconds: 300,
+		LogLevel:             "info",
 	}
 }
 
@@ -173,6 +180,9 @@ func (c *Config) Validate() error {
 	}
 	if _, ok := SensitivityProfiles[c.ThrottleSensitivity]; !ok {
 		return fmt.Errorf("throttle_sensitivity must be low, medium, or high")
+	}
+	if c.IdleFullAfterSeconds < 0 {
+		return fmt.Errorf("idle_full_after_seconds cannot be negative")
 	}
 	// Empty means "unset" and Load normalises it to mini. A typo must not fall
 	// through to the main chain, where a small miner may never earn a payout.
