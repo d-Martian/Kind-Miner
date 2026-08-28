@@ -1,99 +1,120 @@
 package scheduler
 
 import (
+	"math"
 	"testing"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/kind-miner/kind-miner/internal/kindness"
 )
-
-// decide mirrors tick()'s ordering — pause override, then CPU thresholds, then
-// the idle gate — without the monitors and subprocess tick() would otherwise
-// need. Keep it in step with tick().
-func decide(s *Scheduler, profile config.ThresholdProfile, usage float64) State {
-	if s.Override() == OverridePause {
-		return StatePaused
-	}
-	switch {
-	case usage >= profile.PauseAt:
-		return StatePaused
-	case usage >= profile.ReduceAt:
-		return StateReduced
-	default:
-		if state, _, gated := s.idleGate(); gated {
-			return state
-		}
-		return StateFull
-	}
-}
 
 // The point of "mine now" is that it is still kind: it skips only the wait for
 // the user to step away, and never the backoff that keeps other work smooth.
 func TestOverrideInteractionsWithLoad(t *testing.T) {
 	const after = 5 * time.Minute
-	profile := config.SensitivityProfiles[config.SensitivityMedium] // reduce 40%, pause 60%
 
 	active := fakeIdle{dur: time.Second, ok: true}
 	away := fakeIdle{dur: 10 * time.Minute, ok: true}
 
+	// Polite: ceiling 0.78. Ghost's 0.52 is what the idle gate holds it to.
 	tests := []struct {
-		name     string
-		override Override
-		idle     fakeIdle
-		usage    float64
-		want     State
+		name       string
+		override   Override
+		idle       fakeIdle
+		otherCPU   float64
+		wantTarget float64
 	}{
-		{"idle user, quiet machine, mines fully", OverrideNone, away, 0.10, StateFull},
-		{"active user, quiet machine, holds back", OverrideNone, active, 0.10, StateReduced},
-		{"active user, busy machine, still throttles", OverrideNone, active, 0.50, StateReduced},
-		{"idle user, heavy load, pauses", OverrideNone, away, 0.80, StatePaused},
+		{"idle user, quiet machine, takes the full ceiling", OverrideNone, away, 0.10, 0.68},
+		{"active user, quiet machine, held to the ghost ceiling", OverrideNone, active, 0.10, 0.42},
+		{"active user, busy machine, gets what is left of the ghost ceiling", OverrideNone, active, 0.40, 0.12},
+		{"idle user, heavy load, stops", OverrideNone, away, 0.80, 0},
 
-		// Mine-now cases: the idle wait is skipped, the load backoff is not.
-		{"mine now, active user, quiet machine", OverrideMine, active, 0.10, StateFull},
-		{"mine now yields to a busy machine", OverrideMine, active, 0.50, StateReduced},
-		{"mine now still pauses under heavy load", OverrideMine, active, 0.80, StatePaused},
+		// Mine-now skips the idle wait; the load backoff is untouched.
+		{"mine now, active user, quiet machine", OverrideMine, active, 0.10, 0.68},
+		{"mine now yields to a busy machine", OverrideMine, active, 0.60, 0.18},
+		{"mine now still stops under heavy load", OverrideMine, active, 0.90, 0},
 
 		// Pause wins over everything, including mine-now having been set before.
-		{"pause overrides a quiet machine", OverridePause, away, 0.10, StatePaused},
-		{"pause overrides an active user", OverridePause, active, 0.10, StatePaused},
+		{"pause overrides a quiet machine", OverridePause, away, 0.10, 0},
+		{"pause overrides an active user", OverridePause, active, 0.10, 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(after, tt.override, tt.idle)
-			if got := decide(s, profile, tt.usage); got != tt.want {
-				t.Errorf("override=%v usage=%.2f idle=%v: state = %v, want %v",
-					tt.override, tt.usage, tt.idle.dur, got, tt.want)
+			p := policy{preset: s.preset}
+			c := conditions{otherCPU: tt.otherCPU, idleGated: s.idleGated(tt.override)}
+
+			target, _, _ := decide(p, c, tt.override)
+			if diff := target - tt.wantTarget; diff > 1e-9 || diff < -1e-9 {
+				t.Errorf("override=%v other=%.2f idle=%v: target = %.4f, want %.4f",
+					tt.override, tt.otherCPU, tt.idle.dur, target, tt.wantTarget)
 			}
 		})
 	}
 }
 
-// The state enum is only a label; what protects the user's machine is the
-// thread count and suspend actually reaching the miner process.
-func TestKindnessReachesTheEngine(t *testing.T) {
-	s := newTestScheduler(5*time.Minute, OverrideMine, fakeIdle{dur: time.Second, ok: true})
+// The allowance is only a number until it reaches the process. What protects
+// the user's machine is the thread count and the suspend.
+// The allowance reaches the miner as a duty fraction, mapped by how much of
+// the machine the miner covers at full tilt. No thread thrash, no restart — the
+// whole point of the rewrite, since restarting stalled the miner in RandomX
+// init and it never produced a hash.
+func TestAllowanceReachesTheEngine(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{ok: false})
+	// A half-machine miner: full share 0.5, so an allowance maps to twice the
+	// duty.
+	s.cores = 8
+	s.maxThreads = 4
 	m := s.xmrig.(*stubMiner)
 
-	s.applyState(StateFull, "")
-	if m.paused || m.threads != 4 {
-		t.Errorf("full speed: paused=%v threads=%d, want false, 4", m.paused, m.threads)
+	s.apply(0.5, "")
+	if m.duty != 1.0 {
+		t.Errorf("full allowance: duty = %.2f, want 1.0", m.duty)
+	}
+	if state, _ := s.CurrentState(); state != StateFull {
+		t.Errorf("state = %v, want StateFull", state)
 	}
 
-	// Busy machine while mine-now is on: threads must drop, not stay at max.
-	s.applyState(StateReduced, "system CPU 55%")
-	if m.paused || m.threads != 2 {
-		t.Errorf("reduced: paused=%v threads=%d, want false, 2", m.paused, m.threads)
+	// Falling is immediate — that is the entire promise. 0.25/0.5 = 0.5 duty.
+	s.apply(0.25, "busy")
+	if math.Abs(m.duty-0.5) > 1e-9 {
+		t.Errorf("stepping aside: duty = %.2f, want 0.5", m.duty)
+	}
+	if state, _ := s.CurrentState(); state != StateReduced {
+		t.Errorf("state = %v, want StateReduced", state)
 	}
 
-	s.applyState(StateMinimal, "system CPU 70%")
-	if m.threads != 1 {
-		t.Errorf("minimal: threads=%d, want 1", m.threads)
+	// No allowance suspends the miner (duty 0) and records the reason.
+	s.apply(0, "system busy · other apps at 95%")
+	if m.duty != 0 {
+		t.Errorf("no allowance: duty = %.2f, want 0", m.duty)
 	}
+	if state, reason := s.CurrentState(); state != StatePaused || reason != "system busy · other apps at 95%" {
+		t.Errorf("state = %v reason = %q, want StatePaused / the busy reason", state, reason)
+	}
+}
 
-	s.applyState(StatePaused, "system CPU 90%")
-	if !m.paused {
-		t.Error("paused: miner was not suspended")
+// Duty control has no restart cost, so both directions apply on the very tick
+// they are computed — the fall-fast/rise-slow shape lives entirely in the
+// smoothed allowance, not in the actuator.
+func TestDutyAppliesImmediatelyBothWays(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{ok: false})
+	s.cores = 8
+	s.maxThreads = 8 // full share 1.0, duty == allowance
+	m := s.xmrig.(*stubMiner)
+
+	s.apply(0.9, "")
+	if math.Abs(m.duty-0.9) > 1e-9 {
+		t.Fatalf("duty = %.2f, want 0.9", m.duty)
+	}
+	s.apply(0.2, "busy")
+	if math.Abs(m.duty-0.2) > 1e-9 {
+		t.Errorf("fall: duty = %.2f, want 0.2 immediately", m.duty)
+	}
+	s.apply(0.8, "")
+	if math.Abs(m.duty-0.8) > 1e-9 {
+		t.Errorf("rise: duty = %.2f, want 0.8 immediately", m.duty)
 	}
 }
 
@@ -118,5 +139,23 @@ func TestOverrideSwitching(t *testing.T) {
 	s.SetOverride(OverrideMine)
 	if got := s.Override(); got != OverrideMine {
 		t.Errorf("Override() = %v, want OverrideMine", got)
+	}
+}
+
+// Changing preset must take effect without restarting anything, because the
+// tray offers it as a one-click change.
+func TestSetKindnessTakesEffect(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{ok: false})
+
+	s.SetKindness(kindness.Full)
+	if got := s.Preset().Level; got != kindness.Full {
+		t.Fatalf("Preset() = %v, want full", got)
+	}
+
+	// An unknown level must fall back rather than leave the scheduler with a
+	// zero-valued preset, which would have a ceiling of 0 and never mine.
+	s.SetKindness("nonsense")
+	if got := s.Preset(); got.Ceiling <= 0 {
+		t.Errorf("Preset() after an unknown level has ceiling %.2f, want the default's", got.Ceiling)
 	}
 }

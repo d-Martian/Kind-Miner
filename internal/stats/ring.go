@@ -22,7 +22,20 @@ type Sample struct {
 	OtherCPU float64
 	// Hashrate is the miner's hashrate in H/s at that moment.
 	Hashrate float64
+	// TempC is the hottest CPU sensor in Celsius, or 0 where none was readable.
+	TempC float64
+	// Watts is whole-package power draw. WattsKnown is false on the many
+	// machines whose energy counters are root-only, where showing a number
+	// would mean inventing one.
+	Watts      float64
+	WattsKnown bool
+	// BackedOff marks the moment the miner gave a noticeable slice of CPU back
+	// to other work. The chart ticks these so restraint is visible.
+	BackedOff bool
 }
+
+// Total returns the whole machine's CPU usage at this sample.
+func (s Sample) Total() float64 { return s.MinerCPU + s.OtherCPU }
 
 // Ring is a fixed-size circular buffer of samples. It is safe for concurrent
 // use: the scheduler appends from its tick loop while the GUI reads.

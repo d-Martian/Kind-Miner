@@ -15,6 +15,24 @@ const (
 
 	labelMineNow  = "Mine at full speed now"
 	labelMineAuto = "Return to automatic (wait for idle)"
+
+	// Short forms for the dashboard footer, which shares its row with the
+	// kindness control and has no room for the tray's fuller wording.
+	labelPause         = "Pause mining"
+	labelResume        = "Resume mining"
+	labelMineNowShort  = "Mine now"
+	labelMineAutoShort = "Wait for idle"
+
+	// labelKeepPaused is the pause button while the scheduler has already
+	// stood the miner down on its own: pressing it converts the automatic
+	// pause into a manual one. "Pause mining" there would contradict the
+	// header saying the miner is not running.
+	labelKeepPaused = "Keep paused"
+
+	// statusStandbyPrefix opens every status line for an automatic pause. It
+	// is deliberately not "Paused" — that word is reserved for the user's own
+	// pause, so the two states can never be confused.
+	statusStandbyPrefix = "Standing by — "
 )
 
 // fineGrainedBelow is the point where the countdown switches from a coarse
@@ -48,6 +66,12 @@ func countdownLabel(secs int, ok bool) string {
 // feels different is liable to uninstall the miner rather than investigate, so
 // the line always says whether mining is backing off for them.
 func trayStatusLine(countdown func() (int, bool), override scheduler.Override, state scheduler.State, reason string) string {
+	// A full stop the scheduler chose reads as standby whatever override is
+	// active: "backing off for your apps" would be a lie when the cause is
+	// heat or battery, and "paused" belongs to the user alone.
+	if override != scheduler.OverridePause && state == scheduler.StatePaused && reason != "" {
+		return statusStandbyPrefix + reason
+	}
 	switch override {
 	case scheduler.OverridePause:
 		return statusPaused

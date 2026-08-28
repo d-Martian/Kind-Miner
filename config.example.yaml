@@ -23,11 +23,20 @@ mode: p2pool-remote
 # Leave blank to auto-select from the built-in community node list.
 remote_node: ""
 
-# P2Pool sidechain — the only accepted values are "mini" and "main"; anything
-# else is rejected at startup, and leaving it blank falls back to "mini".
-# "mini" is the default and the right choice for a desktop CPU: its share
-# difficulty is far lower, so you land shares (and get paid) regularly instead
-# of waiting a very long time between payouts on the main chain.
+# P2Pool sidechain — "main", "mini" or "nano"; anything else is rejected at
+# startup, and leaving it blank falls back to "mini".
+#
+# The chains differ in how hard a share is to find. What matters is landing
+# shares often enough to stay inside the six-hour payout window; a chain whose
+# shares you rarely land pays almost nothing, and the symptom looks exactly
+# like the miner being broken.
+#
+#   main   above roughly 50 kH/s
+#   mini   most desktops — the default
+#   nano   below about 1 kH/s
+#
+# The Connection tab tells you how often you are actually landing shares and
+# whether a different chain would suit the machine better.
 p2pool_chain: mini
 
 # Start kind-miner automatically when you log in. Changing this from the
@@ -36,10 +45,10 @@ p2pool_chain: mini
 # takes effect the next time the app starts.
 run_at_startup: false
 
-# How long the keyboard and mouse must be quiet before mining is allowed to use
-# every configured thread (seconds). Before that it runs at reduced speed, so a
-# machine you are sitting at never has all its cores taken. Set to 0 to go to
-# full speed as soon as the CPU is free, without waiting for you to step away.
+# How long the keyboard and mouse must be quiet before mining is allowed its
+# full kindness ceiling (seconds). Until then it is held to the Ghost ceiling,
+# so a machine you are sitting at never has most of it taken. Set to 0 to use
+# the chosen kindness immediately, without waiting for you to step away.
 idle_full_after_seconds: 300
 
 # --- p2pool-local settings ---
@@ -85,21 +94,62 @@ xmrig_path: ""
 # 0 = auto (half of available logical cores — leaves headroom for the OS)
 max_threads: 0
 
-# --- Throttle behavior ---
+# --- Kindness ---
 
-# How aggressively kind-miner backs off when the system gets busy.
+# How much of the machine the miner may take, and how fast it gets out of the
+# way when you want it back.
 #
-#   low     Backs off only when CPU is very busy (good for dedicated machines)
-#   medium  Balanced default — backs off at moderate load
-#   high    Backs off early, maximum system responsiveness
-throttle_sensitivity: medium
+# Each preset is a CPU ceiling that mining and everything else share. The miner
+# only ever asks for what is left underneath it, so other work always has the
+# rest of the machine reserved. Every preset gives ground quickly and takes it
+# back slowly — the difference is how much ground there is.
+#
+#   ghost     up to  52% CPU  Only genuinely idle cycles. Payouts are slow.
+#   polite    up to  78% CPU  The default, and the one most people keep.
+#   balanced  up to  90% CPU  Shares evenly; you may feel a short lag.
+#   full      up to 100% CPU  Fills the rest of the machine. Still yields to
+#                             your apps. For computers you are not sitting at.
+#
+# This replaces the old throttle_sensitivity key. A config that still has one
+# is migrated on load (high -> ghost, medium -> polite, low -> balanced) and
+# the dead key is dropped the next time the file is written. The preset once
+# named "greedy" is now "full"; the old name still loads and is rewritten.
+kindness: polite
 
 # Pause mining when running on battery power.
 pause_on_battery: true
 
+# Ease mining off as the CPU approaches temp_limit_celsius, instead of mining
+# flat out and then hard-stopping at the limit. On by default: a machine that
+# idles warm should hold a temperature, not oscillate between full speed and a
+# dead stop. The last few degrees before the limit scale the miner down; only
+# the limit itself stops it. Set false to mine full-tilt right up to the limit.
+thermal_governor: true
+
+# Mine only while the screen is locked. Off by default: most people want the
+# machine earning whenever they are away from it, not only when they remembered
+# to lock it. Has no effect where the session lock state cannot be read.
+mine_only_when_locked: false
+
 # Pause mining when CPU temperature exceeds this value (Celsius).
 # Set to 0 to disable temperature-based throttling.
 temp_limit_celsius: 95
+
+# --- Dashboard chart ---
+
+# Display only; none of this changes how the miner behaves.
+chart:
+  # Shade the band above the kindness ceiling — the part of the machine mining
+  # will not touch.
+  shade_headroom: true
+  # Tick the moments the miner gave CPU back.
+  mark_backoff: true
+  # Overlay CPU temperature on a 0–100 °C scale.
+  draw_temperature: false
+  # Fill the area under the miner's line.
+  fill_miner: true
+  # How much history the chart shows: 30, 60 or 120 seconds.
+  window_seconds: 30
 
 # Log level: debug | info | warn | error
 log_level: info

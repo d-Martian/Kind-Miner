@@ -7,6 +7,7 @@ require (
 	github.com/BurntSushi/xgb v0.0.0-20210121224620-deaf085860bc
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/shirou/gopsutil/v3 v3.23.11
+	golang.org/x/image v0.41.0
 	golang.org/x/net v0.55.0
 	golang.org/x/sys v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -42,7 +43,6 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yuin/goldmark v1.7.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
-	golang.org/x/image v0.41.0 // indirect
 	golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a // indirect
 	golang.org/x/text v0.37.0 // indirect
 )
