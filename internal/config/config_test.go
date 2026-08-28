@@ -62,6 +62,39 @@ func TestValidate(t *testing.T) {
 			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: ChainNano},
 		},
 		{
+			name: "remote node with host:port",
+			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:18089"},
+		},
+		{
+			// Blank means "use the default Nodo over Tor", not a bad address.
+			name: "blank remote node is accepted",
+			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: ""},
+		},
+		{
+			// The failure this guards: caught here it is one dialog at startup;
+			// left to node selection it is a minute of downloads and retries
+			// before the same message appears.
+			name:    "remote node without a port is rejected",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192"},
+			wantErr: true,
+		},
+		{
+			name:    "remote node with a non-numeric port is rejected",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:rpc"},
+			wantErr: true,
+		},
+		{
+			name:    "remote node with an out-of-range port is rejected",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:70000"},
+			wantErr: true,
+		},
+		{
+			// Other modes ignore remote_node, so a stale value must not block
+			// a config that is otherwise fine.
+			name: "remote node ignored in local mode",
+			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, Kindness: kindness.Polite, RemoteNode: "192.168.8.192"},
+		},
+		{
 			// Without this check a typo joins the main chain, where a desktop
 			// miner may never accumulate a payout.
 			name:    "misspelled chain is rejected",
