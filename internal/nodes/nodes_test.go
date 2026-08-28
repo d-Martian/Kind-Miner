@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -89,5 +90,19 @@ func TestCommunityNodesHaveZMQ(t *testing.T) {
 		if n.RPCPort == 0 {
 			t.Errorf("community node %s has RPCPort=0", n.Host)
 		}
+	}
+}
+
+// TestParseAddrErrIsBadAddr pins the sentinel that tells a typo apart from an
+// unreachable node: resolveNode retries the second and must not retry the
+// first.
+func TestParseAddrErrIsBadAddr(t *testing.T) {
+	for _, addr := range []string{"notahost", "192.168.8.192", "192.168.8.192:rpc"} {
+		t.Run(addr, func(t *testing.T) {
+			_, err := parseAddr(addr)
+			if !errors.Is(err, ErrBadAddr) {
+				t.Errorf("parseAddr(%q) error = %v, want it to wrap ErrBadAddr", addr, err)
+			}
+		})
 	}
 }

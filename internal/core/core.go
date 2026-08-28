@@ -9,6 +9,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -287,6 +288,12 @@ func resolveNode(cfg *config.Config) (nodes.Node, error) {
 			node, err := nodes.SelectBest(cfg.RemoteNode)
 			if err == nil {
 				return node, nil
+			}
+			// Only unreachability is worth a retry. A malformed address parses
+			// the same way every time, so retrying it just spends 60s before
+			// showing the user the error they could have had immediately.
+			if errors.Is(err, nodes.ErrBadAddr) {
+				return nodes.Node{}, err
 			}
 			lastErr = err
 			if attempt < maxAttempts {

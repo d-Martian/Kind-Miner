@@ -3,9 +3,11 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -268,6 +270,20 @@ func (c *Config) Validate() error {
 	// is accepted and read as the default rather than rejected.
 	if c.Kindness != "" && !kindness.Valid(c.Kindness) {
 		return fmt.Errorf("kindness must be one of ghost, polite, balanced, full; got %q", c.Kindness)
+	}
+	// Checked here rather than left to node selection: an unparseable address
+	// is not transient, and without this guard it surfaces only after the
+	// binaries have been downloaded and Tor started — a minute of apparent
+	// hang for a missing ":18089". nodes.parseAddr stays the authority on the
+	// format; this rejects exactly what it would reject.
+	if c.Mode == ModeP2PoolRemote && c.RemoteNode != "" {
+		_, port, err := net.SplitHostPort(c.RemoteNode)
+		if err != nil {
+			return fmt.Errorf("remote_node %q must be host:port (e.g. 192.168.8.192:18089)", c.RemoteNode)
+		}
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+			return fmt.Errorf("remote_node %q has an invalid port %q", c.RemoteNode, port)
+		}
 	}
 	if c.IdleFullAfterSeconds < 0 {
 		return fmt.Errorf("idle_full_after_seconds cannot be negative")
