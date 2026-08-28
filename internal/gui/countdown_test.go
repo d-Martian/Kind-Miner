@@ -90,6 +90,27 @@ func TestTrayStatusLine(t *testing.T) {
 			state:     scheduler.StateFull,
 			want:      statusIdle,
 		},
+		{
+			// An automatic full stop is standby with its reason, not
+			// "backing off for your apps" — heat is not the user's apps, and
+			// not "paused" — that word belongs to the user's own pause.
+			name:      "an automatic stop reads as standby",
+			countdown: noCountdown,
+			override:  scheduler.OverrideNone,
+			state:     scheduler.StatePaused,
+			reason:    "waiting for the CPU to cool (88°C)",
+			want:      statusStandbyPrefix + "waiting for the CPU to cool (88°C)",
+		},
+		{
+			// The same stop while mine-now is on: the heat still wins, and
+			// the line must still explain it rather than claim yielding.
+			name:      "standby wins over mine-now",
+			countdown: noCountdown,
+			override:  scheduler.OverrideMine,
+			state:     scheduler.StatePaused,
+			reason:    "running on battery",
+			want:      statusStandbyPrefix + "running on battery",
+		},
 	}
 
 	for _, tt := range tests {

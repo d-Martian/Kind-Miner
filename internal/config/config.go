@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/kind-miner/kind-miner/internal/kindness"
 )
 
 type Mode string
@@ -19,6 +21,8 @@ const (
 	ModePool         Mode = "pool"
 )
 
+// Sensitivity is the superseded throttle control, kept only so configs written
+// before kindness existed still load. Load migrates it and Save drops it.
 type Sensitivity string
 
 const (
@@ -27,32 +31,33 @@ const (
 	SensitivityHigh   Sensitivity = "high"
 )
 
-type ThresholdProfile struct {
-	// CPU fraction (0.0–1.0) at which mining threads are halved
-	ReduceAt float64
-	// CPU fraction at which mining is fully paused
-	PauseAt float64
-}
-
-var SensitivityProfiles = map[Sensitivity]ThresholdProfile{
-	SensitivityLow:    {ReduceAt: 0.70, PauseAt: 0.80},
-	SensitivityMedium: {ReduceAt: 0.40, PauseAt: 0.60},
-	SensitivityHigh:   {ReduceAt: 0.20, PauseAt: 0.40},
+// kindnessForSensitivity maps the old three-point scale onto the kindness
+// presets. The old scale ran the other way round — "high" meant highly
+// sensitive to other work, so it becomes the kindest preset.
+var kindnessForSensitivity = map[Sensitivity]kindness.Level{
+	SensitivityHigh:   kindness.Ghost,
+	SensitivityMedium: kindness.Polite,
+	SensitivityLow:    kindness.Balanced,
 }
 
 // P2Pool sidechains. mini is the default: its share difficulty is roughly 100x
 // lower than the main chain, so a desktop-sized miner finds shares — and
-// therefore earns — often enough to matter. Anything that is not exactly
-// ChainMini makes p2pool join the main chain, which is why the value is
-// validated rather than passed through.
+// therefore earns — often enough to matter. nano is lower again, for machines
+// under about 1 kH/s. The value is validated rather than passed through
+// because an unrecognised chain makes p2pool silently join the main chain,
+// where a small miner may never earn a payout.
 const (
 	ChainMini = "mini"
 	ChainMain = "main"
+	ChainNano = "nano"
 )
 
+// Chains lists the sidechains in the order the UI offers them.
+var Chains = []string{ChainMain, ChainMini, ChainNano}
+
 type Config struct {
-	Wallet  string `yaml:"wallet"`
-	Mode    Mode   `yaml:"mode"`
+	Wallet string `yaml:"wallet"`
+	Mode   Mode   `yaml:"mode"`
 
 	// p2pool-remote
 	RemoteNode  string `yaml:"remote_node"`
@@ -82,11 +87,38 @@ type Config struct {
 	// what the user asked for, used to re-register if the entry goes missing.
 	RunAtStartup bool `yaml:"run_at_startup"`
 
+	// Kindness names how much of the machine the miner may take and how fast it
+	// lets go. See internal/kindness.
+	Kindness kindness.Level `yaml:"kindness"`
+
+	// ThrottleSensitivity is the pre-kindness control. It is read so old configs
+	// migrate, then cleared — omitempty keeps it out of everything we write.
+	ThrottleSensitivity Sensitivity `yaml:"throttle_sensitivity,omitempty"`
+
 	// throttle
-	MaxThreads          int         `yaml:"max_threads"`
-	ThrottleSensitivity Sensitivity `yaml:"throttle_sensitivity"`
-	PauseOnBattery      bool        `yaml:"pause_on_battery"`
-	TempLimitCelsius    float64     `yaml:"temp_limit_celsius"`
+	MaxThreads       int     `yaml:"max_threads"`
+	PauseOnBattery   bool    `yaml:"pause_on_battery"`
+	TempLimitCelsius float64 `yaml:"temp_limit_celsius"`
+
+	// ThermalGovernor eases mining off as the CPU approaches TempLimitCelsius,
+	// rather than mining flat out and then hard-stopping at the limit. On by
+	// default: a machine that idles warm should hold a temperature, not
+	// oscillate between full speed and a dead stop.
+	ThermalGovernor bool `yaml:"thermal_governor"`
+
+	// PauseOnThrottle is the superseded thermal control. It is parsed so old
+	// configs still load, then ignored; the thermal governor replaced it.
+	PauseOnThrottle bool `yaml:"pause_on_thermal_throttle,omitempty"`
+
+	// MineOnlyWhenLocked restricts mining to a locked session. Off by default:
+	// most people want the machine earning whenever they are not using it, not
+	// only when they remembered to lock it.
+	MineOnlyWhenLocked bool `yaml:"mine_only_when_locked"`
+
+	// Chart holds the dashboard graph preferences. They change nothing about
+	// mining, but they live in the config so the window opens the way the user
+	// left it.
+	Chart ChartOptions `yaml:"chart"`
 
 	// IdleFullAfterSeconds is how long the keyboard and mouse must be quiet
 	// before mining is allowed to use every configured thread. Until then it
@@ -97,19 +129,47 @@ type Config struct {
 	LogLevel string `yaml:"log_level"`
 }
 
+// ChartOptions are the dashboard graph's display preferences.
+type ChartOptions struct {
+	// ShadeHeadroom shades the band above the kindness ceiling — the part of
+	// the machine mining will not touch.
+	ShadeHeadroom bool `yaml:"shade_headroom"`
+	// MarkBackoff ticks the moments the miner gave CPU back.
+	MarkBackoff bool `yaml:"mark_backoff"`
+	// DrawTemp overlays CPU temperature.
+	DrawTemp bool `yaml:"draw_temperature"`
+	// FillMiner fills the area under the miner line.
+	FillMiner bool `yaml:"fill_miner"`
+	// WindowSeconds is how much history the chart shows.
+	WindowSeconds int `yaml:"window_seconds"`
+}
+
+// ChartWindows are the spans the graph settings offer, in seconds.
+var ChartWindows = []int{30, 60, 120}
+
 func Defaults() *Config {
 	return &Config{
-		Mode:                ModeP2PoolRemote,
-		P2PoolChain:         ChainMini,
-		ManageP2Pool:        true,
-		ManageTor:           true,
-		ThrottleSensitivity:  SensitivityMedium,
+		Mode:                 ModeP2PoolRemote,
+		P2PoolChain:          ChainMini,
+		ManageP2Pool:         true,
+		ManageTor:            true,
+		Kindness:             kindness.Default,
 		PauseOnBattery:       true,
+		ThermalGovernor:      true,
 		TempLimitCelsius:     95,
 		IdleFullAfterSeconds: 300,
 		LogLevel:             "info",
+		Chart: ChartOptions{
+			ShadeHeadroom: true,
+			MarkBackoff:   true,
+			FillMiner:     true,
+			WindowSeconds: 30,
+		},
 	}
 }
+
+// Preset returns the kindness preset the config selects.
+func (c *Config) Preset() kindness.Preset { return kindness.Get(c.Kindness) }
 
 // pathOverride, when set via SetPath, replaces the default config location.
 var pathOverride string
@@ -143,6 +203,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("cannot read config at %s: %w", Path(), err)
 	}
 	cfg := Defaults()
+	// Blanked so an absent `kindness:` key is distinguishable from one set to
+	// the default — the difference decides whether the old throttle setting
+	// still gets a say.
+	cfg.Kindness = ""
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
@@ -152,7 +216,28 @@ func Load() (*Config, error) {
 	if cfg.P2PoolChain == "" {
 		cfg.P2PoolChain = ChainMini
 	}
+	cfg.migrateKindness()
+	if cfg.Chart.WindowSeconds <= 0 {
+		cfg.Chart.WindowSeconds = Defaults().Chart.WindowSeconds
+	}
 	return cfg, nil
+}
+
+// migrateKindness carries a pre-kindness config forward. The old
+// throttle_sensitivity only applies when the user has not chosen a kindness
+// preset; either way the dead key is cleared so the next Save drops it.
+func (c *Config) migrateKindness() {
+	if c.Kindness == "" {
+		if l, ok := kindnessForSensitivity[c.ThrottleSensitivity]; ok {
+			c.Kindness = l
+		} else {
+			c.Kindness = kindness.Default
+		}
+	}
+	// Normalise a stored alias (e.g. the old "greedy") to its current name so
+	// the next Save rewrites it and the rest of the app only ever sees canon.
+	c.Kindness = kindness.Canonical(c.Kindness)
+	c.ThrottleSensitivity = ""
 }
 
 func (c *Config) Save() error {
@@ -178,8 +263,11 @@ func (c *Config) Validate() error {
 	if c.Mode == ModePool && c.PoolURL == "" {
 		return fmt.Errorf("pool_url is required when mode is 'pool'")
 	}
-	if _, ok := SensitivityProfiles[c.ThrottleSensitivity]; !ok {
-		return fmt.Errorf("throttle_sensitivity must be low, medium, or high")
+	// Empty is what a config written before kindness existed looks like after
+	// migration has been skipped (e.g. a struct built by hand in a test), so it
+	// is accepted and read as the default rather than rejected.
+	if c.Kindness != "" && !kindness.Valid(c.Kindness) {
+		return fmt.Errorf("kindness must be one of ghost, polite, balanced, full; got %q", c.Kindness)
 	}
 	if c.IdleFullAfterSeconds < 0 {
 		return fmt.Errorf("idle_full_after_seconds cannot be negative")
@@ -187,9 +275,10 @@ func (c *Config) Validate() error {
 	// Empty means "unset" and Load normalises it to mini. A typo must not fall
 	// through to the main chain, where a small miner may never earn a payout.
 	switch c.P2PoolChain {
-	case "", ChainMini, ChainMain:
+	case "", ChainMini, ChainMain, ChainNano:
 	default:
-		return fmt.Errorf("p2pool_chain must be %q or %q, got %q", ChainMini, ChainMain, c.P2PoolChain)
+		return fmt.Errorf("p2pool_chain must be one of %q, %q or %q, got %q",
+			ChainMain, ChainMini, ChainNano, c.P2PoolChain)
 	}
 	return nil
 }

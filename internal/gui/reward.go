@@ -29,6 +29,20 @@ func rewardLabel(stats engine.P2PoolStats, ok bool) string {
 	return rewardPrefix + "~" + formatETA(eta)
 }
 
+// rewardValue renders just the estimate, for places that already carry a
+// "Next reward" label of their own — repeating it inside the value reads as a
+// mistake.
+func rewardValue(stats engine.P2PoolStats, ok bool) string {
+	if !ok {
+		return "estimating…"
+	}
+	eta, ok := stats.RewardETA()
+	if !ok {
+		return "estimating…"
+	}
+	return "~" + formatETA(eta)
+}
+
 // rewardDetail renders the dashboard's reward line, which has room for the
 // share of the next block this miner has earned so far.
 func rewardDetail(stats engine.P2PoolStats) string {

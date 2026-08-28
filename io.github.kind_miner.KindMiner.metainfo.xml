@@ -49,12 +49,16 @@
   -->
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/onboarding-welcome.png</image>
-      <caption>Idle Monero mining that pays straight to your wallet</caption>
+      <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/dashboard.png</image>
+      <caption>Watch the miner step aside the moment you need your machine</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/onboarding-wallet.png</image>
-      <caption>One-step setup: paste your Monero wallet address</caption>
+      <caption>Setup starts with one question: where your rewards go</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/onboarding-kindness.png</image>
+      <caption>Choose how much of the machine mining may take</caption>
     </screenshot>
   </screenshots>
 
