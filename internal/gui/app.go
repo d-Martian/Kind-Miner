@@ -2,7 +2,6 @@ package gui
 
 import (
 	"fmt"
-	"image/color"
 	"sync"
 	"time"
 
@@ -17,10 +16,22 @@ import (
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/core"
+	"github.com/kind-miner/kind-miner/internal/kindness"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
 const appID = "io.github.kind_miner.KindMiner"
+
+// windowSize is the dashboard's default geometry. It is wide enough for four
+// stat tiles and a chart with a legible time axis, which is what the layout
+// needs to say what it is for at a glance.
+var windowSize = fyne.NewSize(760, 560)
+
+// setupSize is the geometry for the screens that come before the dashboard —
+// setup, startup progress, and errors. They are single columns of prose and
+// look wrong stretched to the dashboard's width.
+var setupSize = fyne.NewSize(560, 460)
 
 // currentApp holds the running Fyne app so Quit can be invoked from a signal
 // handler in package main. Only one app exists per process.
@@ -54,28 +65,31 @@ type uiApp struct {
 	// close-to-tray vs close-to-quit, and whether a tray icon is registered.
 	hasTray bool
 
-	// dashboard widgets (created when the dashboard screen is shown)
-	status  *canvas.Text
-	detail  *canvas.Text
-	reward  *canvas.Text
-	toggle  *widget.Button
-	mineNow *widget.Button
+	// dash is the live dashboard, created when that screen is first shown.
+	dash *dashboard
 
 	// system tray
 	trayMenu   *fyne.Menu
+	mStatus    *fyne.MenuItem
+	mHashrate  *fyne.MenuItem
+	mUptime    *fyne.MenuItem
+	mShares    *fyne.MenuItem
+	mReward    *fyne.MenuItem
+	mKindness  *fyne.MenuItem
+	mKindItems []*fyne.MenuItem
 	mToggle    *fyne.MenuItem
 	mMineNow   *fyne.MenuItem
-	mCountdown *fyne.MenuItem
-	mReward    *fyne.MenuItem
 
 	refreshStop chan struct{}
 	stopOnce    sync.Once
 
-	// lastMenuKey holds the rendered text of every dynamic menu item. Fyne 2.5.3
-	// cannot refresh a single item, so changing a label means re-applying the
-	// whole menu — which closes it if the user has it open. Re-applying only when
-	// the rendered text actually changed keeps that rare.
-	lastMenuKey string
+	// lastMenu holds the rendered text of the dynamic menu items, split by how
+	// urgently a change to it needs to reach the screen, alongside when the menu
+	// was last re-applied and the icon currently on screen. Re-applying a tray
+	// menu is far more expensive than it looks — see refreshTray.
+	lastMenu     trayMenuKey
+	lastMenuAt   time.Time
+	lastTrayIcon fyne.Resource
 }
 
 // RunGraphical owns the full GUI lifecycle: optional first-run onboarding, an
@@ -87,7 +101,7 @@ func RunGraphical(sup *core.Supervisor, firstRun bool) {
 	u.installTray()
 
 	if firstRun {
-		u.win.SetContent(u.onboardingScreen())
+		u.setScreen(u.onboardingScreen(), setupSize)
 	} else {
 		u.startStartup()
 	}
@@ -100,7 +114,7 @@ func RunGraphical(sup *core.Supervisor, firstRun bool) {
 // blocks until the user quits; the caller owns Shutdown.
 func RunTray(sup *core.Supervisor) {
 	u := newUIApp(sup)
-	u.win.SetContent(u.dashboardScreen())
+	u.setScreen(u.dashboardScreen(), windowSize)
 	u.installTray()
 	if !u.hasTray {
 		// No tray to live in — keep a window on screen so there's a way back.
@@ -118,7 +132,7 @@ func newUIApp(sup *core.Supervisor) *uiApp {
 	currentApp = a
 
 	w := a.NewWindow("kind-miner")
-	w.Resize(fyne.NewSize(360, 320))
+	w.Resize(windowSize)
 	w.CenterOnScreen()
 
 	u := &uiApp{app: a, win: w, sup: sup, refreshStop: make(chan struct{}), hasTray: systemTrayAvailable()}
@@ -136,48 +150,41 @@ func newUIApp(sup *core.Supervisor) *uiApp {
 	return u
 }
 
+// setScreen swaps the window content and asserts the geometry that screen was
+// designed for.
+//
+// The resize is not redundant. Fyne sizes a window to its content's minimum on
+// SetContent, so the narrow setup screens shrink the window — and it stays
+// shrunk when the far wider dashboard replaces them, which squeezes the chart
+// into a column. Each screen therefore states its own size as it appears.
+func (u *uiApp) setScreen(content fyne.CanvasObject, size fyne.Size) {
+	u.win.SetContent(content)
+	u.win.Resize(size)
+}
+
 // startStartup swaps to the progress screen and runs the supervisor bring-up
 // on a background goroutine.
 func (u *uiApp) startStartup() {
-	u.win.SetContent(u.progressScreen(core.StepInstallXMRig))
+	u.setScreen(u.progressScreen(core.StepInstallXMRig), setupSize)
 	go u.runStartup()
 }
 
 func (u *uiApp) runStartup() {
 	err := u.sup.Start(func(st core.Step) {
+		// Only the text changes between steps, so the window is left alone —
+		// re-resizing on every step would undo a resize the user just made.
 		u.win.SetContent(u.progressScreen(st))
 	})
 	if err != nil {
-		u.win.SetContent(u.errorScreen(err))
+		u.setScreen(u.errorScreen(err), setupSize)
 		u.showWindow()
 		return
 	}
-	u.win.SetContent(u.dashboardScreen())
+	u.setScreen(u.dashboardScreen(), windowSize)
 	u.startRefresh()
 }
 
 // ---- screens ----
-
-// onboardingScreen starts the first-run flow: a welcome screen that hands off
-// to wallet entry.
-func (u *uiApp) onboardingScreen() fyne.CanvasObject {
-	return welcomeScreen(func() {
-		u.win.SetContent(u.walletEntryScreen())
-	})
-}
-
-// walletEntryScreen collects the wallet address; on submit it saves the config
-// and proceeds to startup.
-func (u *uiApp) walletEntryScreen() fyne.CanvasObject {
-	return walletScreen(u.win, func(addr string) {
-		u.sup.Config().Wallet = addr
-		if err := u.sup.Config().Save(); err != nil {
-			u.win.SetContent(u.errorScreen(fmt.Errorf("saving config: %w", err)))
-			return
-		}
-		u.startStartup()
-	})
-}
 
 func (u *uiApp) progressScreen(step core.Step) fyne.CanvasObject {
 	title := canvas.NewText(SetupTitle, colorForeground)
@@ -208,26 +215,11 @@ func (u *uiApp) progressScreen(step core.Step) fyne.CanvasObject {
 }
 
 func (u *uiApp) dashboardScreen() fyne.CanvasObject {
-	u.status = canvas.NewText("Starting…", colorForeground)
-	u.status.TextSize = 24
-	u.status.TextStyle = fyne.TextStyle{Bold: true}
-
-	u.detail = canvas.NewText("", colorMuted)
-	u.detail.TextSize = 14
-
-	u.reward = canvas.NewText("", colorMuted)
-	u.reward.TextSize = 12
-
-	u.toggle = widget.NewButton("Pause", u.onToggle)
-	u.mineNow = widget.NewButton("Mine now", u.onMineNowToggle)
-	settings := widget.NewButton("Settings", u.onSettings)
-	quit := widget.NewButton("Quit", u.confirmQuit)
-
-	buttons := container.NewHBox(u.toggle, u.mineNow, settings, widget.NewLabel(""), quit)
-	body := container.NewVBox(u.status, u.detail, u.reward)
-
-	u.updateDashboard()
-	return container.NewBorder(nil, buttons, nil, nil, container.NewPadded(body))
+	if u.dash == nil {
+		u.dash = u.newDashboard()
+	}
+	u.dash.refresh()
+	return u.dash.object
 }
 
 func (u *uiApp) errorScreen(err error) fyne.CanvasObject {
@@ -276,6 +268,24 @@ func (u *uiApp) onMineNowToggle() {
 		s.SetOverride(scheduler.OverrideNone)
 	} else {
 		s.SetOverride(scheduler.OverrideMine)
+	}
+	u.updateDashboard()
+}
+
+// setKindness changes preset from anywhere in the UI. It takes effect on the
+// running scheduler at once and is written to disk, because a preset that
+// silently reverted on restart would be worse than no control at all.
+func (u *uiApp) setKindness(level kindness.Level) {
+	cfg := u.sup.Config()
+	if cfg.Kindness == level {
+		return
+	}
+	cfg.Kindness = level
+	if s := u.sup.Scheduler(); s != nil {
+		s.SetKindness(level)
+	}
+	if err := cfg.Save(); err != nil {
+		dialog.ShowError(fmt.Errorf("saving kindness: %w", err), u.win)
 	}
 	u.updateDashboard()
 }
@@ -329,64 +339,18 @@ func (u *uiApp) stopRefresh() {
 	u.stopOnce.Do(func() { close(u.refreshStop) })
 }
 
-// updateDashboard reads the current mining state and refreshes the window
-// labels, the toggle button, and the tray icon. Safe to call before startup
-// completes (it no-ops while the scheduler is nil).
+// updateDashboard refreshes the window and the tray from current state. Safe to
+// call before startup completes (it no-ops while the scheduler is nil).
 func (u *uiApp) updateDashboard() {
 	s := u.sup.Scheduler()
 	x := u.sup.XMRig()
 	if s == nil || x == nil {
 		return
 	}
-	state, reason := s.CurrentState()
-	override := s.Override()
-	paused := override == scheduler.OverridePause
-	mineNow := override == scheduler.OverrideMine
-	icon, statusText, detailText := visuals(state, reason, x.Hashrate())
-
-	countdown := trayStatusLine(s.IdleCountdown, override, state, reason)
-	// While the only thing holding mining back is the wait for idle, the detail
-	// line should say how long is left rather than repeat the reason.
-	if reason == scheduler.ReasonWaitingForIdle {
-		detailText = countdown
+	if u.dash != nil {
+		u.dash.refresh()
 	}
-
-	if u.status != nil {
-		u.status.Text = statusText
-		u.status.Color = statusColor(state)
-		u.status.Refresh()
-		u.detail.Text = detailText
-		u.detail.Refresh()
-	}
-	if u.reward != nil {
-		u.reward.Text = ""
-		if p := u.sup.P2Pool(); p != nil {
-			if stats, ok := p.Stats(); ok {
-				u.reward.Text = rewardDetail(stats)
-			}
-		}
-		u.reward.Refresh()
-	}
-	if u.toggle != nil {
-		if paused {
-			u.toggle.SetText("Resume")
-		} else {
-			u.toggle.SetText("Pause")
-		}
-	}
-	if u.mineNow != nil {
-		if mineNow {
-			u.mineNow.SetText("Wait for idle")
-		} else {
-			u.mineNow.SetText("Mine now")
-		}
-	}
-
-	reward := rewardEstimating
-	if p := u.sup.P2Pool(); p != nil {
-		reward = rewardLabel(p.Stats())
-	}
-	u.refreshTray(icon, paused, mineNow, countdown, reward)
+	u.refreshTray()
 }
 
 // ---- system tray ----
@@ -399,113 +363,206 @@ func (u *uiApp) installTray() {
 	if !ok {
 		return // not a desktop driver (shouldn't happen on supported platforms)
 	}
-	u.mToggle = fyne.NewMenuItem("Pause", u.onToggle)
-	u.mMineNow = fyne.NewMenuItem(labelMineNow, u.onMineNowToggle)
-	// Status lines rather than actions: they show why mining is holding back and
-	// what it is working towards.
-	u.mCountdown = fyne.NewMenuItem(statusIdle, nil)
-	u.mCountdown.Disabled = true
-	u.mReward = fyne.NewMenuItem(rewardEstimating, nil)
-	u.mReward.Disabled = true
 
-	items := []*fyne.MenuItem{u.mCountdown}
-	// In pool mode there is no p2pool sidechain, so there is nothing to estimate.
+	// Status lines rather than actions: they say what the miner is doing, what
+	// it has done, and what it is working towards, without opening the window.
+	u.mStatus = disabledItem(statusIdle)
+	u.mHashrate = disabledItem("Hashrate " + emDash)
+	u.mUptime = disabledItem("Uptime " + emDash)
+	u.mShares = disabledItem("Shares " + emDash)
+	u.mReward = disabledItem(rewardEstimating)
+
+	u.mToggle = fyne.NewMenuItem("Pause mining", u.onToggle)
+	u.mMineNow = fyne.NewMenuItem(labelMineNow, u.onMineNowToggle)
+	u.mKindness = u.buildKindnessMenu()
+
+	items := []*fyne.MenuItem{
+		u.mStatus,
+		u.mHashrate,
+		u.mUptime,
+	}
+	// In pool mode there is no p2pool sidechain, so there are no shares to
+	// count and nothing to estimate.
 	if u.sup.Config() != nil && u.sup.Config().Mode != config.ModePool {
-		items = append(items, u.mReward)
+		items = append(items, u.mShares, u.mReward)
 	} else {
-		u.mReward = nil
+		u.mShares, u.mReward = nil, nil
 	}
 	items = append(items,
-		fyne.NewMenuItem("Open kind-miner", u.showWindow),
+		fyne.NewMenuItemSeparator(),
+		u.mKindness,
 		u.mMineNow,
 		u.mToggle,
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Open kind-miner", u.showWindow),
 		fyne.NewMenuItem("Settings", u.onSettings),
 	)
 	u.trayMenu = fyne.NewMenu("kind-miner", items...)
 	desk.SetSystemTrayMenu(u.trayMenu) // Fyne appends a Quit item automatically
 	desk.SetSystemTrayIcon(resMining)
+	u.lastTrayIcon, u.lastMenuAt = resMining, time.Now()
 }
 
-// refreshTray updates the tray icon and the dynamic menu labels, re-applying the
-// menu only when the rendered text changed. See lastMenuKey.
-func (u *uiApp) refreshTray(icon fyne.Resource, paused, mineNow bool, countdown, reward string) {
+func disabledItem(label string) *fyne.MenuItem {
+	item := fyne.NewMenuItem(label, nil)
+	item.Disabled = true
+	return item
+}
+
+// buildKindnessMenu makes the presets reachable without opening a window, which
+// is where the design puts them: changing how much of the machine the miner may
+// take should be as easy as noticing you want it back.
+func (u *uiApp) buildKindnessMenu() *fyne.MenuItem {
+	current := u.sup.Config().Kindness
+	items := make([]*fyne.MenuItem, 0, len(kindness.Order))
+	u.mKindItems = nil
+	for _, preset := range kindness.All() {
+		level := preset.Level
+		item := fyne.NewMenuItem(
+			fmt.Sprintf("%s — up to %d%% CPU", preset.Label, preset.CeilingPercent()),
+			func() { u.setKindness(level) },
+		)
+		item.Checked = level == current
+		items = append(items, item)
+		u.mKindItems = append(u.mKindItems, item)
+	}
+	parent := fyne.NewMenuItem("Kindness", nil)
+	parent.ChildMenu = fyne.NewMenu("", items...)
+	return parent
+}
+
+// trayStatsInterval is the shortest gap between two tray rebuilds caused only by
+// the live numbers moving. The labels the user can act on ignore it and update
+// at once; see refreshTray.
+const trayStatsInterval = 30 * time.Second
+
+// trayMenuKey is the rendered text of the dynamic tray items, split by how
+// urgently a change to it needs to reach the screen.
+type trayMenuKey struct {
+	// controls is the text that answers "what did my click just do" — the
+	// status line and the labels of the items that act. It must never lag.
+	controls string
+	// stats is the live readout beside them. It moves on its own every tick
+	// whether or not anyone is looking at the menu.
+	stats string
+}
+
+// shouldReapplyMenu decides whether the tray menu is worth re-applying.
+//
+// Fyne 2.5.3 cannot refresh a single menu item, so any change re-applies the
+// whole menu, and that is far more expensive than one string: it tears down and
+// rebuilds every item over D-Bus, on the GLFW main thread that also dispatches
+// window input, and Fyne leaks a goroutine per item on every rebuild. The
+// hashrate alone (two decimals) changed every second, which defeated the
+// original single-key guard entirely and left the app re-applying the menu
+// about once a second forever — a per-second D-Bus storm and an unbounded
+// goroutine leak.
+//
+// So the numbers are rate-limited and the controls are not. A user who clicks
+// "Pause mining" sees the label become "Resume mining" immediately, while the
+// hashrate ticking underneath cannot drag the whole menu along with it.
+func shouldReapplyMenu(cur, prev trayMenuKey, since time.Duration) bool {
+	if cur.controls != prev.controls {
+		return true
+	}
+	if cur.stats == prev.stats {
+		return false
+	}
+	return since >= trayStatsInterval
+}
+
+// refreshTray updates the tray icon and the dynamic menu labels. Both are
+// guarded: an unchanged icon is not re-encoded and re-pushed, and the menu is
+// re-applied only when shouldReapplyMenu says it has earned it.
+func (u *uiApp) refreshTray() {
 	desk, ok := u.app.(desktop.App)
-	if !ok {
+	if !ok || !u.hasTray {
 		return
 	}
-	desk.SetSystemTrayIcon(icon)
-
-	toggleLabel := "Pause"
-	if paused {
-		toggleLabel = "Resume"
+	s := u.sup.Scheduler()
+	if s == nil {
+		return
 	}
+	state, reason := s.CurrentState()
+	override := s.Override()
+	preset := s.Preset()
+	history := s.History()
+
+	// Setting the icon re-encodes it to a PNG and hands it to the main thread,
+	// so an unchanged icon is not free.
+	if icon := trayIcon(state); icon != u.lastTrayIcon {
+		u.lastTrayIcon = icon
+		desk.SetSystemTrayIcon(icon)
+	}
+
+	status := trayStatusLine(s.IdleCountdown, override, state, reason)
+	hashrate := emDash
+	if mean, ok := stats.Mean(history, hashrateWindow, stats.Hashrate); ok {
+		hashrate = formatHashrate(mean)
+	}
+	uptime := emDash
+	if up, ok := u.sup.Uptime(); ok {
+		uptime = formatUptime(up)
+	}
+	shares, reward := emDash, rewardEstimating
+	if p := u.sup.P2Pool(); p != nil {
+		if st, ok := p.Stats(); ok {
+			shares = fmt.Sprintf("%d found", st.SharesFound)
+			if occupancy, ok := st.WindowOccupancy(); ok {
+				shares += fmt.Sprintf(" · %s of the payout window", formatPercent(occupancy))
+			}
+			reward = rewardLabel(st, true)
+		}
+	}
+	toggleLabel := pauseLabel(override, state == scheduler.StatePaused)
 	mineNowLabel := labelMineNow
-	if mineNow {
+	if override == scheduler.OverrideMine {
 		mineNowLabel = labelMineAuto
 	}
-	key := toggleLabel + "\x00" + mineNowLabel + "\x00" + countdown + "\x00" + reward
-	if key == u.lastMenuKey {
+
+	key := trayMenuKey{
+		controls: status + "\x00" + toggleLabel + "\x00" + mineNowLabel + "\x00" + string(preset.Level),
+		stats:    hashrate + "\x00" + uptime + "\x00" + shares + "\x00" + reward,
+	}
+	now := time.Now()
+	if !shouldReapplyMenu(key, u.lastMenu, now.Sub(u.lastMenuAt)) {
 		return
 	}
-	u.lastMenuKey = key
+	u.lastMenu, u.lastMenuAt = key, now
 
-	if u.mToggle != nil {
-		u.mToggle.Label = toggleLabel
-	}
-	if u.mMineNow != nil {
-		u.mMineNow.Label = mineNowLabel
-	}
-	if u.mCountdown != nil {
-		u.mCountdown.Label = countdown
-	}
-	if u.mReward != nil {
-		u.mReward.Label = reward
+	setItem(u.mStatus, status)
+	setItem(u.mHashrate, "Hashrate  "+hashrate)
+	setItem(u.mUptime, "Uptime  "+uptime)
+	setItem(u.mShares, "Shares  "+shares)
+	setItem(u.mReward, reward)
+	setItem(u.mToggle, toggleLabel)
+	setItem(u.mMineNow, mineNowLabel)
+	for i, item := range u.mKindItems {
+		if i < len(kindness.Order) {
+			item.Checked = kindness.Order[i] == preset.Level
+		}
 	}
 	desk.SetSystemTrayMenu(u.trayMenu) // re-apply to reflect the new labels
 }
 
-// ---- presentation helpers (ported from the old systray Tray) ----
+func setItem(item *fyne.MenuItem, label string) {
+	if item != nil {
+		item.Label = label
+	}
+}
 
-// visuals maps a mining state to its tray icon, headline, and detail line.
-func visuals(state scheduler.State, reason string, hr float64) (icon fyne.Resource, status, detail string) {
+// ---- presentation helpers ----
+
+// trayIcon maps a mining state to its tray icon. Only three are drawn: mining,
+// stepping aside, and stopped — finer detail is unreadable at 22px.
+func trayIcon(state scheduler.State) fyne.Resource {
 	switch state {
 	case scheduler.StateFull:
-		return resMining, "Mining", formatHashrate(hr)
-	case scheduler.StateReduced:
-		return resThrottle, "Throttled", formatHashrate(hr)
-	case scheduler.StateMinimal:
-		return resThrottle, "Minimal", formatHashrate(hr)
-	case scheduler.StatePaused:
-		if reason != "" {
-			return resPaused, "Paused", reason
-		}
-		return resPaused, "Paused", ""
-	}
-	return resMining, "—", ""
-}
-
-func statusColor(s scheduler.State) color.Color {
-	switch s {
-	case scheduler.StateFull:
-		return colorOK
+		return resMining
 	case scheduler.StateReduced, scheduler.StateMinimal:
-		return colorAccent
+		return resThrottle
 	default:
-		return colorMuted
-	}
-}
-
-// formatHashrate formats a H/s value into a human-readable string.
-func formatHashrate(hs float64) string {
-	switch {
-	case hs >= 1_000_000:
-		return fmt.Sprintf("%.2f MH/s", hs/1_000_000)
-	case hs >= 1_000:
-		return fmt.Sprintf("%.2f kH/s", hs/1_000)
-	case hs > 0:
-		return fmt.Sprintf("%.2f H/s", hs)
-	default:
-		return "— H/s"
+		return resPaused
 	}
 }
 

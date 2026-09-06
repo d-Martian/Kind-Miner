@@ -1,9 +1,12 @@
 package core
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/kind-miner/kind-miner/internal/nodes"
 )
 
 func TestTorNeeded(t *testing.T) {
@@ -26,5 +29,25 @@ func TestTorNeeded(t *testing.T) {
 				t.Errorf("torNeeded() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestResolveNodeDoesNotRetryBadAddress guards the difference between a slow
+// failure and a fast one. Node selection retries 3x with 30s gaps for a node
+// that is merely unreachable; a malformed address parses the same way every
+// time, so retrying it only delays the error by a minute.
+func TestResolveNodeDoesNotRetryBadAddress(t *testing.T) {
+	cfg := &config.Config{Mode: config.ModeP2PoolRemote, RemoteNode: "192.168.8.192"}
+
+	start := time.Now()
+	_, err := resolveNode(cfg)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, nodes.ErrBadAddr) {
+		t.Fatalf("resolveNode() error = %v, want it to wrap nodes.ErrBadAddr", err)
+	}
+	// A single retry would put this well past 30s.
+	if elapsed > 5*time.Second {
+		t.Errorf("resolveNode() took %s; it retried a permanent failure", elapsed)
 	}
 }

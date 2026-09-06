@@ -1,4 +1,7 @@
-# P2Pool runtime data
+# P2Pool runtime data. The loose filenames predate p2pool getting its own work
+# directory; /p2pool/ is where a repo-root dev build writes them now, and also
+# catches the api/ stat files and p2pool.blocks that the names miss.
+/p2pool/
 p2pool.cache
 p2pool.log
 p2pool_i2p_peers.txt
