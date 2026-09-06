@@ -4,7 +4,7 @@
 # SHA256 checksums are verified before use.
 set -euo pipefail
 
-XMRIG_VERSION="6.21.3"
+XMRIG_VERSION="6.26.0"
 GITHUB="https://github.com/xmrig/xmrig/releases/download/v${XMRIG_VERSION}"
 DIST="$(dirname "$0")/../dist"
 
@@ -13,17 +13,17 @@ declare -A URLS=(
   ["linux-amd64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-linux-static-x64.tar.gz"
   ["darwin-amd64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-macos-x64.tar.gz"
   ["darwin-arm64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-macos-arm64.tar.gz"
-  ["windows-amd64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-msvc-win64.zip"
+  ["windows-amd64"]="${GITHUB}/xmrig-${XMRIG_VERSION}-windows-x64.zip"
 )
 
-# SHA256 checksums for v6.21.3 — update when bumping XMRIG_VERSION.
+# SHA256 checksums for v6.26.0 — update when bumping XMRIG_VERSION.
 # Obtain with: shasum -a 256 <archive>. Kept in sync with
 # internal/autoinstall/deps.json (the runtime pin manifest).
 declare -A SUMS=(
-  ["linux-amd64"]="a0eefd7a5c0efd1cac153a075b4fdead443a04f11cc587a09bd5ac09e174f10f"
-  ["darwin-amd64"]="4f6c7aa6d5d8ffa1429021db6d6104f42c2691abbab2e01d123356192bcf06fa"
-  ["darwin-arm64"]="d7badde96309772bd219503bce91a239ed83dae042d426ef7aa663fce007dccf"
-  ["windows-amd64"]="713263085499ae626a6148fab67932c9a69611b21ac3d04cf52a5e23495f902e"
+  ["linux-amd64"]="fc6f8ae5f64e4f17481f7e3be29a1c56949f216a998414188003eae1db20c9e5"
+  ["darwin-amd64"]="1da924b358c0089e361540c4a9e6f8b09538b29efeafa2379590e0f6db358ff4"
+  ["darwin-arm64"]="6ae4eb4216e99a201ae9a3d2c3a7c275207c5165cfc25da1f3d735d6c4829c18"
+  ["windows-amd64"]="bba8097cb37d9b458a1cb1137876b27cde6740d17fe4ccbc086ba07d87d9e147"
 )
 
 download_and_extract() {
