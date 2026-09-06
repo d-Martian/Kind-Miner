@@ -83,11 +83,13 @@ type uiApp struct {
 	refreshStop chan struct{}
 	stopOnce    sync.Once
 
-	// lastMenuKey holds the rendered text of every dynamic menu item. Fyne 2.5.3
-	// cannot refresh a single item, so changing a label means re-applying the
-	// whole menu — which closes it if the user has it open. Re-applying only when
-	// the rendered text actually changed keeps that rare.
-	lastMenuKey string
+	// lastMenu holds the rendered text of the dynamic menu items, split by how
+	// urgently a change to it needs to reach the screen, alongside when the menu
+	// was last re-applied and the icon currently on screen. Re-applying a tray
+	// menu is far more expensive than it looks — see refreshTray.
+	lastMenu     trayMenuKey
+	lastMenuAt   time.Time
+	lastTrayIcon fyne.Resource
 }
 
 // RunGraphical owns the full GUI lifecycle: optional first-run onboarding, an
@@ -398,6 +400,7 @@ func (u *uiApp) installTray() {
 	u.trayMenu = fyne.NewMenu("kind-miner", items...)
 	desk.SetSystemTrayMenu(u.trayMenu) // Fyne appends a Quit item automatically
 	desk.SetSystemTrayIcon(resMining)
+	u.lastTrayIcon, u.lastMenuAt = resMining, time.Now()
 }
 
 func disabledItem(label string) *fyne.MenuItem {
@@ -428,8 +431,49 @@ func (u *uiApp) buildKindnessMenu() *fyne.MenuItem {
 	return parent
 }
 
-// refreshTray updates the tray icon and the dynamic menu labels, re-applying the
-// menu only when the rendered text changed. See lastMenuKey.
+// trayStatsInterval is the shortest gap between two tray rebuilds caused only by
+// the live numbers moving. The labels the user can act on ignore it and update
+// at once; see refreshTray.
+const trayStatsInterval = 30 * time.Second
+
+// trayMenuKey is the rendered text of the dynamic tray items, split by how
+// urgently a change to it needs to reach the screen.
+type trayMenuKey struct {
+	// controls is the text that answers "what did my click just do" — the
+	// status line and the labels of the items that act. It must never lag.
+	controls string
+	// stats is the live readout beside them. It moves on its own every tick
+	// whether or not anyone is looking at the menu.
+	stats string
+}
+
+// shouldReapplyMenu decides whether the tray menu is worth re-applying.
+//
+// Fyne 2.5.3 cannot refresh a single menu item, so any change re-applies the
+// whole menu, and that is far more expensive than one string: it tears down and
+// rebuilds every item over D-Bus, on the GLFW main thread that also dispatches
+// window input, and Fyne leaks a goroutine per item on every rebuild. The
+// hashrate alone (two decimals) changed every second, which defeated the
+// original single-key guard entirely and left the app re-applying the menu
+// about once a second forever — a per-second D-Bus storm and an unbounded
+// goroutine leak.
+//
+// So the numbers are rate-limited and the controls are not. A user who clicks
+// "Pause mining" sees the label become "Resume mining" immediately, while the
+// hashrate ticking underneath cannot drag the whole menu along with it.
+func shouldReapplyMenu(cur, prev trayMenuKey, since time.Duration) bool {
+	if cur.controls != prev.controls {
+		return true
+	}
+	if cur.stats == prev.stats {
+		return false
+	}
+	return since >= trayStatsInterval
+}
+
+// refreshTray updates the tray icon and the dynamic menu labels. Both are
+// guarded: an unchanged icon is not re-encoded and re-pushed, and the menu is
+// re-applied only when shouldReapplyMenu says it has earned it.
 func (u *uiApp) refreshTray() {
 	desk, ok := u.app.(desktop.App)
 	if !ok || !u.hasTray {
@@ -444,7 +488,12 @@ func (u *uiApp) refreshTray() {
 	preset := s.Preset()
 	history := s.History()
 
-	desk.SetSystemTrayIcon(trayIcon(state))
+	// Setting the icon re-encodes it to a PNG and hands it to the main thread,
+	// so an unchanged icon is not free.
+	if icon := trayIcon(state); icon != u.lastTrayIcon {
+		u.lastTrayIcon = icon
+		desk.SetSystemTrayIcon(icon)
+	}
 
 	status := trayStatusLine(s.IdleCountdown, override, state, reason)
 	hashrate := emDash
@@ -471,12 +520,15 @@ func (u *uiApp) refreshTray() {
 		mineNowLabel = labelMineAuto
 	}
 
-	key := status + "\x00" + hashrate + "\x00" + uptime + "\x00" + shares + "\x00" +
-		reward + "\x00" + toggleLabel + "\x00" + mineNowLabel + "\x00" + string(preset.Level)
-	if key == u.lastMenuKey {
+	key := trayMenuKey{
+		controls: status + "\x00" + toggleLabel + "\x00" + mineNowLabel + "\x00" + string(preset.Level),
+		stats:    hashrate + "\x00" + uptime + "\x00" + shares + "\x00" + reward,
+	}
+	now := time.Now()
+	if !shouldReapplyMenu(key, u.lastMenu, now.Sub(u.lastMenuAt)) {
 		return
 	}
-	u.lastMenuKey = key
+	u.lastMenu, u.lastMenuAt = key, now
 
 	setItem(u.mStatus, status)
 	setItem(u.mHashrate, "Hashrate  "+hashrate)
