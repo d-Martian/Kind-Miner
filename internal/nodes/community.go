@@ -5,6 +5,7 @@ package nodes
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -89,7 +90,7 @@ func SelectBest(customAddr string) (Node, error) {
 	if customAddr != "" {
 		n, err := parseAddr(customAddr)
 		if err != nil {
-			return Node{}, fmt.Errorf("invalid remote_node %q: %w", customAddr, err)
+			return Node{}, err // already names the offending address
 		}
 		if n.TorOnly && !hasTor {
 			return Node{}, fmt.Errorf("node %s is a .onion address but Tor is not running on %s", customAddr, torSOCKS5)
@@ -264,15 +265,21 @@ func checkZMQ(n Node, dialer proxy.Dialer) error {
 	}
 }
 
+// ErrBadAddr marks a node address that cannot be parsed. It is permanent —
+// a string that is not host:port will not become one on a second attempt — so
+// callers that retry node selection use it to tell a typo apart from a node
+// that is merely unreachable right now.
+var ErrBadAddr = errors.New("malformed node address")
+
 // parseAddr turns "host:port" into a Node, inferring the ZMQ port.
 func parseAddr(addr string) (Node, error) {
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
-		return Node{}, err
+		return Node{}, fmt.Errorf("%w: %q is not host:port", ErrBadAddr, addr)
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return Node{}, err
+		return Node{}, fmt.Errorf("%w: %q has a non-numeric port", ErrBadAddr, addr)
 	}
 	isTor := strings.HasSuffix(host, ".onion")
 	// Infer ZMQ port: the conventional p2pool pairing is ZMQ 18083 for both

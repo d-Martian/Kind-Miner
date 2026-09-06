@@ -102,10 +102,7 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 		return err
 	}
 
-	p2pPort := 37889
-	if p.chain == "mini" {
-		p2pPort = 37888
-	}
+	p2pPort := p2pPortForChain(p.chain)
 	args := []string{
 		"--host", p.nodeHost,
 		"--rpc-port", fmt.Sprintf("%d", p.rpcPort),
@@ -118,8 +115,8 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 	if p.socks5Proxy != "" {
 		args = append(args, "--socks5", p.socks5Proxy)
 	}
-	if p.chain == "mini" {
-		args = append(args, "--mini")
+	if flag := chainFlag(p.chain); flag != "" {
+		args = append(args, flag)
 	}
 	// --data-api writes the JSON stat files; --local-api adds the local/ ones
 	// (our own hashrate and shares). Both are needed for the reward estimate.
@@ -243,6 +240,31 @@ func (p *P2Pool) readOutput(r io.Reader, readyCh chan<- struct{}, exitCh chan<- 
 		}
 	}
 	close(exitCh)
+}
+
+// chainFlag returns the p2pool argument that selects a sidechain. The main
+// chain is p2pool's default and has no flag, so an unrecognised chain yields
+// "" and joins main — which is why config validates the value first.
+func chainFlag(chain string) string {
+	switch chain {
+	case "mini":
+		return "--mini"
+	case "nano":
+		return "--nano"
+	}
+	return ""
+}
+
+// p2pPortForChain returns the sidechain's default peer-to-peer port. Each
+// sidechain has its own peer network, so they must not share a port.
+func p2pPortForChain(chain string) int {
+	switch chain {
+	case "mini":
+		return 37888
+	case "nano":
+		return 37890
+	}
+	return 37889
 }
 
 // isP2PoolReady returns true when the p2pool log line indicates the Stratum

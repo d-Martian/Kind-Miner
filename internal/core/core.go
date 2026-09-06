@@ -9,11 +9,13 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kind-miner/kind-miner/internal/autoinstall"
@@ -72,6 +74,15 @@ type Supervisor struct {
 	monerod *engine.Monerod
 	p2pool  *engine.P2Pool
 	tor     *engine.Tor
+
+	mu sync.Mutex
+	// started is when mining actually began, which is what the dashboard's
+	// uptime counts — not how long the window has been open.
+	started time.Time
+	// nodeAddr is the monerod p2pool is following, for display.
+	nodeAddr string
+	// viaTor records whether that node is reached over Tor.
+	viaTor bool
 }
 
 // New creates a Supervisor for cfg. It does not start anything.
@@ -143,6 +154,11 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			log.Printf("Routing p2pool through Tor (%s)", socks5Proxy)
 		}
 
+		s.mu.Lock()
+		s.nodeAddr = node.Addr()
+		s.viaTor = socks5Proxy != ""
+		s.mu.Unlock()
+
 		emit(StepStartP2Pool)
 		// Keep p2pool's cache/log/peer files in a persistent data dir instead of
 		// whatever cwd we inherited — in a Flatpak that cwd is a throwaway tmpfs
@@ -169,7 +185,12 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	}
 
 	emit(StepStartXMRig)
-	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, poolURL, s.cfg.Wallet, s.cfg.MaxThreads, 8080)
+	// xmrig runs at a fixed thread count and is throttled by duty-cycling, so
+	// this is the ceiling of raw capacity. It has to come from the same function
+	// the scheduler uses, or the two disagree about the full-tilt share a duty
+	// fraction is measured against and every reported percentage is wrong.
+	threads := scheduler.ThreadCap(s.cfg.MaxThreads)
+	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, poolURL, s.cfg.Wallet, threads, 8080)
 	if err := s.xmrig.Start(); err != nil {
 		return err
 	}
@@ -177,8 +198,31 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	s.sched = scheduler.New(s.cfg, s.xmrig)
 	go s.sched.Start()
 
+	s.mu.Lock()
+	s.started = time.Now()
+	s.mu.Unlock()
+
 	emit(StepReady)
 	return nil
+}
+
+// Uptime returns how long mining has been running. ok is false before Start
+// succeeds.
+func (s *Supervisor) Uptime() (time.Duration, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.started.IsZero() {
+		return 0, false
+	}
+	return time.Since(s.started), true
+}
+
+// Node returns the monerod address p2pool is following and whether it is
+// reached over Tor. The address is empty in pool mode and before Start.
+func (s *Supervisor) Node() (addr string, viaTor bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nodeAddr, s.viaTor
 }
 
 // Scheduler returns the running scheduler, or nil before Start succeeds.
@@ -240,6 +284,12 @@ func resolveNode(cfg *config.Config) (nodes.Node, error) {
 			node, err := nodes.SelectBest(cfg.RemoteNode)
 			if err == nil {
 				return node, nil
+			}
+			// Only unreachability is worth a retry. A malformed address parses
+			// the same way every time, so retrying it just spends 60s before
+			// showing the user the error they could have had immediately.
+			if errors.Is(err, nodes.ErrBadAddr) {
+				return nodes.Node{}, err
 			}
 			lastErr = err
 			if attempt < maxAttempts {

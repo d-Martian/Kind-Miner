@@ -21,18 +21,61 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 
 ## Features
 
-- **Disappears under load.** Every 5 seconds the scheduler measures your CPU usage, excluding the miner's own threads. If you start compiling, gaming, or rendering, XMRig is throttled or suspended within one tick. When you stop, it resumes automatically.
-- **Four-gear state machine.** Full → Reduced (half threads) → Minimal (1 thread) → Paused. Transitions are smooth and fast (~500 ms for a thread count change).
-- **Waits for you to step away.** Full-speed mining only starts once your keyboard and mouse have been quiet for a while (5 minutes by default, configurable). The tray counts down to it. Reading a page or watching a video barely touches the CPU, so idle detection — not CPU load alone — is what decides.
-- **Mine now, kindly.** A tray toggle skips the wait when you want to mine on purpose. It skips *only* the wait: the CPU, battery, and temperature backoff all stay in force, so browsing and video stay smooth.
-- **Tells you what it's doing.** The tray shows whether mining is backing off for you, and roughly how long until your share of the next block reward arrives.
+- **Kindness, not thresholds.** One control decides how much of the machine mining may take and how fast it lets go — Ghost, Polite, Balanced, or Full. Change it from the tray without stopping anything.
+- **Disappears under load.** Every 2 seconds the scheduler measures CPU usage excluding the miner's own threads, and gives the miner whatever is left under the kindness ceiling. If you start compiling, gaming, or rendering, XMRig gets out of the way within one tick.
+- **Shows you it is doing so.** The dashboard plots the miner's CPU against everything else's, with the reserved headroom shaded and each backoff marked. You can watch the miner step aside.
+- **Waits for you to step away.** Until your keyboard and mouse have been quiet for a while (5 minutes by default), mining is held to the Ghost ceiling whatever preset you picked. Reading a page or watching a video barely touches the CPU, so idle detection — not CPU load alone — is what decides.
+- **Mine now, kindly.** A toggle skips the wait when you want to mine on purpose. It skips *only* the wait: the CPU, battery, and temperature backoff all stay in force, so browsing and video stay smooth.
+- **Says what it has earned.** Hashrate, estimated XMR per day, how often you land a p2pool share, and how much of the payout window you occupy — in the window and in the tray.
 - **Starts with your machine.** Optional login-item registration on Linux, macOS, and Windows.
-- **Temperature ceiling.** Configurable hard limit; mining suspends if any core exceeds it.
+- **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down — which catches the clogged-fan case a fixed °C limit misses.
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
 - **Tor-native.** Routes through a Tor hidden service by default. Your IP is not visible to the node operator.
 - **Zero-setup dependencies.** XMRig and P2Pool are downloaded automatically on first run (SHA256-verified). You need: a Monero wallet address, and Tor running.
-- **Graphical or terminal.** Double-click for a full window — onboarding, live status, pause/resume, and an in-app settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.
+- **Graphical or terminal.** Double-click for a full window — four-step setup, live dashboard, and a tabbed settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.
 - **Single native binary.** No installer, no runtime, no Python, no Electron. `./kind-miner` and you're done.
+
+---
+
+## Kindness
+
+Kindness is the one thing kind-miner asks you to understand. Each preset is a
+**ceiling** — the share of the whole machine that mining and everything else may
+occupy together — plus how fast the miner gives ground and how slowly it takes
+it back.
+
+| Preset | Ceiling | What it feels like |
+|---|---|---|
+| **Ghost** | 52% | Only genuinely idle cycles. You will never notice it; payouts are slow. |
+| **Polite** | 78% | Steps aside the moment you touch the machine, and comes back slowly. The default, and the one most people keep. |
+| **Balanced** | 90% | Shares the machine evenly. Heavy work still wins, but you may feel a short lag. |
+| **Full** | 100% | Fills the rest of the machine and gives it back slowly. Still yields to your apps — it just aims to use what's spare. For machines you are not sitting at. |
+
+The miner only ever asks for what is left underneath the ceiling, so other work
+always has the rest of the machine reserved:
+
+```
+target  = ceiling − CPU used by everything else
+allowed = allowed + (target − allowed) × (falling ? Fall : Rise)
+duty    = allowed ÷ (miner's full-tilt CPU share)
+```
+
+The asymmetry between `Fall` and `Rise` is the whole idea. A symmetric
+controller oscillates against bursty desktop load and you feel every swing;
+falling fast and rising slowly turns the same load into a miner that simply
+is not there while you work.
+
+The allowance is applied by **duty-cycling** XMRig — suspending and resuming it
+(SIGSTOP/SIGCONT) so it runs for `duty` of each half-second — never by changing
+its thread count. That matters more than it sounds: RandomX spends ~3 seconds
+allocating its dataset on every launch, so a throttler that restarted XMRig to
+re-thread it would spend all its time re-initialising and never actually hash.
+Pausing keeps the dataset warm, gives smooth fractional control the thread count
+cannot, and hands idle cores straight back to your apps the instant it suspends.
+
+Upgrading from a version before kindness existed? Your `throttle_sensitivity`
+is migrated on first load — `high` → Ghost, `medium` → Polite, `low` →
+Balanced — and the dead key is dropped the next time the config is written.
 
 ---
 
@@ -87,7 +130,7 @@ chmod +x kind-miner
 ./kind-miner --no-tray        # --headless is an alias
 ```
 
-On first run with no config file, kind-miner collects your wallet address — through a graphical onboarding window when launched from the desktop, or a short text wizard when launched from a terminal — then writes `~/.config/kind-miner/config.yaml` and starts mining. A headless launch with no display writes a config template for you to edit instead.
+On first run with no config file, kind-miner asks four questions — where your rewards go, how to reach the Monero network, which xmrig and p2pool to run, and how kind to be — then writes `~/.config/kind-miner/config.yaml` and starts mining. Launched from a terminal it runs a short text wizard instead, and a headless launch with no display writes a config template for you to edit.
 
 ---
 
@@ -131,8 +174,8 @@ mode: p2pool-remote
 # Leave blank to use the kind-miner Nodo (Tor, ZMQ confirmed).
 remote_node: ""
 
-# P2Pool sidechain: "mini" for hashrate < 50 kH/s (most desktops),
-# "main" for higher hashrate machines.
+# P2Pool sidechain: "main" above ~50 kH/s, "mini" for most desktops,
+# "nano" below ~1 kH/s.
 p2pool_chain: mini
 
 # Set to true to let kind-miner manage the p2pool subprocess.
@@ -141,23 +184,43 @@ manage_p2pool: true
 # Traditional pool URL — only used when mode: pool.
 pool_url: ""
 
-# Maximum XMRig threads. 0 = half of logical cores (recommended).
+# Maximum XMRig threads. 0 = auto — min(logical cores, L3 / 2 MiB), which is
+# the most RandomX can use before threads start evicting each other (recommended).
 max_threads: 0
 
-# How aggressively to yield to other processes.
-# low:    reduce at 70% CPU, pause at 80%
-# medium: reduce at 40% CPU, pause at 60%  ← default
-# high:   reduce at 20% CPU, pause at 40%
-throttle_sensitivity: medium
+# How much of the machine mining may take, and how fast it lets go.
+# ghost | polite | balanced | full — see "Kindness" above.
+kindness: polite
 
 # Pause when running on battery.
 pause_on_battery: true
 
+# Pause while the CPU is clocking itself down for heat.
+pause_on_thermal_throttle: true
+
+# Mine only while the screen is locked.
+mine_only_when_locked: false
+
 # Pause if any CPU core exceeds this temperature (Celsius).
 temp_limit_celsius: 95
 
+# Dashboard chart — display only.
+chart:
+  shade_headroom: true
+  mark_backoff: true
+  draw_temperature: false
+  fill_miner: true
+  window_seconds: 30
+
 log_level: info
 ```
+
+Everything here is editable from the settings window, which groups it the same
+way: **Payout**, **Connection**, **Binaries**, **Kindness**, **Graph**,
+**Advanced**. Kindness and graph settings take effect while you watch; wallet,
+mode, node and sidechain need a restart, and the window says so when you save.
+
+kind-miner only rewrites the keys it owns, so anything you add by hand is kept.
 
 ---
 
@@ -196,25 +259,65 @@ XMRig connects directly to a Stratum pool. Simpler, but the pool operator knows 
 ## How the scheduler works
 
 ```
-every 5 seconds:
-  cpu_usage = total_cpu% - xmrig_cpu%    ← other processes only
+every 2 seconds:
+  other_cpu = total_cpu% - xmrig_cpu%     ← other processes only
 
-  if cpu_usage > pause_threshold  → pause XMRig (SIGSTOP)
-  elif cpu_usage > reduce_threshold → half threads
-  else                              → full threads
+  if manually paused                      → allowance 0
+  if on battery and pause_on_battery      → allowance 0
+  if any core temp >= temp limit          → allowance 0
+  if thermally throttled and asked to     → allowance 0
+  if screen unlocked and asked to         → allowance 0
+  else:
+    ceiling = kindness ceiling            ← Ghost's, until you have gone idle
+    target  = max(0, ceiling - other_cpu)
+    allowed += (target - allowed) x (target < allowed ? Fall : Rise)
 
-  if battery and pause_on_battery  → pause
-  if any_core_temp > limit         → pause
+  threads = floor(allowed x cores), capped at max_threads
+  0 threads → suspend (SIGSTOP, instant)
+  fewer     → applied immediately
+  more      → only after several ticks agree (it restarts XMRig)
 ```
 
-XMRig runs at OS idle priority (`nice 19` on Linux/macOS, `IDLE_PRIORITY_CLASS` on Windows). The scheduler is a second, independent layer on top of that. The combination means the miner loses scheduler fights to anything — including background browser tabs — and then gets explicitly suspended if system load climbs further.
+XMRig also runs at OS idle priority (`nice 19` on Linux/macOS,
+`IDLE_PRIORITY_CLASS` on Windows). The scheduler is a second, independent layer
+on top of that. The combination means the miner loses scheduler fights to
+anything — including background browser tabs — and then explicitly hands back
+CPU if load climbs further.
 
 The tray icon reflects state in real time:
 
 | Icon | State | Meaning |
 |---|---|---|
-| 🟠 colour | Full / Reduced / Minimal | Mining at some thread count |
-| ⚫ grey | Paused | Suspended — load, battery, or temp |
+| 🟠 colour | Mining | Running at its full thread count |
+| 🟠 dim | Stepping aside | Running at fewer threads than allowed |
+| ⚫ grey | Paused | Suspended — load, battery, heat, or you |
+
+---
+
+## The resource chart
+
+The dashboard draws the last 30 seconds (or 60, or 2 minutes) of two series:
+every other process's CPU, and the miner's. The band above the kindness ceiling
+is shaded — that is the part of the machine mining will not touch — and each
+moment the miner handed CPU back is ticked along the bottom.
+
+This exists because the failure mode that costs a user the most is deciding some
+unrelated slowdown is the miner's fault and uninstalling it. Watching the orange
+line dive the instant the grey one climbs is a better answer to that than any
+status line.
+
+Fyne 2.5.3 has no chart widget, so the plot is rasterised with
+`golang.org/x/image/vector` and handed to a `canvas.Raster`
+(`internal/gui/chart.go`).
+
+**A note on the power figures.** Since CVE-2020-8694 the Linux kernel ships the
+RAPL energy counters as root-only, because they are precise enough to infer what
+other processes are computing. kind-miner does not ask for privileges to read
+them, so on most machines the power tiles show `—`. Where the counters *are*
+readable, the miner's share is attributed proportionally to CPU — an
+approximation, exact only at the extremes. A modelled wattage presented next to
+a measured hashrate would be indistinguishable from a real one, so none is
+shown.
 
 ---
 
@@ -273,20 +376,6 @@ It runs `monerod` with ZMQ enabled — a requirement for p2pool that most public
 You can substitute any monerod node that has ZMQ enabled by setting `remote_node` in your config. If you run your own node on a home server, this is the cleanest option.
 
 ---
-
-## Planned: a resource chart
-
-The scheduler already keeps a rolling hour of samples — miner CPU, everything
-else's CPU, and hashrate, at 5-second resolution (`internal/stats`,
-`Scheduler.History()`). Nothing draws it yet.
-
-The intended use is a line chart in the app showing the miner's CPU falling as
-other processes claim theirs. kind-miner is meant to be set-and-forget, and the
-failure mode that costs a user the most is deciding some unrelated slowdown is
-the miner's fault and uninstalling it. Being able to see the miner stepping
-aside is a better answer to that than any status line.
-
-Fyne 2.5.3 has no chart widget, so this means drawing onto a canvas.
 
 ---
 

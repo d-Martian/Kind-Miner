@@ -21,19 +21,45 @@ import (
 )
 
 // XMRig manages a single XMRig subprocess.
+//
+// Throttling is done by duty-cycling the running process with SIGSTOP/SIGCONT,
+// not by changing its thread count. That choice is the difference between a
+// miner that works and one that does not: RandomX spends ~3 seconds allocating
+// its dataset on every launch, and the scheduler re-evaluates every couple of
+// seconds, so a design that restarted xmrig to throttle it would spend all its
+// time re-initialising and never actually hash. Pausing and resuming keeps the
+// dataset warm and gives smooth, fine-grained control the thread count cannot.
 type XMRig struct {
-	binPath  string
-	poolURL  string // stratum URL: "127.0.0.1:3333" (p2pool) or "pool.host:port"
-	wallet   string // only used for direct pool mode; p2pool manages the wallet itself
-	threads  int
-	apiPort  int
+	binPath string
+	poolURL string // stratum URL: "127.0.0.1:3333" (p2pool) or "pool.host:port"
+	wallet  string // only used for direct pool mode; p2pool manages the wallet itself
+	threads int
+	apiPort int
 
 	mu       sync.Mutex
 	cmd      *exec.Cmd
 	cancel   context.CancelFunc
 	hashrate float64
 	paused   bool
+
+	// duty is the fraction of wall-clock time the miner is allowed to run,
+	// applied by dutyLoop. 1 runs flat out, 0 keeps it suspended. dutyStop ends
+	// the loop when the process stops.
+	duty     float64
+	dutyStop chan struct{}
 }
+
+// dutyPeriod is one full run/suspend cycle. Short enough that a half-duty miner
+// frees the machine in sub-second slices rather than visible half-second
+// stalls; long enough that the syscall overhead and any stale-share cost stay
+// negligible. Pausing the miner never stalls other apps — it hands them the
+// cores — so this only shapes the miner's own throughput.
+const dutyPeriod = 500 * time.Millisecond
+
+// minRunSlice keeps the smallest "on" slice long enough for the HTTP API to
+// answer a poll within it, so a heavily throttled miner still reports a
+// hashrate instead of looking dead.
+const minRunSlice = 80 * time.Millisecond
 
 // xmrigSummary is the subset of XMRig's /1/summary we care about.
 type xmrigSummary struct {
@@ -96,10 +122,108 @@ func (x *XMRig) start() error {
 	x.cmd = cmd
 	x.cancel = cancel
 	x.paused = false
+	x.dutyStop = make(chan struct{})
 
 	go x.readOutput(stdout)
 	go x.pollHashrateAPI()
+	go x.dutyLoop(x.dutyStop, cmd.Process)
 	return nil
+}
+
+// SetDuty sets the fraction of time the miner may run, in [0,1]. It takes
+// effect within one dutyPeriod without restarting the process. Values outside
+// the range are clamped.
+func (x *XMRig) SetDuty(d float64) {
+	if d < 0 {
+		d = 0
+	} else if d > 1 {
+		d = 1
+	}
+	x.mu.Lock()
+	x.duty = d
+	x.mu.Unlock()
+}
+
+// Duty returns the current duty fraction.
+func (x *XMRig) Duty() float64 {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return x.duty
+}
+
+// dutyLoop drives SIGSTOP/SIGCONT so the process runs for duty of each period.
+// It is bound to one process: SetThreads restarts the loop against the new one,
+// and a stale loop exits when its stop channel closes.
+func (x *XMRig) dutyLoop(stop <-chan struct{}, proc *os.Process) {
+	wait := func(d time.Duration) bool {
+		if d <= 0 {
+			return false
+		}
+		t := time.NewTimer(d)
+		defer t.Stop()
+		select {
+		case <-stop:
+			return true
+		case <-t.C:
+			return false
+		}
+	}
+
+	for {
+		d := x.Duty()
+		switch {
+		case d <= 0:
+			x.suspend(proc)
+			if wait(dutyPeriod) {
+				return
+			}
+		case d >= 1:
+			x.unsuspend(proc)
+			if wait(dutyPeriod) {
+				return
+			}
+		default:
+			on := time.Duration(d * float64(dutyPeriod))
+			if on < minRunSlice {
+				on = minRunSlice
+			}
+			off := dutyPeriod - on
+			x.unsuspend(proc)
+			if wait(on) {
+				return
+			}
+			x.suspend(proc)
+			if wait(off) {
+				return
+			}
+		}
+	}
+}
+
+// suspend/unsuspend act on a specific process so the duty loop never signals a
+// PID that Stop has already reaped and the OS may have recycled.
+func (x *XMRig) suspend(proc *os.Process) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if x.cmd == nil || x.cmd.Process != proc || x.paused {
+		return
+	}
+	if err := suspendProcess(proc); err != nil {
+		return
+	}
+	x.paused = true
+}
+
+func (x *XMRig) unsuspend(proc *os.Process) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if x.cmd == nil || x.cmd.Process != proc || !x.paused {
+		return
+	}
+	if err := resumeProcess(proc); err != nil {
+		return
+	}
+	x.paused = false
 }
 
 func (x *XMRig) buildArgs() []string {
@@ -107,6 +231,9 @@ func (x *XMRig) buildArgs() []string {
 		"--url", x.poolURL,
 		"--cpu-priority", "0",
 		"--no-color",
+		// Print a speed line every 10s so a hashrate is available from stdout
+		// even if an API poll lands during a duty-cycle suspend.
+		"--print-time", "10",
 		"--http-host", "127.0.0.1",
 		"--http-port", strconv.Itoa(x.apiPort),
 	}
@@ -132,6 +259,10 @@ func (x *XMRig) stop() {
 	if x.cmd == nil {
 		return
 	}
+	if x.dutyStop != nil {
+		close(x.dutyStop)
+		x.dutyStop = nil
+	}
 	x.cancel()
 	_ = x.cmd.Wait()
 	x.cmd = nil
@@ -139,36 +270,11 @@ func (x *XMRig) stop() {
 	x.paused = false
 }
 
-// Pause suspends the XMRig process via OS-level signals/APIs.
-func (x *XMRig) Pause() error {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	if x.cmd == nil || x.paused {
-		return nil
-	}
-	if err := suspendProcess(x.cmd.Process); err != nil {
-		return err
-	}
-	x.paused = true
-	return nil
-}
-
-// Resume unsuspends the XMRig process.
-func (x *XMRig) Resume() error {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	if x.cmd == nil || !x.paused {
-		return nil
-	}
-	if err := resumeProcess(x.cmd.Process); err != nil {
-		return err
-	}
-	x.paused = false
-	return nil
-}
-
-// SetThreads restarts XMRig with the new thread count.
-// It is a no-op if threads hasn't changed.
+// SetThreads changes the thread count XMRig runs with. Because xmrig cannot be
+// re-threaded live, this restarts the process — so it is reserved for a config
+// change (the user editing max_threads), never used for moment-to-moment
+// throttling, which SetDuty handles without a restart. It is a no-op if the
+// count is unchanged.
 func (x *XMRig) SetThreads(n int) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -232,10 +338,12 @@ func (x *XMRig) readOutput(r io.Reader) {
 	}
 }
 
-// pollHashrateAPI queries XMRig's HTTP API every 15 seconds.
+// pollHashrateAPI queries XMRig's HTTP API every 5 seconds. The timeout
+// comfortably exceeds one dutyPeriod, so a poll that lands during a duty-cycle
+// suspend simply completes when the process next resumes rather than failing.
 func (x *XMRig) pollHashrateAPI() {
 	client := &http.Client{Timeout: 3 * time.Second}
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
 		x.mu.Lock()
