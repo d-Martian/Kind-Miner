@@ -91,7 +91,11 @@ pool_url: ""
 xmrig_path: ""
 
 # Maximum CPU threads to use for mining.
-# 0 = auto (half of available logical cores — leaves headroom for the OS)
+# 0 = auto: as many threads as RandomX can actually use, which is the smaller of
+# the logical core count and (L3 cache / 2 MiB). Threads past what the cache
+# holds make the machine hash *less*, so raising this above auto usually costs
+# hashrate rather than buying it. Kindness and the duty cycle do the throttling;
+# this is only the ceiling of raw capacity.
 max_threads: 0
 
 # --- Kindness ---

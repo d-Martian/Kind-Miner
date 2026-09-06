@@ -14,7 +14,6 @@ import (
 	"log"
 	"net"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -187,13 +186,10 @@ func (s *Supervisor) Start(progress func(Step)) error {
 
 	emit(StepStartXMRig)
 	// xmrig runs at a fixed thread count and is throttled by duty-cycling, so
-	// this is the ceiling of raw capacity — the whole machine unless the user
-	// capped it. The scheduler resolves 0 the same way, so the two agree on the
-	// full-tilt share that a duty fraction is measured against.
-	threads := s.cfg.MaxThreads
-	if threads <= 0 {
-		threads = runtime.NumCPU()
-	}
+	// this is the ceiling of raw capacity. It has to come from the same function
+	// the scheduler uses, or the two disagree about the full-tilt share a duty
+	// fraction is measured against and every reported percentage is wrong.
+	threads := scheduler.ThreadCap(s.cfg.MaxThreads)
 	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, poolURL, s.cfg.Wallet, threads, 8080)
 	if err := s.xmrig.Start(); err != nil {
 		return err
