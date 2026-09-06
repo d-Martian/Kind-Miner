@@ -10,7 +10,7 @@ import (
 
 // P2PoolStats is the subset of p2pool's JSON statistics kind-miner uses.
 //
-// Field names come from p2pool v4.15.1: network/stats and pool/stats are
+// Field names come from p2pool v4.18: network/stats and pool/stats are
 // written in src/p2pool.cpp, local/stratum in src/stratum_server.cpp. Re-check
 // them when the pinned p2pool version changes.
 type P2PoolStats struct {

@@ -30,7 +30,7 @@ func writeAPIFiles(t *testing.T, network, pool, local string) string {
 	return dir
 }
 
-// The JSON below is the shape p2pool v4.15.1 writes (src/p2pool.cpp and
+// The JSON below is the shape p2pool v4.18 writes (src/p2pool.cpp and
 // src/stratum_server.cpp). If a version bump changes a field name, this test is
 // what should catch it.
 const (
