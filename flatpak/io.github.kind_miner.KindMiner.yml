@@ -82,5 +82,9 @@ modules:
           - build
           - dist
           - bin
+          # p2pool's work directory. The loose filenames below it predate
+          # p2pool getting one, and on their own they let ~143 MB of cache and
+          # peer state into every build sandbox.
+          - p2pool
           - p2pool.cache
           - p2pool.log
