@@ -13,6 +13,11 @@ const (
 	statusMineNow  = "Mining now — still yielding to your apps"
 	statusYielding = "Backing off — your apps come first"
 
+	// statusAlmostFull stands in for the last minute of the idle wait. Naming
+	// the remaining seconds would change this label every second; see
+	// countdownLabel for why the tray cannot pay that.
+	statusAlmostFull = "Full speed in under a minute"
+
 	labelMineNow  = "Mine at full speed now"
 	labelMineAuto = "Return to automatic (wait for idle)"
 
@@ -35,16 +40,17 @@ const (
 	statusStandbyPrefix = "Standing by — "
 )
 
-// fineGrainedBelow is the point where the countdown switches from a coarse
-// minute estimate to a live per-second one.
+// countdownLabel renders the remaining wait before mining ramps to full speed,
+// for the tray.
 //
-// The label only changes once a minute above this threshold, and Fyne 2.5.3 can
-// only update a menu label by re-applying the whole menu — which closes it if
-// the user is looking at it. A ticking seconds display is worth that cost only
-// when the wait is nearly over and the user might actually be watching it.
-const fineGrainedBelow = 90
-
-// countdownLabel renders the remaining wait before mining ramps to full speed.
+// It is deliberately coarse — never a ticking seconds display. Fyne 2.5.3
+// cannot refresh a single menu item, so any change to this string re-applies
+// the whole menu: a D-Bus teardown and rebuild of every item, run on the GLFW
+// main thread that also dispatches window input, and one that leaks a goroutine
+// per item inside Fyne. A per-second label here made that happen every second
+// for as long as the app was running. The dashboard still counts down in
+// seconds (see formatCountdown) because repainting a canvas.Text is free; the
+// tray cannot afford the same thing.
 //
 // secs is the seconds remaining; ok is false when no countdown applies, which
 // covers a disabled gate, a system without idle detection, and the case where
@@ -53,10 +59,10 @@ func countdownLabel(secs int, ok bool) string {
 	if !ok {
 		return statusIdle
 	}
-	if secs <= fineGrainedBelow {
-		return fmt.Sprintf("Full speed in %ds", secs)
-	}
 	mins := (secs + 59) / 60
+	if mins <= 1 {
+		return statusAlmostFull
+	}
 	return fmt.Sprintf("Full speed in ~%dm", mins)
 }
 

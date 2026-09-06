@@ -14,11 +14,11 @@ func TestCountdownLabel(t *testing.T) {
 		want string
 	}{
 		{"no countdown applies", 0, false, statusIdle},
-		{"seconds when nearly there", 47, true, "Full speed in 47s"},
-		{"at the fine-grained boundary", 90, true, "Full speed in 90s"},
-		// Above the boundary the label changes once a minute, so re-applying the
-		// tray menu (which closes an open menu) stays rare.
-		{"coarse minutes above the boundary", 91, true, "Full speed in ~2m"},
+		// The label must never name the remaining seconds: it would then change
+		// every second, and every change re-applies the whole tray menu.
+		{"the last minute does not tick", 47, true, statusAlmostFull},
+		{"one minute exactly does not tick", 60, true, statusAlmostFull},
+		{"just over a minute rounds up", 61, true, "Full speed in ~2m"},
 		{"rounds minutes up", 240, true, "Full speed in ~4m"},
 		{"exact minute", 300, true, "Full speed in ~5m"},
 	}
@@ -49,7 +49,7 @@ func TestTrayStatusLine(t *testing.T) {
 			override:  scheduler.OverrideNone,
 			state:     scheduler.StateReduced,
 			reason:    scheduler.ReasonWaitingForIdle,
-			want:      "Full speed in 42s",
+			want:      statusAlmostFull,
 		},
 		{
 			name:      "paused says so",
