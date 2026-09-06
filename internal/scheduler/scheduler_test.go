@@ -376,12 +376,14 @@ func TestThermalFactor(t *testing.T) {
 }
 
 func TestThreadCap(t *testing.T) {
-	if got := threadCap(3); got != 3 {
-		t.Errorf("threadCap(3) = %d, want 3", got)
+	// A user who names a thread count gets it: the cache cap is a default, not
+	// a ceiling imposed on an explicit choice.
+	if got := ThreadCap(3); got != 3 {
+		t.Errorf("ThreadCap(3) = %d, want 3", got)
 	}
-	// 0 means "the whole machine" now — duty and the ceiling do the limiting —
-	// and must never resolve to zero even on a single-core host.
-	if got := threadCap(0); got < 1 {
-		t.Errorf("threadCap(0) = %d, want at least 1", got)
+	// 0 means "as much as RandomX can use" — duty and the ceiling do the rest —
+	// and must never resolve to zero, on a single-core host or a tiny cache.
+	if got := ThreadCap(0); got < 1 {
+		t.Errorf("ThreadCap(0) = %d, want at least 1", got)
 	}
 }

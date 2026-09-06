@@ -184,7 +184,8 @@ manage_p2pool: true
 # Traditional pool URL — only used when mode: pool.
 pool_url: ""
 
-# Maximum XMRig threads. 0 = half of logical cores (recommended).
+# Maximum XMRig threads. 0 = auto — min(logical cores, L3 / 2 MiB), which is
+# the most RandomX can use before threads start evicting each other (recommended).
 max_threads: 0
 
 # How much of the machine mining may take, and how fast it lets go.

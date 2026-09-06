@@ -180,7 +180,7 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 		idle:            monitor.NewIdle(),
 		history:         stats.NewRing(historyCapacity),
 		cores:           runtime.NumCPU(),
-		maxThreads:      threadCap(cfg.MaxThreads),
+		maxThreads:      ThreadCap(cfg.MaxThreads),
 		preset:          cfg.Preset(),
 		pauseOnBattery:  cfg.PauseOnBattery,
 		onlyWhenLocked:  cfg.MineOnlyWhenLocked,
@@ -193,16 +193,48 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 	}
 }
 
-// threadCap resolves the configured maximum thread count, where 0 means "the
-// whole machine". The kindness ceiling and the duty cycle are what hold mining
-// back now, so the thread count is just the ceiling of raw capacity a Full
-// preset can reach — reserving cores here as well would only stop Full from
-// ever meaning full.
-func threadCap(configured int) int {
+// randomxScratchpad is the working set RandomX gives each mining thread. A
+// thread only hashes at full speed while its scratchpad stays resident in the
+// last-level cache.
+const randomxScratchpad = 2 << 20
+
+// ThreadCap resolves the configured maximum thread count, where 0 means "as
+// much of the machine as RandomX can actually use".
+//
+// The kindness ceiling and the duty cycle are what hold mining back, so this is
+// the ceiling of raw capacity a Full preset can reach. It deliberately reserves
+// nothing for the OS — doing that here as well would stop Full from ever
+// meaning full.
+//
+// It is still not the core count, because past a point extra threads subtract
+// hashrate. Each one wants 2 MiB of L3, and once the scratchpads no longer fit
+// the threads evict each other continuously: every thread gets slower and the
+// machine hashes less in total than it would have with fewer. This was a real
+// observed configuration, not a hypothetical — a 22-thread part with 24 MiB of
+// L3 asked for 44 MiB of scratchpad against 24 MiB of cache, and two of those
+// threads sat on low-power cores with no L3 at all. Capping at the cache is
+// faster *and* kinder, so there is no trade being made here.
+//
+// Where the cache size cannot be read this falls back to the core count, which
+// is what every platform did before.
+func ThreadCap(configured int) int {
 	if configured > 0 {
 		return configured
 	}
-	return int(math.Max(1, float64(runtime.NumCPU())))
+	l3, known := monitor.L3CacheBytes()
+	return capForCache(runtime.NumCPU(), l3, known)
+}
+
+// capForCache is the pure half of ThreadCap: how many threads a machine with
+// this many cores and this much last-level cache should mine with. An unknown
+// cache size means "no opinion", which leaves the core count standing.
+func capForCache(cores int, l3 int64, known bool) int {
+	if known {
+		if fits := int(l3 / randomxScratchpad); fits < cores {
+			cores = fits
+		}
+	}
+	return int(math.Max(1, float64(cores)))
 }
 
 // Start begins the polling loop. It blocks until Stop is called.
@@ -308,7 +340,7 @@ func (s *Scheduler) IsManuallyPaused() bool { return s.Override() == OverridePau
 // (wallet, mode, node) are not handled here.
 func (s *Scheduler) UpdateRuntime(cfg *config.Config) {
 	s.mu.Lock()
-	s.maxThreads = threadCap(cfg.MaxThreads)
+	s.maxThreads = ThreadCap(cfg.MaxThreads)
 	s.preset = cfg.Preset()
 	s.pauseOnBattery = cfg.PauseOnBattery
 	s.onlyWhenLocked = cfg.MineOnlyWhenLocked
