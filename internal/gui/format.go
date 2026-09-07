@@ -146,3 +146,17 @@ func formatShareInterval(d time.Duration, ok bool) string {
 	}
 	return "every " + formatETA(d)
 }
+
+// wifiPowerSaveText renders the Wi-Fi power save row. An unreadable or wired
+// link shows the em dash the rest of this file uses for "unknown", never "Off"
+// — that would claim a check that never happened.
+func wifiPowerSaveText(_ string, enabled, known bool) string {
+	switch {
+	case !known:
+		return emDash
+	case enabled:
+		return WiFiPowerSaveOn
+	default:
+		return WiFiPowerSaveOff
+	}
+}
