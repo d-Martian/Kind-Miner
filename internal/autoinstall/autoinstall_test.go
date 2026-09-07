@@ -7,6 +7,8 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -143,4 +145,66 @@ func TestAssetURL(t *testing.T) {
 	if got := assetURL(spec, a); got != want {
 		t.Fatalf("assetURL = %q, want %q", got, want)
 	}
+}
+
+// install writes a fake binary and its stamp, standing in for a completed
+// ensurePinned run.
+func install(t *testing.T, dir, name, version string, content []byte) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeStamp(path, pinStamp{Version: version, SHA256: sha256Hex(content)}); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestInstallReason(t *testing.T) {
+	body := []byte("a pinned binary")
+
+	t.Run("the pinned build, untouched, is left alone", func(t *testing.T) {
+		p := install(t, t.TempDir(), "xmrig", "6.26.0", body)
+		if got := installReason(p, "6.26.0"); got != "" {
+			t.Errorf("installReason = %q, want no reason to reinstall", got)
+		}
+	})
+
+	t.Run("a moved pin is fetched, which is the bug this fixes", func(t *testing.T) {
+		// Before the stamp existed, ensurePinned returned early on any file that
+		// was present, so a deps.json bump never reached an existing install.
+		p := install(t, t.TempDir(), "xmrig", "6.21.3", body)
+		if got := installReason(p, "6.26.0"); got == "" {
+			t.Error("a version bump must trigger a reinstall, got none")
+		}
+	})
+
+	t.Run("a modified binary is fetched again", func(t *testing.T) {
+		dir := t.TempDir()
+		p := install(t, dir, "xmrig", "6.26.0", body)
+		if err := os.WriteFile(p, []byte("something else entirely"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := installReason(p, "6.26.0"); got == "" {
+			t.Error("a binary that no longer matches its stamp must be replaced")
+		}
+	})
+
+	t.Run("an install predating the stamp is fetched again", func(t *testing.T) {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "xmrig")
+		if err := os.WriteFile(p, body, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := installReason(p, "6.26.0"); got == "" {
+			t.Error("an unstamped binary cannot be vouched for and must be replaced")
+		}
+	})
+
+	t.Run("a missing binary is installed", func(t *testing.T) {
+		if got := installReason(filepath.Join(t.TempDir(), "xmrig"), "6.26.0"); got == "" {
+			t.Error("a missing binary must be installed")
+		}
+	})
 }
