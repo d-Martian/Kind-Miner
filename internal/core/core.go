@@ -199,6 +199,9 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	// the scheduler uses, or the two disagree about the full-tilt share a duty
 	// fraction is measured against and every reported percentage is wrong.
 	threads := scheduler.ThreadCap(s.cfg.MaxThreads)
+	// Checked here rather than at startup: p2pool has already taken its share
+	// of the pool by now, and its share is the whole problem.
+	s.checkHugePages(threads)
 	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, poolURL, s.cfg.Wallet, threads, 8080)
 	if err := s.xmrig.Start(); err != nil {
 		return err
@@ -252,6 +255,23 @@ func (s *Supervisor) checkWiFiPowerSave() {
 	log.Printf("warning: Wi-Fi power save is on for %s. Mining can stall this "+
 		"machine's network for seconds at a time while the radio is asleep. "+
 		"Disable it with: nmcli con modify <connection> wifi.powersave 2", iface)
+}
+
+// checkHugePages warns when the huge page pool will not cover the miner.
+//
+// Falling back to 4 KiB pages costs a large fraction of the hashrate and xmrig
+// does it silently, so without this the machine simply mines slowly for no
+// visible reason. See monitor.HugePagesFor for why p2pool is what usually
+// exhausts a pool that looks big enough.
+func (s *Supervisor) checkHugePages(threads int) {
+	short, wantPages := monitor.HugePagesFor(threads)
+	if !short {
+		return
+	}
+	log.Printf("warning: not enough free huge pages for the miner's RandomX dataset, "+
+		"so it will fall back to 4 KiB pages and hash considerably slower. p2pool "+
+		"keeps a dataset of its own and starts first, so the pool has to cover both: "+
+		"sudo sysctl -w vm.nr_hugepages=%d", wantPages)
 }
 
 // WiFiPowerSave reports the active wireless interface and whether it runs with

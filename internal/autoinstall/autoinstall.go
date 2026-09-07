@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -126,8 +127,13 @@ func binName(name string) string {
 // reproducible pattern used for the Tor Expert Bundle.
 func ensurePinned(binDir, name string, spec depSpec) (string, error) {
 	dest := filepath.Join(binDir, binName(name))
-	if _, err := os.Stat(dest); err == nil {
-		return dest, nil // already present — silent
+	if reason := installReason(dest, spec.Version); reason == "" {
+		return dest, nil // the pinned build, unmodified — silent
+	} else if _, err := os.Stat(dest); err == nil {
+		// Say why an existing binary is being replaced. Silently overwriting
+		// one would be indistinguishable from the bug this replaced, where a
+		// moved pin never reached anyone who already had the old version.
+		log.Printf("%s: %s — fetching the pinned build", name, reason)
 	}
 
 	key := platformKey()
@@ -163,8 +169,76 @@ func ensurePinned(binDir, name string, spec depSpec) (string, error) {
 		return "", fmt.Errorf("saving %s: %w", name, err)
 	}
 
+	// The stamp is what makes the next start able to tell "the pinned build" from
+	// "some build". Failing to write it only costs a redundant download later,
+	// so it must not fail the install.
+	if err := writeStamp(dest, pinStamp{Version: spec.Version, SHA256: sha256Hex(binary)}); err != nil {
+		log.Printf("%s: could not record the version stamp (%v); it will be re-downloaded next start", name, err)
+	}
+
 	printStatus(name, spec.Version, fmtSize(int64(len(binary))), true)
 	return dest, nil
+}
+
+// pinStamp records what ensurePinned last installed, beside the binary itself.
+//
+// SHA256 is of the extracted binary, not of the archive deps.json pins: it is
+// the only thing that can be re-checked later, and without it a pinned hash is
+// tamper-evident exactly once, at download time, and never again.
+type pinStamp struct {
+	Version string `json:"version"`
+	SHA256  string `json:"sha256"`
+}
+
+func stampPath(binPath string) string { return binPath + ".pin.json" }
+
+func writeStamp(binPath string, st pinStamp) error {
+	b, err := json.Marshal(st)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(stampPath(binPath), b, 0o644)
+}
+
+func readStamp(binPath string) (pinStamp, bool) {
+	b, err := os.ReadFile(stampPath(binPath))
+	if err != nil {
+		return pinStamp{}, false
+	}
+	var st pinStamp
+	if err := json.Unmarshal(b, &st); err != nil {
+		return pinStamp{}, false
+	}
+	return st, true
+}
+
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// installReason says why the binary at path has to be fetched, or "" when the
+// one already there is the pinned build, unmodified.
+//
+// The version comparison is the point: before it existed, ensurePinned returned
+// early on any file that happened to be present, so moving a pin in deps.json
+// upgraded nobody who already had the old build — the runtime kept the previous
+// version indefinitely while the release scripts shipped the new one.
+func installReason(path, wantVersion string) string {
+	binary, err := os.ReadFile(path)
+	if err != nil {
+		return "not installed"
+	}
+	st, ok := readStamp(path)
+	switch {
+	case !ok:
+		return "no record of which version is installed"
+	case st.Version != wantVersion:
+		return fmt.Sprintf("pinned version moved to %s (installed: %s)", wantVersion, st.Version)
+	case !strings.EqualFold(st.SHA256, sha256Hex(binary)):
+		return "the installed binary no longer matches the one that was verified"
+	}
+	return ""
 }
 
 // verifyAndExtract checks data against wantSHA (a hex-encoded SHA256) and, on a
@@ -224,11 +298,11 @@ func downloadWithProgress(label, url string) ([]byte, error) {
 }
 
 type progressReader struct {
-	r          io.Reader
-	total      int64
-	read       int64
-	label      string
-	lastPrint  time.Time
+	r         io.Reader
+	total     int64
+	read      int64
+	label     string
+	lastPrint time.Time
 }
 
 func (p *progressReader) Read(b []byte) (int, error) {
@@ -319,7 +393,9 @@ func extractZip(data []byte, name string) ([]byte, error) {
 
 // torVersion pins the Tor Expert Bundle release. The per-platform SHA256 sums
 // below come from the build manifest at:
-//   archive.torproject.org/tor-package-archive/torbrowser/15.0.15/sha256sums-unsigned-build.txt
+//
+//	archive.torproject.org/tor-package-archive/torbrowser/15.0.15/sha256sums-unsigned-build.txt
+//
 // Tor is security-critical, so unlike XMRig/p2pool its download is verified
 // against these pinned hashes.
 const torVersion = "15.0.15"
