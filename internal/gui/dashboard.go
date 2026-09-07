@@ -97,6 +97,7 @@ func (u *uiApp) newDashboard() *dashboard {
 		Add("CPU temperature", emDash)
 	d.linkDetail = newKVList().
 		Add("Node", emDash).
+		Add(WiFiPowerSaveKey, emDash).
 		Add("P2Pool chain", emDash).
 		Add("Shares found", emDash).
 		Add("You land a share", emDash).
@@ -357,6 +358,10 @@ func (d *dashboard) refreshPower(history []stats.Sample) {
 }
 
 func (d *dashboard) refreshConnection(cfg *config.Config) {
+	// Set before the pool-mode return below: a sleeping radio stalls the
+	// network whichever way the miner is pointed.
+	d.linkDetail.Set(WiFiPowerSaveKey, wifiPowerSaveText(d.u.sup.WiFiPowerSave()))
+
 	p2pool := d.u.sup.P2Pool()
 	if p2pool == nil {
 		d.link.Set("Pool", "")
