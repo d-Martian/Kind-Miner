@@ -20,11 +20,12 @@ func (f fakeIdle) IdleTime() (time.Duration, bool) { return f.dur, f.ok }
 // the real XMRig subprocess. The scheduler's whole control surface is the duty
 // fraction now, so that is all the stub needs to capture.
 type stubMiner struct {
-	duty float64
+	duty    float64
+	stopped bool
 }
 
 func (m *stubMiner) SetDuty(d float64) { m.duty = d }
-func (m *stubMiner) Stop()             {}
+func (m *stubMiner) Stop()             { m.stopped = true }
 func (m *stubMiner) PID() int          { return 0 }
 
 // newTestScheduler builds a Scheduler with the fields the state machine reads,
@@ -38,6 +39,7 @@ func newTestScheduler(after time.Duration, override Override, idle idleSource) *
 		cores:         4,
 		maxThreads:    4,
 		preset:        kindness.Get(kindness.Default),
+		stopCh:        make(chan struct{}),
 		Events:        make(chan StateChange, 16),
 	}
 }
