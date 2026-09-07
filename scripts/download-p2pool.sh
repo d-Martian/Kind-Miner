@@ -2,7 +2,7 @@
 # Downloads pre-built p2pool binaries for each target platform.
 set -euo pipefail
 
-P2POOL_VERSION="4.15.1"
+P2POOL_VERSION="4.18"
 GITHUB="https://github.com/SChernykh/p2pool/releases/download/v${P2POOL_VERSION}"
 DIST="$(dirname "$0")/../dist"
 
@@ -14,14 +14,14 @@ declare -A URLS=(
   ["windows-amd64"]="${GITHUB}/p2pool-v${P2POOL_VERSION}-windows-x64.zip"
 )
 
-# SHA256 checksums for v4.15.1 — update when bumping P2POOL_VERSION.
+# SHA256 checksums for v4.18 — update when bumping P2POOL_VERSION.
 # Kept in sync with internal/autoinstall/deps.json (the runtime pin manifest).
 declare -A SUMS=(
-  ["linux-amd64"]="efd8b23579774711a5b86743da980e0936b7c220894063296719116d7f9ba254"
-  ["linux-arm64"]="90b2481c04d42487178f5169b3dfe7dc46287f3b0fb2c6cf8b5672a682ad855e"
-  ["darwin-amd64"]="0e113c9beff21001ded4a15a3ae2f5ce8a151d18457476923026b322113bc1de"
-  ["darwin-arm64"]="391c55474c3f08994340df2824a0b452dac8e0d18ee43cf3b361ce80f00dcd5b"
-  ["windows-amd64"]="97b4ba97e65d766ecf223694168b5739e65156390707fbf50f9979054cba52d3"
+  ["linux-amd64"]="893691726b0218fe1883a7a326e2c69db4eb228fc72ba00c8adfa6be85b8a415"
+  ["linux-arm64"]="da189a52c11d274112fb2c26495ba15b748b8504d278d8f8d16f3d8674747bb2"
+  ["darwin-amd64"]="a62be84b6ca4e4e980ab4b1785a6bc191d5eed15621f0777d3e91008457e8532"
+  ["darwin-arm64"]="b9b6abae4380fb3adde0696e5a8edc40f88783f685e210668b9386f07ddba856"
+  ["windows-amd64"]="36e53c383535c29222dfdbcd8d2bb372c610309f9a3f9435e99783431be830d4"
 )
 
 download_and_extract() {
