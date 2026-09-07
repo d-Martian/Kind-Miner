@@ -300,8 +300,18 @@ func (s *Supervisor) Config() *config.Config { return s.cfg }
 // subprocesses, in reverse order of startup. It is safe to call even if Start
 // failed partway through.
 func (s *Supervisor) Shutdown() {
+	// Order matters. The scheduler goes first so nothing resumes the miner
+	// underneath us, then the miner itself, and only then p2pool — stopping the
+	// pool first would leave xmrig hashing against a dead stratum for as long as
+	// p2pool takes to write its ~450 MB cache out.
 	if s.sched != nil {
 		s.sched.Stop()
+	}
+	// Explicit rather than left to the scheduler: Shutdown has to stop
+	// everything Start launched, or a future change to either one silently
+	// orphans a mining process.
+	if s.xmrig != nil {
+		s.xmrig.Stop()
 	}
 	if s.p2pool != nil {
 		s.p2pool.Stop()
