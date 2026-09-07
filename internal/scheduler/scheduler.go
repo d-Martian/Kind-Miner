@@ -137,6 +137,9 @@ type Scheduler struct {
 	allowed float64
 	duty    float64
 	stopCh  chan struct{}
+	// stopOnce guards stopCh: Shutdown can be reached twice on some exit paths,
+	// and closing a closed channel panics.
+	stopOnce sync.Once
 
 	Events chan StateChange
 }
@@ -257,8 +260,19 @@ func (s *Scheduler) Start() {
 }
 
 // Stop halts the scheduler and shuts down XMRig.
+//
+// It stops the miner here rather than only signalling the tick loop to do it.
+// Signalling alone was the bug: Stop returned immediately, Shutdown returned,
+// the process exited — and the loop never got scheduled to run its own
+// xmrig.Stop(), leaving a full-speed miner running with nothing supervising it
+// and no window to close it from. Whether the race was lost depended on when
+// the last tick landed, which is why it looked intermittent.
+//
+// The loop still stops the miner on its way out. XMRig.Stop is idempotent, so
+// doing it twice costs nothing and neither path is load-bearing alone.
 func (s *Scheduler) Stop() {
-	close(s.stopCh)
+	s.stopOnce.Do(func() { close(s.stopCh) })
+	s.xmrig.Stop()
 }
 
 // CurrentState returns the current mining state and the last reason it changed.
