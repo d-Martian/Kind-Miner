@@ -209,3 +209,50 @@ func TestNormaliseChain(t *testing.T) {
 		t.Errorf("normaliseChain(\"\") = %q, want mini", got)
 	}
 }
+
+func TestWiFiPowerSaveText(t *testing.T) {
+	cases := []struct {
+		name    string
+		iface   string
+		enabled bool
+		known   bool
+		want    string
+	}{
+		{
+			name: "a wired machine cannot be checked and must not read as off",
+			want: emDash,
+		},
+		{
+			name:  "an unreadable setting is unknown, not off",
+			iface: "wlan0", enabled: true, known: false,
+			want: emDash,
+		},
+		{
+			name:  "power save on is called out",
+			iface: "wlp47s0f0", enabled: true, known: true,
+			want: WiFiPowerSaveOn,
+		},
+		{
+			name:  "a link that was checked and is fine says so",
+			iface: "wlp47s0f0", enabled: false, known: true,
+			want: WiFiPowerSaveOff,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := wifiPowerSaveText(c.iface, c.enabled, c.known); got != c.want {
+				t.Errorf("wifiPowerSaveText(%q,%v,%v) = %q, want %q",
+					c.iface, c.enabled, c.known, got, c.want)
+			}
+		})
+	}
+}
+
+// The row is elided past valueWidth, so the warning has to survive intact.
+func TestWiFiPowerSaveTextFitsTheColumn(t *testing.T) {
+	for _, s := range []string{WiFiPowerSaveOn, WiFiPowerSaveOff} {
+		if got := shortenMiddle(s, valueWidth); got != s {
+			t.Errorf("%q is elided to %q; shorten it", s, got)
+		}
+	}
+}

@@ -21,6 +21,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/autoinstall"
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/kind-miner/kind-miner/internal/monitor"
 	"github.com/kind-miner/kind-miner/internal/nodes"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
 )
@@ -83,6 +84,12 @@ type Supervisor struct {
 	nodeAddr string
 	// viaTor records whether that node is reached over Tor.
 	viaTor bool
+	// wifiIface names the active wireless interface, and wifiPowerSave whether
+	// it sleeps between beacons. wifiPowerSaveKnown separates "checked, it is
+	// off" from "could not check" — a wired machine must not read as either.
+	wifiIface          string
+	wifiPowerSave      bool
+	wifiPowerSaveKnown bool
 }
 
 // New creates a Supervisor for cfg. It does not start anything.
@@ -101,6 +108,8 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			progress(st)
 		}
 	}
+
+	s.checkWiFiPowerSave()
 
 	// Auto-download any missing binaries before we need them.
 	binDir := autoinstall.BinDir()
@@ -223,6 +232,35 @@ func (s *Supervisor) Node() (addr string, viaTor bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.nodeAddr, s.viaTor
+}
+
+// checkWiFiPowerSave records and logs a warning when the active wireless link
+// sleeps between beacons. See monitor.WiFiPowerSave for the measured failure
+// this catches: mining load turns that sleep into multi-second network stalls,
+// which is the opposite of getting out of the user's way.
+//
+// It only ever warns. Refusing to mine over a power-saving link would be a
+// worse trade than a slow network, and the setting is the user's to make.
+func (s *Supervisor) checkWiFiPowerSave() {
+	iface, enabled, ok := monitor.WiFiPowerSave()
+	s.mu.Lock()
+	s.wifiIface, s.wifiPowerSave, s.wifiPowerSaveKnown = iface, enabled, ok
+	s.mu.Unlock()
+	if !ok || !enabled {
+		return
+	}
+	log.Printf("warning: Wi-Fi power save is on for %s. Mining can stall this "+
+		"machine's network for seconds at a time while the radio is asleep. "+
+		"Disable it with: nmcli con modify <connection> wifi.powersave 2", iface)
+}
+
+// WiFiPowerSave reports the active wireless interface and whether it runs with
+// power save on. ok is false on a wired machine, or where the setting could not
+// be read; callers must not render that as "off".
+func (s *Supervisor) WiFiPowerSave() (iface string, enabled, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.wifiIface, s.wifiPowerSave, s.wifiPowerSaveKnown
 }
 
 // Scheduler returns the running scheduler, or nil before Start succeeds.

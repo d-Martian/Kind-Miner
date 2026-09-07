@@ -64,3 +64,16 @@ const (
 	MinerName  = "Starting the miner"
 	MinerBlurb = "Bringing all the pieces together and inviting your computer to begin earning. From here, kind-miner lives in your system tray — working when you don't need the machine, and stepping aside the moment you do."
 )
+
+// Warning shown when the active wireless link runs with 802.11 power save on.
+//
+// It names the remedy rather than only the problem: the failure it describes
+// looks so much like a broken internet connection that a user will otherwise
+// spend the evening restarting their router. See monitor.WiFiPowerSave.
+// Values are short because kvList elides anything past valueWidth; the full
+// explanation and the remedy go to the log.
+const (
+	WiFiPowerSaveKey = "Wi-Fi power save"
+	WiFiPowerSaveOn  = "On — may stall this network"
+	WiFiPowerSaveOff = "Off"
+)
