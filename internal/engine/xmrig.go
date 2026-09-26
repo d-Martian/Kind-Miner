@@ -101,25 +101,35 @@ func (x *XMRig) start() error {
 		return err
 	}
 
-	args := x.buildArgs()
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = os.Environ()
-
-	stdout, err := cmd.StdoutPipe()
+	name, args, scoped := launchCommand(bin, x.buildArgs())
+	cmd, stdout, cancel, err := launchProcess(name, args)
 	if err != nil {
-		cancel()
 		return err
 	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return fmt.Errorf("starting xmrig: %w", err)
+	// systemd-run execs the miner only once the user manager has answered for
+	// the scope. The duty loop's first act is often SIGSTOP (the miner starts
+	// at duty 0), and stopping systemd-run mid-request left it frozen as
+	// itself — never becoming the miner, and failing outright if the stop
+	// outlasted D-Bus's timeout. So nothing touches the process until it is
+	// the miner; a scope that cannot be made costs a direct launch, not mining.
+	if scoped {
+		if err := awaitExec(cmd.Process.Pid, bin, scopeExecTimeout); err != nil {
+			log.Printf("xmrig: could not start in an idle scope (%v); starting it directly", err)
+			cancel()
+			_ = cmd.Wait()
+			scoped = false
+			if cmd, stdout, cancel, err = launchProcess(bin, x.buildArgs()); err != nil {
+				return err
+			}
+		}
 	}
 
 	if err := setPriority(cmd.Process); err != nil {
 		log.Printf("warn: could not set xmrig priority: %v", err)
+	}
+	demote(cmd.Process.Pid, !scoped)
+	if how := describeLowPriority(scoped); how != "" {
+		log.Printf("xmrig: %s", how)
 	}
 
 	x.cmd = cmd
@@ -130,7 +140,33 @@ func (x *XMRig) start() error {
 	go x.readOutput(stdout)
 	go x.pollHashrateAPI()
 	go x.dutyLoop(x.dutyStop, cmd.Process)
+	go settle(cmd.Process.Pid, scoped, x.dutyStop)
 	return nil
+}
+
+// scopeExecTimeout bounds the wait for systemd-run to become the miner. It
+// normally takes tens of milliseconds; a user manager that has not answered
+// in seconds is not going to.
+const scopeExecTimeout = 10 * time.Second
+
+// launchProcess starts name with its output piped for readOutput.
+func launchProcess(name string, args []string) (*exec.Cmd, io.Reader, context.CancelFunc, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = os.Environ()
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return nil, nil, nil, err
+	}
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, nil, nil, fmt.Errorf("starting xmrig: %w", err)
+	}
+	return cmd, stdout, cancel, nil
 }
 
 // SetDuty sets the fraction of time the miner may run, in [0,1]. It takes
