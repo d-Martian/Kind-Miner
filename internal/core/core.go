@@ -76,6 +76,8 @@ type Supervisor struct {
 	monerod *engine.Monerod
 	p2pool  *engine.P2Pool
 	tor     *engine.Tor
+	// relay carries RPC and ZMQ to an onion node over Tor; nil for any other.
+	relay *nodes.Relay
 
 	mu sync.Mutex
 	// started is when mining actually began, which is what the dashboard's
@@ -170,10 +172,21 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		}
 		log.Printf("Using monerod node: %s", node.Addr())
 
+		// follow is what p2pool is pointed at: the node itself, or for an onion
+		// node the loopback relay standing in for it.
+		follow := node
 		var socks5Proxy string
 		if node.TorOnly || strings.HasSuffix(node.Host, ".onion") {
+			// p2pool's --socks5 keeps its peer traffic on Tor, but it cannot carry
+			// ZMQ, so the node itself is reached through the relay.
 			socks5Proxy = "127.0.0.1:9050"
-			log.Printf("Routing p2pool through Tor (%s)", socks5Proxy)
+			relay, err := nodes.StartRelay(node, 0)
+			if err != nil {
+				return fmt.Errorf("starting the Tor relay for %s: %w", node.Addr(), err)
+			}
+			s.relay = relay
+			follow = relay.Local()
+			log.Printf("Routing p2pool through Tor (%s), node via relay %s", socks5Proxy, follow.Addr())
 		}
 
 		s.mu.Lock()
@@ -193,9 +206,9 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		s.p2pool = engine.NewP2Pool(engine.P2PoolOptions{
 			BinPath:     s.cfg.P2PoolBinPath,
 			Wallet:      s.cfg.Wallet,
-			NodeHost:    node.Host,
-			RPCPort:     node.RPCPort,
-			ZMQPort:     node.ZMQPort,
+			NodeHost:    follow.Host,
+			RPCPort:     follow.RPCPort,
+			ZMQPort:     follow.ZMQPort,
 			RPCLogin:    onNodo.RPCLogin,
 			NoRandomX:   profile,
 			Chain:       s.cfg.P2PoolChain,
@@ -383,6 +396,11 @@ func (s *Supervisor) Shutdown() {
 	}
 	if s.monerod != nil {
 		s.monerod.Stop()
+	}
+	// After p2pool, which would otherwise log a burst of failed RPC calls
+	// against a relay that had vanished underneath it.
+	if s.relay != nil {
+		s.relay.Close()
 	}
 	if s.tor != nil {
 		s.tor.Stop()

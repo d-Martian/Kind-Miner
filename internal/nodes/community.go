@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/net/proxy"
 )
 
 // Node is a monerod endpoint suitable for p2pool.
@@ -30,6 +28,11 @@ type Node struct {
 // Addr returns "host:rpcport" for logging and p2pool --host / --rpc-port args.
 func (n Node) Addr() string {
 	return fmt.Sprintf("%s:%d", n.Host, n.RPCPort)
+}
+
+// onion reports whether the node is only reachable through Tor.
+func (n Node) onion() bool {
+	return n.TorOnly || strings.HasSuffix(n.Host, ".onion")
 }
 
 // communityNodes lists the p2pool-compatible monerod nodes used by kind-miner.
@@ -163,44 +166,44 @@ func SelectBest(customAddr string) (Node, error) {
 	return winners[0].node, nil
 }
 
-// probeNode checks that a node has synchronized RPC and an open ZMQ port.
+// Probe timeouts. A fresh Tor circuit to an onion service can take tens of
+// seconds to build; a clearnet node that has not answered in a few seconds is
+// firewalled, and waiting longer only delays trying the next one.
+const (
+	clearnetProbeTimeout = 5 * time.Second
+	torProbeTimeout      = 30 * time.Second
+)
+
+// probeNode checks that a node has synchronized RPC and a ZMQ endpoint that
+// actually speaks ZMTP.
 func probeNode(n Node, hasTor bool) (time.Duration, error) {
-	dialer, err := makeDialer(n, hasTor)
+	dial, err := dialerFor(n, hasTor)
 	if err != nil {
 		return 0, err
+	}
+	timeout := clearnetProbeTimeout
+	if n.onion() {
+		timeout = torProbeTimeout
 	}
 
 	start := time.Now()
 
 	// 1. RPC check — must be synchronized.
-	if err := checkRPC(n, dialer); err != nil {
+	if err := checkRPC(n, dial); err != nil {
 		return 0, fmt.Errorf("RPC: %w", err)
 	}
 
-	// 2. ZMQ check — p2pool requires this port to be open.
-	if err := checkZMQ(n, dialer); err != nil {
-		return 0, fmt.Errorf("ZMQ port %d not reachable (node doesn't support p2pool): %w", n.ZMQPort, err)
+	// 2. ZMQ check — a real greeting, not an open port.
+	zmqAddr := net.JoinHostPort(n.Host, strconv.Itoa(n.ZMQPort))
+	if err := probeZMTP(context.Background(), dial, zmqAddr, timeout); err != nil {
+		return 0, fmt.Errorf("ZMQ port %d unusable for p2pool: %w", n.ZMQPort, err)
 	}
 
 	return time.Since(start), nil
 }
 
-func makeDialer(n Node, hasTor bool) (proxy.Dialer, error) {
-	if n.TorOnly || strings.HasSuffix(n.Host, ".onion") {
-		if !hasTor {
-			return nil, fmt.Errorf(".onion node requires Tor at %s", torSOCKS5)
-		}
-		return proxy.SOCKS5("tcp", torSOCKS5, nil, proxy.Direct)
-	}
-	return proxy.Direct, nil
-}
-
-func checkRPC(n Node, dialer proxy.Dialer) error {
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return dialer.Dial(network, addr)
-		},
-	}
+func checkRPC(n Node, dial dialFunc) error {
+	transport := &http.Transport{DialContext: dial}
 	client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
 
 	url := fmt.Sprintf("http://%s:%d/json_rpc", n.Host, n.RPCPort)
@@ -216,7 +219,9 @@ func checkRPC(n Node, dialer proxy.Dialer) error {
 			Status       string `json:"status"`
 			Synchronized bool   `json:"synchronized"`
 		} `json:"result"`
-		Error *struct{ Message string `json:"message"` } `json:"error"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
@@ -231,38 +236,6 @@ func checkRPC(n Node, dialer proxy.Dialer) error {
 		return fmt.Errorf("not fully synchronized")
 	}
 	return nil
-}
-
-func checkZMQ(n Node, dialer proxy.Dialer) error {
-	addr := net.JoinHostPort(n.Host, strconv.Itoa(n.ZMQPort))
-
-	if !n.TorOnly && !strings.HasSuffix(n.Host, ".onion") {
-		// Clearnet: use net.DialTimeout so firewalled ports fail fast.
-		conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
-		if err != nil {
-			return err
-		}
-		conn.Close()
-		return nil
-	}
-
-	// Tor: SOCKS5 dialer doesn't support timeouts, so race against a timer.
-	type result struct{ conn net.Conn; err error }
-	ch := make(chan result, 1)
-	go func() {
-		conn, err := dialer.Dial("tcp", addr)
-		ch <- result{conn, err}
-	}()
-	select {
-	case r := <-ch:
-		if r.err != nil {
-			return r.err
-		}
-		r.conn.Close()
-		return nil
-	case <-time.After(20 * time.Second):
-		return fmt.Errorf("ZMQ timeout (Tor circuit took too long)")
-	}
 }
 
 // ErrBadAddr marks a node address that cannot be parsed. It is permanent —
