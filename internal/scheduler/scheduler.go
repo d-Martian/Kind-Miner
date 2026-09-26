@@ -80,6 +80,10 @@ const (
 // to show a countdown instead.
 const ReasonWaitingForIdle = "waiting for you to go idle"
 
+// ReasonNodeSyncing is the state reason while mining on a Nodo waits for the
+// node to finish syncing.
+const ReasonNodeSyncing = "Monero node is syncing"
+
 // tickInterval is how often the machine is sampled. Short enough that the
 // dashboard chart shows the miner reacting, long enough that the sampling
 // itself is not the load.
@@ -112,6 +116,9 @@ type Scheduler struct {
 	idle    idleSource
 	history *stats.Ring
 
+	// nodo is the guest-on-a-node control, nil unless mine_on_nodo is set.
+	nodo *nodoControl
+
 	// cores is the machine's logical CPU count — the denominator that turns a
 	// CPU allowance into a duty fraction. A field rather than a call to runtime
 	// so the controller can be tested against a fixed machine size.
@@ -132,6 +139,10 @@ type Scheduler struct {
 	state    State
 	pausedBy string
 	override Override
+	// activeCores is how many cores the miner is currently confined to, or 0
+	// when it may use the whole machine. It narrows the miner's full-tilt share
+	// so the duty still maps onto the CPU the allowance is expressed in.
+	activeCores int
 	// allowed is the smoothed CPU allowance, a fraction of total capacity, and
 	// duty is what that became after mapping onto the running miner.
 	allowed float64
@@ -161,6 +172,13 @@ type miner interface {
 	PID() int
 }
 
+// affinitySetter is implemented by engines that can be confined to a set of
+// cores while running. It is separate from miner for the same reason
+// hashrateReporter is.
+type affinitySetter interface {
+	SetAffinity([]int) error
+}
+
 // hashrateReporter is implemented by engines that can report a hashrate. It is
 // separate from miner so a test stub does not have to provide one.
 type hashrateReporter interface {
@@ -169,7 +187,7 @@ type hashrateReporter interface {
 
 // New creates a Scheduler. It does not start the mining loop.
 func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
-	return &Scheduler{
+	s := &Scheduler{
 		cfg:             cfg,
 		xmrig:           xmrig,
 		cpu:             monitor.NewCPU(),
@@ -180,17 +198,21 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 		idle:            monitor.NewIdle(),
 		history:         stats.NewRing(historyCapacity),
 		cores:           runtime.NumCPU(),
-		maxThreads:      ThreadCap(cfg.MaxThreads),
+		maxThreads:      Threads(cfg),
 		preset:          cfg.Preset(),
 		pauseOnBattery:  cfg.PauseOnBattery,
 		onlyWhenLocked:  cfg.MineOnlyWhenLocked,
-		tempLimit:       cfg.TempLimitCelsius,
+		tempLimit:       tempLimitFor(cfg),
 		thermalGovernor: cfg.ThermalGovernor,
 		idleFullAfter:   time.Duration(cfg.IdleFullAfterSeconds) * time.Second,
 		state:           StatePaused,
 		stopCh:          make(chan struct{}),
 		Events:          make(chan StateChange, 16),
 	}
+	if cfg.MineOnNodo {
+		s.nodo = newNodoControl()
+	}
+	return s
 }
 
 // randomxScratchpad is the working set RandomX gives each mining thread. A
@@ -282,7 +304,11 @@ func (s *Scheduler) Allowance() (share, duty float64) {
 func (s *Scheduler) ActiveThreads() (active, total int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return int(float64(s.maxThreads)*s.duty + 0.5), s.maxThreads
+	running := s.maxThreads
+	if s.activeCores > 0 && s.activeCores < running {
+		running = s.activeCores
+	}
+	return int(float64(running)*s.duty + 0.5), s.maxThreads
 }
 
 // Preset returns the kindness preset currently in force.
@@ -340,11 +366,11 @@ func (s *Scheduler) IsManuallyPaused() bool { return s.Override() == OverridePau
 // (wallet, mode, node) are not handled here.
 func (s *Scheduler) UpdateRuntime(cfg *config.Config) {
 	s.mu.Lock()
-	s.maxThreads = ThreadCap(cfg.MaxThreads)
+	s.maxThreads = Threads(cfg)
 	s.preset = cfg.Preset()
 	s.pauseOnBattery = cfg.PauseOnBattery
 	s.onlyWhenLocked = cfg.MineOnlyWhenLocked
-	s.tempLimit = cfg.TempLimitCelsius
+	s.tempLimit = tempLimitFor(cfg)
 	s.thermalGovernor = cfg.ThermalGovernor
 	s.idleFullAfter = time.Duration(cfg.IdleFullAfterSeconds) * time.Second
 	s.mu.Unlock()
@@ -397,6 +423,9 @@ type conditions struct {
 	// idleGated reports the user still being present, which holds the miner to
 	// the kindest ceiling rather than the configured one.
 	idleGated bool
+	// nodeSyncing reports the Monero node this machine serves still catching
+	// up. Only set on a Nodo, and only when the node actually said so.
+	nodeSyncing bool
 }
 
 // decide turns a policy and an observation into the CPU allowance the miner may
@@ -425,6 +454,12 @@ func decide(p policy, c conditions, override Override) (target float64, reason s
 	// that cannot report it, refusing to mine at all would be a silent failure.
 	if p.onlyWhenLocked && c.lockKnown && !c.locked {
 		return 0, "screen is unlocked", true
+	}
+	// A syncing node is verifying every block it downloads and needs all of the
+	// machine; mining through it would stretch a sync of days into longer, on
+	// the one box whose purpose is the node.
+	if c.nodeSyncing {
+		return 0, ReasonNodeSyncing, true
 	}
 
 	ceiling := p.preset.Ceiling
@@ -525,6 +560,7 @@ func (s *Scheduler) tick() {
 	s.mu.Unlock()
 
 	c := s.observe(p, override)
+	s.placeOnCores()
 	target, reason, hard := decide(p, c, override)
 
 	s.mu.Lock()
@@ -582,6 +618,13 @@ func (s *Scheduler) observe(p policy, override Override) conditions {
 		c.otherCPU = other
 	}
 	c.idleGated = s.idleGated(override)
+	if s.nodo != nil && s.nodo.sync != nil {
+		synced, known := s.nodo.sync.Synced()
+		// Unknown is not "syncing": a node behind an RPC login cannot answer,
+		// and reading that as a sync would stop mining forever with no reason
+		// the owner could act on.
+		c.nodeSyncing = known && !synced
+	}
 	return c
 }
 
@@ -702,7 +745,13 @@ func (s *Scheduler) minerFullShare() float64 {
 	if s.cores <= 0 {
 		return 1
 	}
-	full := float64(s.maxThreads) / float64(s.cores)
+	threads := s.maxThreads
+	// More threads than cores to run them on time-share those cores; they
+	// cannot occupy more of the machine than the cores they are confined to.
+	if s.activeCores > 0 && s.activeCores < threads {
+		threads = s.activeCores
+	}
+	full := float64(threads) / float64(s.cores)
 	if full > 1 {
 		full = 1
 	}
