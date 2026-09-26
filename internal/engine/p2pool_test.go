@@ -110,13 +110,24 @@ func TestP2PoolArgs(t *testing.T) {
 			t.Errorf("--rpc-login must follow --host with the login: %v", args)
 		}
 	})
-	t.Run("a desktop keeps RandomX and passes no login", func(t *testing.T) {
-		p := NewP2Pool(P2PoolOptions{Wallet: "w", NodeHost: "node.example", RPCPort: 18089, ZMQPort: 18083, Chain: "mini", StratumPort: 3333})
+	t.Run("a desktop runs light and passes no login", func(t *testing.T) {
+		p := NewP2Pool(P2PoolOptions{Wallet: "w", NodeHost: "node.example", RPCPort: 18089, ZMQPort: 18083, Chain: "mini", StratumPort: 3333, LightMode: true})
 		args := p.buildArgs()
+		if indexOf(args, "--light-mode") < 0 {
+			t.Errorf("desktop args lack --light-mode, so p2pool takes a second 2 GB: %v", args)
+		}
 		for _, flag := range []string{"--no-randomx", "--no-cache", "--no-log-file", "--rpc-login"} {
 			if indexOf(args, flag) >= 0 {
 				t.Errorf("desktop args carry %s: %v", flag, args)
 			}
+		}
+	})
+	t.Run("the Nodo profile has no use for light mode", func(t *testing.T) {
+		// --no-randomx allocates neither dataset nor cache; adding --light-mode
+		// would say nothing and suggest p2pool still hashes locally.
+		p := NewP2Pool(P2PoolOptions{Wallet: "w", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "nano", StratumPort: 3333, NoRandomX: true, LightMode: true})
+		if args := p.buildArgs(); indexOf(args, "--light-mode") >= 0 {
+			t.Errorf("Nodo args carry --light-mode: %v", args)
 		}
 	})
 }

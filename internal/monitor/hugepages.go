@@ -37,10 +37,12 @@ func RandomXHugePageBytes(threads int) int64 {
 // when they do not, the pool size in pages that would.
 //
 // This exists because kind-miner runs two RandomX consumers, not one: p2pool
-// verifies shares with its own dataset and starts first, so on a pool sized for
-// the miner alone p2pool takes nearly all of it and the miner — the process the
-// pages were reserved for — silently falls back to 4 KiB pages. Observed on a
-// machine with 1280 pages reserved: p2pool held 1177 of them and xmrig got 13.
+// verifies shares with RandomX too and starts first, so on a pool sized for the
+// miner alone p2pool takes its share and the miner — the process the pages
+// were reserved for — silently falls back to 4 KiB pages. Observed before
+// p2pool ran in light mode, on a machine with 1280 pages reserved: p2pool's
+// dataset held 1177 of them and xmrig got 13. Light mode shrinks p2pool's
+// share to its two 256 MB caches, but it still allocates first.
 //
 // short is false when there is nothing to say, including when the machine has
 // no huge pages at all: a user who has not set any has not made this mistake,
