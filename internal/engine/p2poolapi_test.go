@@ -218,3 +218,27 @@ func TestStartPassesDataAPIFlags(t *testing.T) {
 		t.Errorf("data-api dir not created: %v", err)
 	}
 }
+
+func TestReadStatsPeers(t *testing.T) {
+	dir := writeAPIFiles(t, sampleNetwork, samplePool, sampleLocal)
+	p := NewP2Pool(P2PoolOptions{DataAPIDir: dir})
+
+	// Before local/p2p exists the peer count is unknown, not zero: reading it
+	// as zero would call every fresh start an island.
+	p.readStats()
+	if s, _ := p.Stats(); s.PeersKnown {
+		t.Errorf("PeersKnown = true with no local/p2p file")
+	}
+
+	// The shape p2pool v4.18 writes (src/p2p_server.cpp). local/stratum has a
+	// "connections" field too, but that counts miners, not peers.
+	const sampleP2P = `{"connections":12,"incoming_connections":4,"peer_list_size":300,"peers":[],"uptime":600,"zmq_last_active":3}`
+	if err := os.WriteFile(filepath.Join(dir, "local", "p2p"), []byte(sampleP2P), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p.readStats()
+	s, _ := p.Stats()
+	if !s.PeersKnown || s.Peers != 12 {
+		t.Errorf("Peers = %d (known %v), want 12 from local/p2p", s.Peers, s.PeersKnown)
+	}
+}
