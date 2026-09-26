@@ -139,6 +139,9 @@ type Scheduler struct {
 	state    State
 	pausedBy string
 	override Override
+	// hold is a fault outside the machine that makes mining pointless — p2pool
+	// on an island, say — named for the user. Empty when nothing holds it.
+	hold string
 	// activeCores is how many cores the miner is currently confined to, or 0
 	// when it may use the whole machine. It narrows the miner's full-tilt share
 	// so the duty still maps onto the CPU the allowance is expressed in.
@@ -361,6 +364,23 @@ func (s *Scheduler) Override() Override {
 	return s.override
 }
 
+// SetHold stops mining for a reason outside this machine, such as p2pool
+// mining a sidechain of its own; "" releases it. Unlike the user's pause it is
+// lifted by whoever set it, as soon as the fault clears.
+func (s *Scheduler) SetHold(reason string) {
+	s.mu.Lock()
+	s.hold = reason
+	s.mu.Unlock()
+}
+
+// Held reports the fault holding mining, if any. The GUI uses it to tell a
+// problem that needs the user's attention apart from an ordinary stand-down.
+func (s *Scheduler) Held() (reason string, held bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hold, s.hold != ""
+}
+
 // ManualPause suspends mining until ManualResume is called.
 func (s *Scheduler) ManualPause() { s.SetOverride(OverridePause) }
 
@@ -415,6 +435,7 @@ func (s *Scheduler) IdleCountdown() (int, bool) {
 // policy is the settings one decision reads. Snapshotting it under the lock
 // keeps a concurrent UpdateRuntime from changing the rules mid-tick.
 type policy struct {
+	hold            string
 	preset          kindness.Preset
 	pauseOnBattery  bool
 	onlyWhenLocked  bool
@@ -460,6 +481,12 @@ type conditions struct {
 func decide(p policy, c conditions, override Override) (target float64, reason string, hard bool) {
 	if override == OverridePause {
 		return 0, "manual pause", true
+	}
+	// Ahead of every machine condition: while the hold stands, mining earns
+	// nothing whatever the battery or the temperature say, and it is the one
+	// reason the user may have to act on.
+	if p.hold != "" {
+		return 0, p.hold, true
 	}
 	if p.pauseOnBattery && c.onBattery {
 		return 0, "running on battery", true
@@ -564,6 +591,7 @@ func scaleRate(r float64) float64 {
 func (s *Scheduler) tick() {
 	s.mu.Lock()
 	p := policy{
+		hold:            s.hold,
 		preset:          s.preset,
 		pauseOnBattery:  s.pauseOnBattery,
 		onlyWhenLocked:  s.onlyWhenLocked,

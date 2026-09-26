@@ -343,6 +343,13 @@ The tray icon reflects state in real time:
 | 🟠 colour | Mining | Running at its full thread count |
 | 🟠 dim | Stepping aside | Running at fewer threads than allowed |
 | ⚫ grey | Paused | Suspended — load, battery, heat, or you |
+| ⚫ grey, amber badge | Held | p2pool is mining alone on a sidechain of its own, so shares would never pay. The menu says why; mining resumes by itself once the check passes |
+
+p2pool on an island looks like healthy mining: it takes every share and never
+pays, because nobody else is on its chain. Once a minute kind-miner checks that
+p2pool has peers, that the sidechain is long and still moving, and that the pool
+is much bigger than this machine. If any check fails for three minutes, mining
+is held until they pass again.
 
 ---
 

@@ -78,6 +78,8 @@ type Supervisor struct {
 	tor     *engine.Tor
 	// relay carries RPC and ZMQ to an onion node over Tor; nil for any other.
 	relay *nodes.Relay
+	// islandStop ends the sidechain health check; nil in pool mode.
+	islandStop chan struct{}
 
 	mu sync.Mutex
 	// started is when mining actually began, which is what the dashboard's
@@ -251,6 +253,10 @@ func (s *Supervisor) Start(progress func(Step)) error {
 
 	s.sched = scheduler.New(s.cfg, s.xmrig)
 	go s.sched.Start()
+	if s.p2pool != nil {
+		s.islandStop = make(chan struct{})
+		go s.watchIslands(s.islandStop)
+	}
 
 	s.mu.Lock()
 	s.started = time.Now()
@@ -374,6 +380,10 @@ func (s *Supervisor) Shutdown() {
 	// underneath us, then the miner itself, and only then p2pool — stopping the
 	// pool first would leave xmrig hashing against a dead stratum for as long as
 	// p2pool takes to write its ~450 MB cache out.
+	if s.islandStop != nil {
+		close(s.islandStop)
+		s.islandStop = nil
+	}
 	if s.sched != nil {
 		s.sched.Stop()
 	}
