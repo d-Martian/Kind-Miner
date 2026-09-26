@@ -25,6 +25,7 @@ type P2Pool struct {
 	zmqPort     int
 	rpcLogin    string // "user:password" for a node with RPC login; "" for none
 	noRandomX   bool   // the Nodo profile; see P2PoolOptions.NoRandomX
+	lightMode   bool   // see P2PoolOptions.LightMode
 	chain       string // "mini" or "main"
 	stratumPort int    // local Stratum port XMRig connects to
 	socks5Proxy string // e.g. "127.0.0.1:9050" for Tor; empty = direct
@@ -65,6 +66,15 @@ type P2PoolOptions struct {
 	// It needs monerod's unrestricted RPC, which on a Nodo is 127.0.0.1:18081.
 	NoRandomX bool
 
+	// LightMode skips p2pool's own ~2 GB RandomX dataset and verifies shares
+	// from the 256 MB cache instead. p2pool checks a sidechain block every few
+	// seconds, not millions of hashes a second, so the slower verification
+	// costs nothing noticeable — while the dataset was the second copy of 2 GB
+	// on a machine already giving 2 GB to the miner, and it took the huge
+	// pages reserved for the miner because p2pool starts first. Ignored with
+	// NoRandomX, which needs neither.
+	LightMode bool
+
 	// Chain is "mini" or "main" (see config.ChainMini).
 	Chain string
 
@@ -93,6 +103,7 @@ func NewP2Pool(o P2PoolOptions) *P2Pool {
 		zmqPort:     o.ZMQPort,
 		rpcLogin:    o.RPCLogin,
 		noRandomX:   o.NoRandomX,
+		lightMode:   o.LightMode,
 		chain:       o.Chain,
 		stratumPort: o.StratumPort,
 		socks5Proxy: o.SOCKS5Proxy,
@@ -224,8 +235,11 @@ func (p *P2Pool) buildArgs() []string {
 	if flag := chainFlag(p.chain); flag != "" {
 		args = append(args, flag)
 	}
-	if p.noRandomX {
+	switch {
+	case p.noRandomX:
 		args = append(args, "--no-randomx", "--no-cache", "--no-log-file")
+	case p.lightMode:
+		args = append(args, "--light-mode")
 	}
 	return args
 }

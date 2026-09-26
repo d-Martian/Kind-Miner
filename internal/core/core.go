@@ -206,13 +206,16 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			statsDir = nodoStatsDir(statsDir)
 		}
 		s.p2pool = engine.NewP2Pool(engine.P2PoolOptions{
-			BinPath:     s.cfg.P2PoolBinPath,
-			Wallet:      s.cfg.Wallet,
-			NodeHost:    follow.Host,
-			RPCPort:     follow.RPCPort,
-			ZMQPort:     follow.ZMQPort,
-			RPCLogin:    onNodo.RPCLogin,
-			NoRandomX:   profile,
+			BinPath:   s.cfg.P2PoolBinPath,
+			Wallet:    s.cfg.Wallet,
+			NodeHost:  follow.Host,
+			RPCPort:   follow.RPCPort,
+			ZMQPort:   follow.ZMQPort,
+			RPCLogin:  onNodo.RPCLogin,
+			NoRandomX: profile,
+			// Everywhere else p2pool verifies from the RandomX cache and leaves
+			// the 2 GB dataset — and the huge pages — to the miner.
+			LightMode:   true,
 			Chain:       s.cfg.P2PoolChain,
 			StratumPort: stratumPort,
 			SOCKS5Proxy: socks5Proxy,
@@ -318,7 +321,8 @@ func (s *Supervisor) checkHugePages(threads int) {
 	}
 	log.Printf("warning: not enough free huge pages for the miner's RandomX dataset, "+
 		"so it will fall back to 4 KiB pages and hash considerably slower. p2pool "+
-		"keeps a dataset of its own and starts first, so the pool has to cover both: "+
+		"starts first and keeps its RandomX caches (about 0.5 GB) there too, so the "+
+		"pool has to cover both: "+
 		"sudo sysctl -w vm.nr_hugepages=%d", wantPages)
 }
 
