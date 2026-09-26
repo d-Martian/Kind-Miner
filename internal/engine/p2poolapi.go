@@ -28,6 +28,10 @@ type P2PoolStats struct {
 	SidechainDifficulty uint64
 	// PPLNSWindowSize is how many sidechain blocks the payout window spans.
 	PPLNSWindowSize uint64
+	// BlockTime is the sidechain's target block time, which the stat files do
+	// not carry; it comes from the chain p2pool was started on. Zero reads as
+	// the 10 seconds main and mini use.
+	BlockTime time.Duration
 	// MinerHashrate15m is our own 15-minute average in H/s (local/stratum).
 	MinerHashrate15m uint64
 	// SharesFound is how many sidechain shares we have landed.
@@ -38,9 +42,18 @@ type P2PoolStats struct {
 	UpdatedAt time.Time
 }
 
-// sidechainBlockTime is p2pool's target time between sidechain blocks. It is 10
-// seconds on the main, mini and nano sidechains alike.
-const sidechainBlockTime = 10 * time.Second
+// sidechainBlockTime is p2pool's target time between sidechain blocks: 10
+// seconds on main and mini, 30 on nano (m_targetBlockTime in p2pool's
+// side_chain.cpp). The PPLNS window is 2160 blocks on all three, so on nano a
+// share earns for three times as long — which is most of why nano suits small
+// miners, and why getting this wrong made nano look three times worse than it
+// is.
+func sidechainBlockTime(chain string) time.Duration {
+	if chain == "nano" {
+		return 30 * time.Second
+	}
+	return 10 * time.Second
+}
 
 // moneroBlockTime is the Monero network's target block interval. Network
 // hashrate is difficulty divided by it.
@@ -130,6 +143,7 @@ func (p *P2Pool) readStats() {
 		SidechainHeight:     pool.PoolStatistics.SidechainHeight,
 		SidechainDifficulty: pool.PoolStatistics.SidechainDifficulty,
 		PPLNSWindowSize:     pool.PoolStatistics.PPLNSWindowSize,
+		BlockTime:           sidechainBlockTime(p.chain),
 		MinerHashrate15m:    local.Hashrate15m,
 		SharesFound:         local.SharesFound,
 		RewardSharePercent:  local.RewardSharePercent,
@@ -180,7 +194,7 @@ func (s P2PoolStats) RewardETA() (time.Duration, bool) {
 
 	blockSecs := float64(s.NetworkDifficulty) / float64(s.PoolHashrate)
 	shareSecs := float64(s.SidechainDifficulty) / float64(s.MinerHashrate15m)
-	windowSecs := float64(s.PPLNSWindowSize) * sidechainBlockTime.Seconds()
+	windowSecs := float64(s.PPLNSWindowSize) * s.blockTime().Seconds()
 
 	etaSecs := blockSecs
 	if shareSecs > windowSecs {
@@ -240,7 +254,14 @@ func (s P2PoolStats) PayoutWindow() (time.Duration, bool) {
 	if s.PPLNSWindowSize == 0 {
 		return 0, false
 	}
-	return time.Duration(s.PPLNSWindowSize) * sidechainBlockTime, true
+	return time.Duration(s.PPLNSWindowSize) * s.blockTime(), true
+}
+
+func (s P2PoolStats) blockTime() time.Duration {
+	if s.BlockTime > 0 {
+		return s.BlockTime
+	}
+	return sidechainBlockTime("")
 }
 
 // WindowOccupancy returns the fraction of the time this miner has at least one
