@@ -56,8 +56,12 @@ jobs:
         run: |
           # Starts against a closed local port, so nothing leaves the runner.
           # The upstream binary prints "DONATE 1%" even when asked for 0.
-          timeout 5 "$RUNNER_TEMP/a/xmrig" --url 127.0.0.1:1 --donate-level 0 --no-color > log.txt 2>&1 || true
-          grep -E 'DONATE +0%' log.txt || { cat log.txt; exit 1; }
+          # Read xmrig's own --log-file, not its redirected stdout: stdout to a
+          # file is block-buffered and `timeout` kills xmrig before it flushes,
+          # which left an empty file and failed this check on both runners.
+          timeout 5 "$RUNNER_TEMP/a/xmrig" --url 127.0.0.1:1 --donate-level 0 \
+            --no-color --log-file="$RUNNER_TEMP/xmrig.log" > /dev/null 2>&1 || true
+          grep -E 'DONATE +0%' "$RUNNER_TEMP/xmrig.log" || { cat "$RUNNER_TEMP/xmrig.log"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
