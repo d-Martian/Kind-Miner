@@ -214,7 +214,8 @@ func (d *dashboard) refresh() {
 }
 
 func (d *dashboard) refreshStatus(sched *scheduler.Scheduler, state scheduler.State, reason string, override scheduler.Override, preset kindness.Preset) {
-	text, tint := statusSummary(state, reason, override, preset, sched.IdleCountdown)
+	_, held := sched.Held()
+	text, tint := statusSummary(state, reason, held, override, preset, sched.IdleCountdown)
 	d.pill.Set(text, tint)
 
 	if up, ok := d.u.sup.Uptime(); ok {
@@ -233,10 +234,16 @@ func (d *dashboard) refreshStatus(sched *scheduler.Scheduler, state scheduler.St
 // header and the controls contradict each other, and the user cannot tell
 // whether they are mining, or ever will be again. Standing by is a promise —
 // this is temporary, and the miner comes back on its own.
-func statusSummary(state scheduler.State, reason string, override scheduler.Override, preset kindness.Preset, countdown func() (int, bool)) (string, color.Color) {
+//
+// A hold is still standing by — it lifts itself when the fault clears — but in
+// amber, because unlike heat or a busy machine the user may be the one who has
+// to fix it.
+func statusSummary(state scheduler.State, reason string, held bool, override scheduler.Override, preset kindness.Preset, countdown func() (int, bool)) (string, color.Color) {
 	switch {
 	case override == scheduler.OverridePause:
 		return "Paused — nothing runs until you resume", colorMuted
+	case held:
+		return "Standing by · " + reason + " · resumes when it clears", colorWarn
 	case state == scheduler.StatePaused && reason != "":
 		return "Standing by · " + reason + " · resumes on its own", colorAccent
 	case state == scheduler.StatePaused:

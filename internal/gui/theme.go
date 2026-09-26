@@ -23,6 +23,9 @@ var (
 	colorAccent     = color.NRGBA{R: 0xf6, G: 0x82, B: 0x1f, A: 0xff} // Monero orange
 	colorOK         = color.NRGBA{R: 0x6c, G: 0xc1, B: 0x8e, A: 0xff}
 	colorError      = color.NRGBA{R: 0xe5, G: 0x6b, B: 0x6f, A: 0xff}
+	// colorWarn is amber, kept visibly yellower than the Monero-orange accent so
+	// "something is wrong" never reads as "mining".
+	colorWarn = color.NRGBA{R: 0xff, G: 0xb3, B: 0x00, A: 0xff}
 
 	// colorDivider outlines cards and separates sections. Barely there by
 	// design: the dashboard should read as one surface with structure, not as a

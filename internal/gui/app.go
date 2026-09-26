@@ -490,7 +490,8 @@ func (u *uiApp) refreshTray() {
 
 	// Setting the icon re-encodes it to a PNG and hands it to the main thread,
 	// so an unchanged icon is not free.
-	if icon := trayIcon(state); icon != u.lastTrayIcon {
+	_, held := s.Held()
+	if icon := trayIcon(state, held); icon != u.lastTrayIcon {
 		u.lastTrayIcon = icon
 		desk.SetSystemTrayIcon(icon)
 	}
@@ -553,9 +554,13 @@ func setItem(item *fyne.MenuItem, label string) {
 
 // ---- presentation helpers ----
 
-// trayIcon maps a mining state to its tray icon. Only three are drawn: mining,
-// stepping aside, and stopped — finer detail is unreadable at 22px.
-func trayIcon(state scheduler.State) fyne.Resource {
+// trayIcon maps a mining state to its tray icon: mining, stepping aside,
+// stopped — finer detail is unreadable at 22px — and held, the one stop that
+// may need the user, which gets the amber badge.
+func trayIcon(state scheduler.State, held bool) fyne.Resource {
+	if held {
+		return resWarning
+	}
 	switch state {
 	case scheduler.StateFull:
 		return resMining

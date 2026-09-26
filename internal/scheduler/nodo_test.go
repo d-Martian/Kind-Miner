@@ -172,3 +172,20 @@ func TestPlaceOnCores(t *testing.T) {
 		}
 	})
 }
+
+func TestDecideHold(t *testing.T) {
+	p := policy{preset: kindness.Get(kindness.Full), hold: "p2pool has no peers"}
+	target, reason, hard := decide(p, conditions{}, OverrideNone)
+	if target != 0 || reason != "p2pool has no peers" || !hard {
+		t.Errorf("got target=%v reason=%q hard=%v; want a hard stop naming the hold", target, reason, hard)
+	}
+	// The user's own pause is still theirs to see.
+	if _, reason, _ := decide(p, conditions{}, OverridePause); reason != "manual pause" {
+		t.Errorf("manual pause under a hold reads %q", reason)
+	}
+	// Named over a machine condition: the hold is what the user can act on.
+	p.pauseOnBattery = true
+	if _, reason, _ := decide(p, conditions{onBattery: true}, OverrideNone); reason != "p2pool has no peers" {
+		t.Errorf("hold on battery reads %q, want the hold", reason)
+	}
+}
