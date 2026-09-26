@@ -334,6 +334,14 @@ on top of that. The combination means the miner loses scheduler fights to
 anything — including background browser tabs — and then explicitly hands back
 CPU if load climbs further.
 
+On Linux it goes further, since nice 19 still takes a real share of a busy core:
+
+- **CPU:** XMRig runs in its own idle-weighted systemd user scope (`cpu.idle=1`), so any app in your session preempts it outright. Inside Flatpak, or without a systemd user session, its threads run under `SCHED_IDLE` instead.
+- **Memory:** its OOM score is 1000, so if memory runs out the kernel kills the miner first, not what you are working in.
+- **Disk:** its I/O is in the idle class, served only when nothing else wants the disk.
+
+None of this needs root, and none of it changes the hashrate on an idle machine.
+
 The tray icon reflects state in real time:
 
 | Icon | State | Meaning |
