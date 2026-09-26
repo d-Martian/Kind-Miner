@@ -139,6 +139,26 @@ mine_only_when_locked: false
 # Set to 0 to disable temperature-based throttling.
 temp_limit_celsius: 95
 
+# --- Mining on a Nodo ---
+
+# Run as a guest on a Nodo, or any big.LITTLE board whose job is serving a
+# Monero node. Off by default and never switched on automatically: the node is
+# the machine's purpose, and mining on it is the owner's call. When on:
+#
+#   - The miner starts on the low-power cores (the RK3588's four A55s) and takes
+#     the big cores only after monerod.service and monero-lws.service have gone
+#     30 seconds without waiting for CPU. It hands them back the first time either
+#     one does. Moving between clusters never restarts the miner.
+#   - Mining stops while monerod reports it is still syncing.
+#   - temp_limit_celsius is held at 70 or below, even if it is set to 0.
+#   - RandomX uses fast mode only if 4 GiB is still free for the node's
+#     database cache after the ~2 GB dataset. Otherwise it uses light mode,
+#     which hashes slower.
+#   - max_threads: 0 means one thread per core, so every core is reachable.
+#
+# Takes effect on restart.
+mine_on_nodo: false
+
 # --- Dashboard chart ---
 
 # Display only; none of this changes how the miner behaves.

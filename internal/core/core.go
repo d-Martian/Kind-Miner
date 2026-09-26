@@ -198,11 +198,18 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	// this is the ceiling of raw capacity. It has to come from the same function
 	// the scheduler uses, or the two disagree about the full-tilt share a duty
 	// fraction is measured against and every reported percentage is wrong.
-	threads := scheduler.ThreadCap(s.cfg.MaxThreads)
+	threads := scheduler.Threads(s.cfg)
 	// Checked here rather than at startup: p2pool has already taken its share
 	// of the pool by now, and its share is the whole problem.
 	s.checkHugePages(threads)
 	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, poolURL, s.cfg.Wallet, threads, 8080)
+	if s.cfg.MineOnNodo {
+		total, available, ok := monitor.Memory()
+		mode := randomXModeFor(available, ok)
+		log.Printf("Mining on a Nodo: RandomX %s mode (%s available of %s)",
+			mode, gib(available, ok), gib(total, ok))
+		s.xmrig.SetRandomXMode(mode)
+	}
 	if err := s.xmrig.Start(); err != nil {
 		return err
 	}
@@ -272,6 +279,34 @@ func (s *Supervisor) checkHugePages(threads int) {
 		"so it will fall back to 4 KiB pages and hash considerably slower. p2pool "+
 		"keeps a dataset of its own and starts first, so the pool has to cover both: "+
 		"sudo sysctl -w vm.nr_hugepages=%d", wantPages)
+}
+
+// pageCacheReserve is the memory a Nodo must still have free after the RandomX
+// dataset is allocated. That memory is not idle: the kernel uses it as page
+// cache for monerod's and the light-wallet server's LMDB databases, and every
+// gigabyte the miner pins is a gigabyte of blockchain that has to come off the
+// disk again. Four gigabytes keeps the hot part of the chain cached.
+const pageCacheReserve int64 = 4 << 30
+
+// randomXModeFor picks the RandomX mode on a Nodo from the memory available at
+// launch. Fast mode's ~2 GB dataset is taken only when the page cache keeps
+// its reserve afterwards; otherwise light mode's 256 MB cache hashes slower
+// but leaves the node its memory. Unknown memory takes the kind answer.
+//
+// It is decided once, at launch, because the mode is fixed for the life of the
+// miner and changing it means re-initialising RandomX.
+func randomXModeFor(available int64, known bool) string {
+	if known && available-monitor.RandomXDatasetBytes >= pageCacheReserve {
+		return "fast"
+	}
+	return "light"
+}
+
+func gib(n int64, known bool) string {
+	if !known {
+		return "unknown"
+	}
+	return fmt.Sprintf("%.1f GiB", float64(n)/(1<<30))
 }
 
 // WiFiPowerSave reports the active wireless interface and whether it runs with
