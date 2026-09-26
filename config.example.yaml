@@ -12,6 +12,11 @@ wallet: ""
 #
 #   p2pool-local   Runs p2pool locally, connects to your own monerod node.
 #                  Fully trustless and private. Requires ~180 GB disk space.
+#                  On a Nodo this is detected automatically: p2pool follows
+#                  the Nodo's own monerod with the ports and RPC login set in
+#                  Nodo's UI, skips its own RandomX dataset (--no-randomx),
+#                  and restarts itself when those settings change there.
+#                  Kind Miner only reads Nodo's config; it never writes to it.
 #
 #   pool           Connects XMRig directly to a traditional Stratum pool.
 #                  Simplest setup, but pool takes a small fee (~0.6–1%).
@@ -53,7 +58,8 @@ idle_full_after_seconds: 300
 
 # --- p2pool-local settings ---
 
-# Set to true to have kind-miner start/stop monerod for you.
+# Set to true to have kind-miner start/stop monerod for you. Ignored on a Nodo,
+# whose monerod is Nodo's own.
 manage_monerod: false
 
 # Path to the monerod binary. Leave blank to search PATH.

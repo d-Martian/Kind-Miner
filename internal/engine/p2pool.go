@@ -3,6 +3,7 @@ package engine
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -22,16 +23,21 @@ type P2Pool struct {
 	nodeHost    string
 	rpcPort     int
 	zmqPort     int
+	rpcLogin    string // "user:password" for a node with RPC login; "" for none
+	noRandomX   bool   // the Nodo profile; see P2PoolOptions.NoRandomX
 	chain       string // "mini" or "main"
 	stratumPort int    // local Stratum port XMRig connects to
 	socks5Proxy string // e.g. "127.0.0.1:9050" for Tor; empty = direct
 	workDir     string // p2pool's cwd — it writes p2pool.cache/log/peer lists there
 	dataAPIDir  string // --data-api target; empty disables the JSON statistics
 
-	mu       sync.Mutex
-	cmd      *exec.Cmd
-	cancel   context.CancelFunc
-	ready    bool
+	mu     sync.Mutex
+	cmd    *exec.Cmd
+	cancel context.CancelFunc
+	ready  bool
+	// closed is set by Close. Start refuses afterwards, so a Reconnect racing a
+	// shutdown cannot bring p2pool back once it has been put away.
+	closed   bool
 	lastLine string // most recent output line, for early-exit diagnostics
 
 	statsState
@@ -48,6 +54,16 @@ type P2PoolOptions struct {
 	NodeHost string
 	RPCPort  int
 	ZMQPort  int
+	// RPCLogin is "user:password" for a node that requires RPC login.
+	RPCLogin string
+
+	// NoRandomX is the profile for running beside the node on a Nodo. p2pool
+	// skips its own RandomX dataset and asks monerod to check share PoW, and
+	// keeps neither a cache file nor a log file. That is ~2 GB of RAM and
+	// nearly all of p2pool's disk writes left to the node, on a board whose
+	// memory is the node's page cache and whose disk is the node's database.
+	// It needs monerod's unrestricted RPC, which on a Nodo is 127.0.0.1:18081.
+	NoRandomX bool
 
 	// Chain is "mini" or "main" (see config.ChainMini).
 	Chain string
@@ -75,6 +91,8 @@ func NewP2Pool(o P2PoolOptions) *P2Pool {
 		nodeHost:    o.NodeHost,
 		rpcPort:     o.RPCPort,
 		zmqPort:     o.ZMQPort,
+		rpcLogin:    o.RPCLogin,
+		noRandomX:   o.NoRandomX,
 		chain:       o.Chain,
 		stratumPort: o.StratumPort,
 		socks5Proxy: o.SOCKS5Proxy,
@@ -91,6 +109,10 @@ func (p *P2Pool) StratumAddr() string {
 // Start launches p2pool and waits until it signals readiness (up to timeout).
 func (p *P2Pool) Start(timeout time.Duration) error {
 	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return errP2PoolClosed
+	}
 	if p.cmd != nil {
 		p.mu.Unlock()
 		return nil
@@ -102,22 +124,7 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 		return err
 	}
 
-	p2pPort := p2pPortForChain(p.chain)
-	args := []string{
-		"--host", p.nodeHost,
-		"--rpc-port", fmt.Sprintf("%d", p.rpcPort),
-		"--zmq-port", fmt.Sprintf("%d", p.zmqPort),
-		"--wallet", p.wallet,
-		"--stratum", fmt.Sprintf("0.0.0.0:%d", p.stratumPort),
-		"--p2p", fmt.Sprintf("0.0.0.0:%d", p2pPort),
-		"--no-color",
-	}
-	if p.socks5Proxy != "" {
-		args = append(args, "--socks5", p.socks5Proxy)
-	}
-	if flag := chainFlag(p.chain); flag != "" {
-		args = append(args, flag)
-	}
+	args := p.buildArgs()
 	// --data-api writes the JSON stat files; --local-api adds the local/ ones
 	// (our own hashrate and shares). Both are needed for the reward estimate.
 	// --data-api is deliberately not affected by p2pool's --data-dir.
@@ -191,6 +198,60 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 	case <-time.After(timeout):
 		return fmt.Errorf("p2pool did not become ready within %s; check node connectivity", timeout)
 	}
+}
+
+// buildArgs is the command line for everything but the stats directory, which
+// Start adds once it has managed to create it.
+func (p *P2Pool) buildArgs() []string {
+	args := []string{
+		"--host", p.nodeHost,
+		"--rpc-port", fmt.Sprintf("%d", p.rpcPort),
+		"--zmq-port", fmt.Sprintf("%d", p.zmqPort),
+	}
+	// --rpc-login belongs to the --host before it, so it must follow it.
+	if p.rpcLogin != "" {
+		args = append(args, "--rpc-login", p.rpcLogin)
+	}
+	args = append(args,
+		"--wallet", p.wallet,
+		"--stratum", fmt.Sprintf("0.0.0.0:%d", p.stratumPort),
+		"--p2p", fmt.Sprintf("0.0.0.0:%d", p2pPortForChain(p.chain)),
+		"--no-color",
+	)
+	if p.socks5Proxy != "" {
+		args = append(args, "--socks5", p.socks5Proxy)
+	}
+	if flag := chainFlag(p.chain); flag != "" {
+		args = append(args, flag)
+	}
+	if p.noRandomX {
+		args = append(args, "--no-randomx", "--no-cache", "--no-log-file")
+	}
+	return args
+}
+
+// Reconnect restarts p2pool against the same node with a new ZMQ port and RPC
+// login — what the owner changes in Nodo's UI. p2pool reads both only at
+// start-up. The miner rides out the gap: xmrig keeps retrying the stratum port
+// until p2pool is back.
+func (p *P2Pool) Reconnect(zmqPort int, rpcLogin string, timeout time.Duration) error {
+	p.Stop()
+	p.mu.Lock()
+	p.zmqPort, p.rpcLogin = zmqPort, rpcLogin
+	p.mu.Unlock()
+	return p.Start(timeout)
+}
+
+var errP2PoolClosed = errors.New("p2pool has been shut down")
+
+// Close stops p2pool for good: any later Start, including one inside a
+// Reconnect already under way, returns an error instead of launching it. A
+// Start already waiting for readiness returns as soon as its process dies.
+func (p *P2Pool) Close() {
+	p.mu.Lock()
+	p.closed = true
+	p.mu.Unlock()
+	p.Stop()
 }
 
 // Stop terminates the p2pool subprocess.
