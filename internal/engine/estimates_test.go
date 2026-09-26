@@ -180,3 +180,33 @@ func TestChainFlagsAndPorts(t *testing.T) {
 		seen[got] = chain
 	}
 }
+
+// nano targets a block every 30 seconds against the same 2160-block window, so
+// a share earns for 18 hours there, not 6. Treating nano like mini made a small
+// miner's slice of the window look a third of what it is.
+func TestNanoPayoutWindow(t *testing.T) {
+	nano := P2PoolStats{PPLNSWindowSize: 2160, BlockTime: sidechainBlockTime("nano"),
+		SidechainDifficulty: 43_200_000, MinerHashrate15m: 1_000}
+	window, ok := nano.PayoutWindow()
+	if !ok || window != 18*time.Hour {
+		t.Errorf("nano PayoutWindow = %v, want 18h", window)
+	}
+	// A share every 12 hours keeps a nano miner in the window all the time.
+	if occ, _ := nano.WindowOccupancy(); occ != 1 {
+		t.Errorf("nano occupancy = %v, want 1 for a share every 12h in an 18h window", occ)
+	}
+	if _, change := nano.SuggestedChain("nano"); change {
+		t.Error("suggested leaving nano for a miner it suits")
+	}
+}
+
+func TestReadStatsCarriesTheChainsBlockTime(t *testing.T) {
+	for chain, want := range map[string]time.Duration{"nano": 30 * time.Second, "mini": 10 * time.Second, "main": 10 * time.Second} {
+		dir := writeAPIFiles(t, sampleNetwork, samplePool, sampleLocal)
+		p := NewP2Pool(P2PoolOptions{DataAPIDir: dir, Chain: chain})
+		p.readStats()
+		if s, _ := p.Stats(); s.BlockTime != want {
+			t.Errorf("%s: BlockTime = %v, want %v", chain, s.BlockTime, want)
+		}
+	}
+}

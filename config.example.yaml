@@ -32,7 +32,8 @@ remote_node: ""
 # startup, and leaving it blank falls back to "mini".
 #
 # The chains differ in how hard a share is to find. What matters is landing
-# shares often enough to stay inside the six-hour payout window; a chain whose
+# shares often enough to stay inside the payout window (six hours on main and
+# mini, eighteen on nano, whose blocks come every 30s); a chain whose
 # shares you rarely land pays almost nothing, and the symptom looks exactly
 # like the miner being broken.
 #
