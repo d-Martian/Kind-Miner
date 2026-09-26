@@ -1,0 +1,22 @@
+From: kind-miner
+Subject: [PATCH 1/2] Allow a donation level of zero
+
+The upstream binary enforces a 1% minimum in source, so donate-level: 0 still
+sends about one minute in every hundred to the developer's pool. That
+connection is made directly, outside Tor, which breaks kind-miner's promise
+that mining talks to one place: the node, over Tor. kind-miner thanks the
+XMRig developers openly instead (their addresses in About).
+
+--- a/src/donate.h	2026-09-26 16:19:58.362607003 -0400
++++ b/src/donate.h	2026-09-26 16:19:58.386622492 -0400
+@@ -37,8 +37,8 @@
+  * If you plan on changing donations to 0%, please consider making a one-off donation to my wallet:
+  * XMR: 48edfHu7V9Z84YzzMa6fUueoELZ9ZRXq9VetWzYGzKt52XU5xvqgzYnDK9URnRoJMk1j8nLwEVsaSWJ4fhdUyZijBGUicoD
+  */
+-constexpr const int kDefaultDonateLevel = 1;
+-constexpr const int kMinimumDonateLevel = 1;
++constexpr const int kDefaultDonateLevel = 0;
++constexpr const int kMinimumDonateLevel = 0;
+ 
+ 
+ #endif // XMRIG_DONATE_H
