@@ -1,0 +1,25 @@
+From: kind-miner
+Subject: [PATCH 2/2] Advise transparent huge pages for the RandomX cache
+
+When static huge pages cannot be allocated, VirtualMemory falls back to
+_mm_malloc and asks for transparent huge pages with MADV_HUGEPAGE — but only
+for allocations requested with 2 MiB alignment. The dataset, the scratchpads
+and the memory pool pass that alignment; the 256 MiB RandomX cache does not,
+so it never gets the advice. The cache is what light mode hashes from on every
+nonce, so on a machine with no reserved huge pages (the default everywhere)
+light mode walks 256 MiB on 4 KiB pages.
+
+Passing the huge page alignment gives the cache the same fallback as the rest.
+Suitable for upstream.
+
+--- a/src/crypto/rx/RxCache.cpp	2026-09-26 16:19:58.362305851 -0400
++++ b/src/crypto/rx/RxCache.cpp	2026-09-26 16:19:58.388506404 -0400
+@@ -35,7 +35,7 @@
+ 
+ xmrig::RxCache::RxCache(bool hugePages, uint32_t nodeId)
+ {
+-    m_memory = new VirtualMemory(maxSize(), hugePages, false, false, nodeId);
++    m_memory = new VirtualMemory(maxSize(), hugePages, false, false, nodeId, VirtualMemory::kDefaultHugePageSize);
+ 
+     create(m_memory->raw());
+ }

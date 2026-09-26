@@ -1,0 +1,20 @@
+# Toolchain for the xmrig build. It only provides compilers: the build itself
+# runs from scripts/build-xmrig.sh with the sources mounted read-only and the
+# network off, and writes the binary to a mounted directory — so nothing about
+# this image's layers (timestamps, ordering) can reach the output.
+#
+# alpine:3.22 by index digest: one digest pins both the amd64 and the arm64
+# image. Static musl is how xmrig builds its own Linux static releases.
+FROM docker.io/library/alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+
+# Exact versions. Alpine drops superseded versions from its repositories, so
+# a pin here eventually stops installing — which fails the build loudly
+# instead of quietly compiling with a different toolchain. Re-pin (and
+# re-verify the binary hashes) when that happens.
+RUN apk add --no-cache \
+      gcc=14.2.0-r6 g++=14.2.0-r6 musl-dev=1.2.5-r12 binutils=2.44-r3 \
+      make=4.4.1-r3 cmake=3.31.7-r1 linux-headers=6.14.2-r0 \
+      autoconf=2.72-r1 automake=1.17-r1 libtool=2.5.4-r1 \
+      perl=5.40.4-r0 bash=5.2.37-r0 patch=2.8-r0
+
+COPY build.sh /usr/local/bin/build-xmrig
