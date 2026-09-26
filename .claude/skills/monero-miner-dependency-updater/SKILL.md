@@ -21,6 +21,7 @@ Use this skill to handle XMRig and P2Pool updates safely. The goal is not "lates
 5. If there are blatant security issues, unclear provenance, missing release assets, missing hashes, or no clean compatibility plan, do not update. Produce a report or issue instead.
 6. If the update looks clean, apply pinned versions and hashes:
    - `python3 .claude/skills/monero-miner-dependency-updater/scripts/apply_dependency_update.py dependency-update-report/latest.json`
+   - **XMRig also needs `engines/xmrig/sources.lock`** — the script does not touch it yet. kind-miner builds xmrig from source with two patches (see `engines/xmrig/`), and `scripts/build-xmrig.sh` refuses to run while the lock and `deps.json` name different versions. Update by hand: the tag tarball's SHA256, the libuv/hwloc/openssl versions and hashes from the new tag's `scripts/build.{uv,hwloc,openssl3}.sh`, and `source_date_epoch` (the tag commit's time). Then confirm both patches still apply and rebuild: `scripts/build-xmrig.sh`. A patch that no longer applies is a hard stop — especially `0001-allow-zero-donation.patch`, since upstream moving the donation code is exactly the change the review in step 4 is looking for.
 7. Run validation:
    - `sh .claude/skills/monero-miner-dependency-updater/scripts/run_update_validation.sh`
 8. If the update remains clean, create a branch, commit the script/code changes and review report, push it, and create a Codeberg PR.

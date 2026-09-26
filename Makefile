@@ -20,7 +20,7 @@ DIST := dist
 # fixed mtime, uid/gid 0, no pax atime/ctime, gzip -n). See REPRODUCIBLE.md.
 PACKAGE := bash scripts/package.sh
 
-.PHONY: all deps build build-all reproduce verify-repro test clean \
+.PHONY: all deps build build-all reproduce verify-repro test clean build-xmrig \
         download-xmrig download-p2pool \
         bundle-linux bundle-darwin bundle-windows appimage flatpak vendor \
         vendor-tarball
@@ -66,6 +66,11 @@ test:
 # Download XMRig binaries into dist/<platform>/bin/
 download-xmrig:
 	bash scripts/download-xmrig.sh
+
+# Build the patched xmrig from source for this machine's architecture, in a
+# digest-pinned container (needs podman). See engines/xmrig/ and REPRODUCIBLE.md.
+build-xmrig:
+	bash scripts/build-xmrig.sh
 
 # Download p2pool binaries into dist/<platform>/bin/
 download-p2pool:

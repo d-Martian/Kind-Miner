@@ -1,0 +1,67 @@
+name: xmrig build
+
+# Builds the patched xmrig from source on each architecture's own runner and
+# fails if two builds from different paths differ. aarch64 is built natively
+# rather than cross-compiled or emulated: xmrig publishes no linux-arm64 binary
+# (the Nodo is arm64), so this job is the only thing that proves that build
+# works, and a native build is the one users' machines will match.
+#
+# The binaries are uploaded as workflow artifacts with their SHA256. Shipping
+# them to users is the packaging phase's job; this workflow only proves they
+# build, and build the same way twice.
+
+on:
+  push:
+    paths:
+      - 'engines/xmrig/**'
+      - 'scripts/build-xmrig.sh'
+      - 'internal/autoinstall/deps.json'
+      - '.github/workflows/xmrig-build.yml'
+  pull_request:
+    paths:
+      - 'engines/xmrig/**'
+      - 'scripts/build-xmrig.sh'
+      - 'internal/autoinstall/deps.json'
+      - '.github/workflows/xmrig-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure podman
+        run: command -v podman || { sudo apt-get update && sudo apt-get install -y --no-install-recommends podman; }
+
+      - name: Build twice from different paths and compare
+        run: |
+          a="$(scripts/build-xmrig.sh "$RUNNER_TEMP/a" | cut -d' ' -f1)"
+          cp -r . "$RUNNER_TEMP/src-b"
+          b="$(cd "$RUNNER_TEMP/src-b" && scripts/build-xmrig.sh "$RUNNER_TEMP/b" | cut -d' ' -f1)"
+          echo "build A $a"
+          echo "build B $b"
+          test "$a" = "$b" || { echo "xmrig build is NOT reproducible"; exit 1; }
+          echo "$a  xmrig" > "$RUNNER_TEMP/a/xmrig.sha256"
+
+      - name: Check the patches took
+        run: |
+          # Starts against a closed local port, so nothing leaves the runner.
+          # The upstream binary prints "DONATE 1%" even when asked for 0.
+          timeout 5 "$RUNNER_TEMP/a/xmrig" --url 127.0.0.1:1 --donate-level 0 --no-color > log.txt 2>&1 || true
+          grep -E 'DONATE +0%' log.txt || { cat log.txt; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xmrig-linux-${{ matrix.arch }}
+          path: |
+            ${{ runner.temp }}/a/xmrig
+            ${{ runner.temp }}/a/xmrig.sha256

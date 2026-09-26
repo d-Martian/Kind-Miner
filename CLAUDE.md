@@ -146,6 +146,14 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   `scripts/download-p2pool.sh`. Runtime never follows `/releases/latest` —
   moving a version requires editing `deps.json`. XMRig has no linux-arm64
   prebuilt, so its absence is intentional.
+- **xmrig is also built from source** (`scripts/build-xmrig.sh`, recipe in
+  `engines/xmrig/`), with exactly two patches: no minimum donation (upstream's
+  1% floor connects outside Tor) and THP advice for the RandomX cache. Its pins
+  live in `engines/xmrig/sources.lock`, whose xmrig version must match
+  `deps.json`; the script refuses to build when they differ. Each architecture
+  is built on its own kind of machine; CI (`xmrig-build.yml`) builds twice on
+  native x86_64 and aarch64 runners and fails if the hashes differ. A full
+  build takes ~7 minutes.
 - **`kindness.Level` strings are the on-disk config format.** Renaming one needs
   an entry in `aliases` (see `greedy` → `full`) so old configs migrate.
   `internal/kindness` is also the source of truth for UI ordering and labels —

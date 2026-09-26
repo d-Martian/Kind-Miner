@@ -1,0 +1,23 @@
+# Source pins for the xmrig build (scripts/build-xmrig.sh). One line per input:
+#   name  sha256  url
+# Every archive is checked against its hash before it reaches the build
+# container, and the container compiles with no network, so an input that is
+# not pinned here cannot get into the binary.
+#
+# The xmrig version must match internal/autoinstall/deps.json; the build script
+# refuses to run if they disagree. The dependency versions are the ones xmrig's
+# own scripts/build_deps.sh uses for that tag (build.uv.sh, build.hwloc.sh,
+# build.openssl3.sh), so the binary links what upstream's static build links.
+#
+# Provenance: openssl matches upstream's published .sha256. xmrig, libuv and
+# hwloc are pinned on first download (2026-09-26); re-verify on every bump.
+xmrig    5005144e78571f26586410c2b2ede2b0c72afe22f97f1708ea24cfb253c3939b  https://github.com/xmrig/xmrig/archive/refs/tags/v6.26.0.tar.gz
+libuv    5f0557b90b1106de71951a3c3931de5e0430d78da1d9a10287ebc7a3f78ef8eb  https://dist.libuv.org/dist/v1.51.0/libuv-v1.51.0.tar.gz
+hwloc    ffa02c3a308275a9339fbe92add054fac8e9a00cb8fe8c53340094012cb7c633  https://download.open-mpi.org/release/hwloc/v2.12/hwloc-2.12.1.tar.gz
+openssl  57e03c50feab5d31b152af2b764f10379aecd8ee92f16c985983ce4a99f7ef86  https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz
+
+# SOURCE_DATE_EPOCH for the build: the commit time of the xmrig v6.26.0 tag
+# (b2ca72480c58, 2026-03-28T13:04:06Z). Tied to xmrig, not to kind-miner, so
+# the binary changes only when xmrig or this recipe does. It is what xmrig's
+# --version prints as "built on", and OpenSSL's build date.
+source_date_epoch 1774703046
