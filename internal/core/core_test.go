@@ -7,6 +7,7 @@ import (
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/nodes"
+	"github.com/kind-miner/kind-miner/internal/nodo"
 )
 
 func TestTorNeeded(t *testing.T) {
@@ -69,6 +70,54 @@ func TestRandomXModeFor(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			if got := randomXModeFor(c.available, c.known); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestNodoProfileApplies(t *testing.T) {
+	cases := []struct {
+		name   string
+		mode   config.Mode
+		isNodo bool
+		want   bool
+	}{
+		{"a Nodo following its own node", config.ModeP2PoolLocal, true, true},
+		{"a Nodo pointed at another node on purpose", config.ModeP2PoolRemote, true, false},
+		{"a desktop running its own monerod", config.ModeP2PoolLocal, false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := nodoProfileApplies(c.mode, c.isNodo); got != c.want {
+				t.Errorf("got %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestNodoNodeUsesTheUnrestrictedRPC(t *testing.T) {
+	// Not monero_rpc_port (18089): that is the restricted listener, which
+	// refuses the calc_pow calls --no-randomx depends on.
+	n := nodoNode(nodo.Node{ZMQPort: 18093})
+	if n.Host != "127.0.0.1" || n.RPCPort != 18081 || n.ZMQPort != 18093 {
+		t.Errorf("got %+v", n)
+	}
+}
+
+func TestStatsDirFor(t *testing.T) {
+	cases := []struct {
+		name                 string
+		runtimeDir, xdg, fbk string
+		want                 string
+	}{
+		{"systemd's RuntimeDirectory wins", "/run/kind-miner", "/run/user/1000", "/var/lib/x/api", "/run/kind-miner/api"},
+		{"the user's runtime dir otherwise", "", "/run/user/1000", "/var/lib/x/api", "/run/user/1000/kind-miner/api"},
+		{"the persistent dir only as a last resort", "", "", "/var/lib/x/api", "/var/lib/x/api"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := statsDirFor(c.runtimeDir, c.xdg, c.fbk); got != c.want {
 				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})
