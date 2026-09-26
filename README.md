@@ -163,14 +163,14 @@ Control Panel → Power Options → Change plan settings → set **Put the compu
 
 RandomX keeps a ~2 GB dataset and a 2 MiB scratchpad per mining thread, and walks them at random. On the default 4 KiB memory pages that walk misses the TLB constantly, and the miner gives up a large fraction of its hashrate for it. Reserving **huge pages** is the single biggest thing you can do for your rate.
 
-Size the pool for **both** processes. kind-miner runs xmrig *and* p2pool, and p2pool keeps a RandomX dataset of its own for verifying shares. p2pool starts first, so a pool sized for the miner alone gets taken by p2pool and the miner silently falls back to 4 KiB pages — the exact thing you were trying to avoid. kind-miner warns at startup when this happens and prints the number to use.
+Size the pool for **both** processes. kind-miner runs xmrig *and* p2pool, and p2pool verifies shares with RandomX too. It runs in light mode, so it keeps two 256 MiB caches rather than a second 2 GB dataset, but it starts first. A pool sized for the miner alone loses those pages to p2pool, and the miner silently falls back to 4 KiB pages — the exact thing you were trying to avoid. kind-miner warns at startup when this happens and prints the number to use.
 
-Roughly: 2,080 MiB for the miner's dataset, 2 MiB per mining thread, and about 2,600 MiB for p2pool. For a 12-thread miner that is around 4,700 MiB — 2,350 pages of 2 MiB. Do not over-reserve: pages in the huge page pool are held out of normal use whether or not anything is using them, so the difference comes straight off the RAM available to everything else.
+Roughly: 2,080 MiB for the miner's dataset, 2 MiB per mining thread, and about 520 MiB for p2pool. For a 12-thread miner that is around 2,620 MiB — 1,310 pages of 2 MiB, so 1,400 leaves a little slack. Do not over-reserve: pages in the huge page pool are held out of normal use whether or not anything is using them, so the difference comes straight off the RAM available to everything else.
 
 **Linux**
 ```sh
 # Reserve the pages on every boot
-echo 'vm.nr_hugepages = 2560' | sudo tee /etc/sysctl.d/99-kind-miner-hugepages.conf
+echo 'vm.nr_hugepages = 1400' | sudo tee /etc/sysctl.d/99-kind-miner-hugepages.conf
 sudo sysctl --system
 
 # Check what you actually got
@@ -178,8 +178,6 @@ grep HugePages_Total /proc/meminfo
 ```
 
 Setting this on a machine that has been up for a while often falls short of what you asked for: memory is fragmented and the kernel cannot find enough contiguous blocks. The drop-in above is applied at boot, when memory is clean — so if the number comes back low, reboot rather than raising it further.
-
-Running p2pool with `--light-mode` is the other way out. It skips p2pool's dataset entirely and leaves the pool to the miner, at the cost of slower share verification.
 
 ---
 
