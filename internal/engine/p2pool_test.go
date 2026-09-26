@@ -83,3 +83,54 @@ func TestP2PoolWorkDir(t *testing.T) {
 		t.Logf("p2pool cwd = %q (work dir %q)", cwd, workDir)
 	}
 }
+
+func TestP2PoolArgs(t *testing.T) {
+	indexOf := func(args []string, s string) int {
+		for i, a := range args {
+			if a == s {
+				return i
+			}
+		}
+		return -1
+	}
+
+	t.Run("the Nodo profile", func(t *testing.T) {
+		p := NewP2Pool(P2PoolOptions{Wallet: "w", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083,
+			RPCLogin: "nodo:secret", NoRandomX: true, Chain: "nano", StratumPort: 3333})
+		args := p.buildArgs()
+		for _, flag := range []string{"--no-randomx", "--no-cache", "--no-log-file"} {
+			if indexOf(args, flag) < 0 {
+				t.Errorf("args lack %s: %v", flag, args)
+			}
+		}
+		// p2pool attaches --rpc-login to the --host before it; ahead of any
+		// --host it would create an empty host entry and the login would be lost.
+		login, host := indexOf(args, "--rpc-login"), indexOf(args, "--host")
+		if login < 0 || host < 0 || login < host || args[login+1] != "nodo:secret" {
+			t.Errorf("--rpc-login must follow --host with the login: %v", args)
+		}
+	})
+	t.Run("a desktop keeps RandomX and passes no login", func(t *testing.T) {
+		p := NewP2Pool(P2PoolOptions{Wallet: "w", NodeHost: "node.example", RPCPort: 18089, ZMQPort: 18083, Chain: "mini", StratumPort: 3333})
+		args := p.buildArgs()
+		for _, flag := range []string{"--no-randomx", "--no-cache", "--no-log-file", "--rpc-login"} {
+			if indexOf(args, flag) >= 0 {
+				t.Errorf("desktop args carry %s: %v", flag, args)
+			}
+		}
+	})
+}
+
+func TestP2PoolStartRefusedAfterClose(t *testing.T) {
+	bin := fakeP2Pool(t, `echo "StratumServer event loop started"; sleep 60`)
+	p := NewP2Pool(P2PoolOptions{BinPath: bin, Wallet: "wallet", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "mini", StratumPort: 3333})
+	if err := p.Start(10 * time.Second); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	p.Close()
+	// What a Nodo config change landing during shutdown would do.
+	if err := p.Reconnect(18093, "", 10*time.Second); err == nil {
+		p.Stop()
+		t.Fatal("Reconnect started p2pool again after Close")
+	}
+}

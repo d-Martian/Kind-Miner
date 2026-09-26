@@ -23,6 +23,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/monitor"
 	"github.com/kind-miner/kind-miner/internal/nodes"
+	"github.com/kind-miner/kind-miner/internal/nodo"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
 )
 
@@ -90,6 +91,10 @@ type Supervisor struct {
 	wifiIface          string
 	wifiPowerSave      bool
 	wifiPowerSaveKnown bool
+	// nodo holds this machine's Nodo settings, nil on anything else. nodoStop
+	// ends the watch on Nodo's config.json.
+	nodo     *nodo.Node
+	nodoStop chan struct{}
 }
 
 // New creates a Supervisor for cfg. It does not start anything.
@@ -110,6 +115,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	}
 
 	s.checkWiFiPowerSave()
+	onNodo, profile := s.detectNodo()
 
 	// Auto-download any missing binaries before we need them.
 	binDir := autoinstall.BinDir()
@@ -139,7 +145,11 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	}
 
 	// Start optional managed subprocesses.
-	if s.cfg.Mode == config.ModeP2PoolLocal && s.cfg.ManageMonerod {
+	// A Nodo's monerod belongs to Nodo: it is already running, a second one
+	// would fight it for the port and the database.
+	if profile && s.cfg.ManageMonerod {
+		log.Println("Nodo detected: leaving monerod to Nodo (ignoring manage_monerod)")
+	} else if s.cfg.Mode == config.ModeP2PoolLocal && s.cfg.ManageMonerod {
 		emit(StepStartMonerod)
 		s.monerod = engine.NewMonerod(s.cfg.MonerodPath)
 		log.Println("Starting monerod (this may take a while for initial sync)…")
@@ -154,6 +164,9 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		node, err := resolveNode(s.cfg)
 		if err != nil {
 			return err
+		}
+		if profile {
+			node = nodoNode(onNodo)
 		}
 		log.Printf("Using monerod node: %s", node.Addr())
 
@@ -173,24 +186,33 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		// whatever cwd we inherited — in a Flatpak that cwd is a throwaway tmpfs
 		// (the ~450 MB p2pool.cache would live in RAM and vanish on exit).
 		p2poolWorkDir := filepath.Join(filepath.Dir(autoinstall.BinDir()), "p2pool")
+		statsDir := filepath.Join(p2poolWorkDir, "api")
+		if profile {
+			statsDir = nodoStatsDir(statsDir)
+		}
 		s.p2pool = engine.NewP2Pool(engine.P2PoolOptions{
 			BinPath:     s.cfg.P2PoolBinPath,
 			Wallet:      s.cfg.Wallet,
 			NodeHost:    node.Host,
 			RPCPort:     node.RPCPort,
 			ZMQPort:     node.ZMQPort,
+			RPCLogin:    onNodo.RPCLogin,
+			NoRandomX:   profile,
 			Chain:       s.cfg.P2PoolChain,
 			StratumPort: stratumPort,
 			SOCKS5Proxy: socks5Proxy,
 			WorkDir:     p2poolWorkDir,
 			// Statistics feed the reward estimate in the tray.
-			DataAPIDir: filepath.Join(p2poolWorkDir, "api"),
+			DataAPIDir: statsDir,
 		})
 		log.Println("Starting p2pool (syncing sidechain…)")
 		if err := s.p2pool.Start(3 * time.Minute); err != nil {
 			return err
 		}
 		log.Println("p2pool ready.")
+		if profile {
+			s.watchNodo(onNodo)
+		}
 	}
 
 	emit(StepStartXMRig)
@@ -348,8 +370,16 @@ func (s *Supervisor) Shutdown() {
 	if s.xmrig != nil {
 		s.xmrig.Stop()
 	}
+	s.mu.Lock()
+	if s.nodoStop != nil {
+		close(s.nodoStop)
+		s.nodoStop = nil
+	}
+	s.mu.Unlock()
+	// Close rather than Stop: the Nodo watch may be restarting p2pool at this
+	// very moment, and Close is what stops that restart from outliving us.
 	if s.p2pool != nil {
-		s.p2pool.Stop()
+		s.p2pool.Close()
 	}
 	if s.monerod != nil {
 		s.monerod.Stop()
