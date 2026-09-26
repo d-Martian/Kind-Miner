@@ -204,6 +204,12 @@ mine_only_when_locked: false
 # Pause if any CPU core exceeds this temperature (Celsius).
 temp_limit_celsius: 95
 
+# Mine as a guest on a Nodo (or any big.LITTLE box that serves a Monero node):
+# low-power cores first, big cores only while monerod and monero-lws are not
+# waiting for CPU, nothing while the node syncs, and a 70 °C ceiling. Opt-in,
+# config file only. Needs a restart.
+mine_on_nodo: false
+
 # Dashboard chart — display only.
 chart:
   shade_headroom: true
@@ -215,7 +221,8 @@ chart:
 log_level: info
 ```
 
-Everything here is editable from the settings window, which groups it the same
+Everything here except `mine_on_nodo` (a headless-box setting) is editable
+from the settings window, which groups it the same
 way: **Payout**, **Connection**, **Binaries**, **Kindness**, **Graph**,
 **Advanced**. Kindness and graph settings take effect while you watch; wallet,
 mode, node and sidechain need a restart, and the window says so when you save.
