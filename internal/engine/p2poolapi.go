@@ -11,8 +11,8 @@ import (
 // P2PoolStats is the subset of p2pool's JSON statistics kind-miner uses.
 //
 // Field names come from p2pool v4.18: network/stats and pool/stats are
-// written in src/p2pool.cpp, local/stratum in src/stratum_server.cpp. Re-check
-// them when the pinned p2pool version changes.
+// written in src/p2pool.cpp, local/stratum in src/stratum_server.cpp, local/p2p
+// in src/p2p_server.cpp. Re-check them when the pinned p2pool version changes.
 type P2PoolStats struct {
 	// NetworkDifficulty is the Monero network difficulty (network/stats).
 	NetworkDifficulty uint64
@@ -34,6 +34,12 @@ type P2PoolStats struct {
 	SharesFound uint64
 	// RewardSharePercent is our current slice of the next block reward.
 	RewardSharePercent float64
+	// Peers is how many sidechain peers p2pool is connected to, in and out
+	// (local/p2p). PeersKnown is false until that file has been read: p2pool
+	// writes it on its own timer, and "not yet written" must not read as zero
+	// peers.
+	Peers      uint64
+	PeersKnown bool
 
 	UpdatedAt time.Time
 }
@@ -68,6 +74,10 @@ type poolStatsFile struct {
 		SidechainDifficulty uint64 `json:"sidechainDifficulty"`
 		SidechainHeight     uint64 `json:"sidechainHeight"`
 	} `json:"pool_statistics"`
+}
+
+type localP2PFile struct {
+	Connections uint64 `json:"connections"`
 }
 
 type localStratumFile struct {
@@ -121,6 +131,8 @@ func (p *P2Pool) readStats() {
 	// local/stratum only appears once the Stratum server has served a miner, so
 	// its absence is normal early on and must not discard the other two files.
 	_ = readJSONFile(filepath.Join(dir, "local", "stratum"), &local)
+	var p2p localP2PFile
+	p2pErr := readJSONFile(filepath.Join(dir, "local", "p2p"), &p2p)
 
 	s := P2PoolStats{
 		NetworkDifficulty:   net.Difficulty,
@@ -133,7 +145,11 @@ func (p *P2Pool) readStats() {
 		MinerHashrate15m:    local.Hashrate15m,
 		SharesFound:         local.SharesFound,
 		RewardSharePercent:  local.RewardSharePercent,
-		UpdatedAt:           time.Now(),
+		// connections already counts incoming ones; incoming_connections is
+		// the subset.
+		Peers:      p2p.Connections,
+		PeersKnown: p2pErr == nil,
+		UpdatedAt:  time.Now(),
 	}
 
 	p.statsMu.Lock()

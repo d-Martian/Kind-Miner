@@ -66,7 +66,7 @@ func TestStatusSummaryAnswersAmIMining(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			text, _ := statusSummary(tt.state, tt.reason, tt.override, polite, noCountdown)
+			text, _ := statusSummary(tt.state, tt.reason, false, tt.override, polite, noCountdown)
 			if !strings.HasPrefix(text, tt.wantPrefix) {
 				t.Fatalf("summary = %q, want prefix %q", text, tt.wantPrefix)
 			}
@@ -104,5 +104,22 @@ func TestPauseLabelNeverContradictsTheHeader(t *testing.T) {
 				t.Errorf("pauseLabel(%v, %v) = %q, want %q", tt.override, tt.paused, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHeldIsAmberAndSaysWhy(t *testing.T) {
+	polite := kindness.Get(kindness.Polite)
+	text, tint := statusSummary(scheduler.StatePaused, "p2pool has no peers", true, scheduler.OverrideNone, polite, noCountdown)
+	if tint != colorWarn {
+		t.Errorf("tint = %v, want amber", tint)
+	}
+	if !strings.Contains(text, "p2pool has no peers") || !strings.Contains(text, "resumes when it clears") {
+		t.Errorf("text = %q, want the reason and how it ends", text)
+	}
+	if icon := trayIcon(scheduler.StatePaused, true); icon != resWarning {
+		t.Errorf("held tray icon = %v, want the amber-badged one", icon.Name())
+	}
+	if icon := trayIcon(scheduler.StatePaused, false); icon != resPaused {
+		t.Errorf("an ordinary stand-down got %v", icon.Name())
 	}
 }
