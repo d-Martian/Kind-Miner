@@ -64,6 +64,33 @@ make verify-repro
   bit-identical. The plan: reproduce the **unsigned payload**, and verify the
   signature as a separate, detached layer.
 
+## xmrig
+
+kind-miner builds xmrig from source rather than trusting upstream's binary, for
+two reasons: upstream's binary donates 1% over a direct connection even when
+told not to, and upstream publishes no linux-arm64 build at all.
+
+```sh
+scripts/build-xmrig.sh          # → dist/xmrig/linux-<arch>/xmrig, prints its SHA256
+```
+
+| Input | How it's pinned |
+|---|---|
+| Sources | xmrig tag, libuv, hwloc, OpenSSL by SHA256 in `engines/xmrig/sources.lock`; checked before anything is built |
+| Toolchain | `alpine:3.22` by index digest (covers amd64 and arm64), every package at an exact version (`engines/xmrig/Containerfile`) |
+| Network | none during the compile (`podman run --network=none`) |
+| Paths | fixed `/build` inside the container, plus `-ffile-prefix-map` |
+| Timestamps | `SOURCE_DATE_EPOCH` = the xmrig tag's commit time, from the lock — the binary changes when xmrig or the recipe does, not with every kind-miner commit |
+| Build id | `-Wl,--build-id=none` |
+| Changes to upstream | exactly the two patches in `engines/xmrig/patches/` |
+
+Caveats: each architecture is built on its own kind of machine, not
+cross-compiled, so an x86_64 host reproduces the x86_64 binary and an aarch64
+host the aarch64 one. Alpine removes superseded package versions from its
+repositories; when a pin stops installing, the build fails and the toolchain has
+to be re-pinned and the hashes re-published. libuv, hwloc and the xmrig tarball
+are pinned on first download (OpenSSL matches upstream's published SHA256).
+
 ## Build-flag parity
 
 The same compiler flags are used in three places and must stay in sync:
@@ -82,4 +109,5 @@ All CI runs on GitHub Actions:
 |---|---|---|
 | `.github/workflows/repro-verify.yml` | push, PR, manual | Rebuilds the binary from two different paths and fails if the SHA256 differ |
 | `.github/workflows/release.yml` | `v*` tag | Native per-OS builds + deterministic archives, uploaded to a draft release |
+| `.github/workflows/xmrig-build.yml` | changes to the xmrig recipe or pins, manual | Builds the patched xmrig twice on native x86_64 and aarch64 runners, fails if the SHA256 differ, and checks the donation patch took |
 | `.github/workflows/dependency-watch.yml` | weekly cron, manual | Opens a tracking issue when XMRig/P2Pool publish a new release |
