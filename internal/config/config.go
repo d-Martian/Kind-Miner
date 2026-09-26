@@ -128,6 +128,14 @@ type Config struct {
 	// whenever the CPU is free.
 	IdleFullAfterSeconds int `yaml:"idle_full_after_seconds"`
 
+	// MineOnNodo runs the miner as a guest on a Nodo (or any big.LITTLE box
+	// whose job is serving a Monero node): the low-power cores first, the big
+	// ones only while the node's services are not waiting for CPU, nothing
+	// while the node is syncing, and a 70 °C ceiling. Off by default and never
+	// inferred — the node is the machine's purpose, and mining on it is the
+	// owner's call.
+	MineOnNodo bool `yaml:"mine_on_nodo"`
+
 	LogLevel string `yaml:"log_level"`
 }
 

@@ -35,6 +35,9 @@ type XMRig struct {
 	wallet  string // only used for direct pool mode; p2pool manages the wallet itself
 	threads int
 	apiPort int
+	// randomxMode is passed to --randomx-mode when set: "fast" keeps the ~2 GB
+	// dataset, "light" a 256 MB cache at a fraction of the hashrate.
+	randomxMode string
 
 	mu       sync.Mutex
 	cmd      *exec.Cmd
@@ -240,12 +243,38 @@ func (x *XMRig) buildArgs() []string {
 	if x.threads > 0 {
 		args = append(args, "--threads", strconv.Itoa(x.threads))
 	}
+	if x.randomxMode != "" {
+		args = append(args, "--randomx-mode", x.randomxMode)
+	}
 	// In pool mode, XMRig needs a worker identifier; use the wallet address.
 	// In p2pool mode the wallet is configured in p2pool itself.
 	if x.wallet != "" && !strings.HasPrefix(x.poolURL, "127.0.0.1") {
 		args = append(args, "--user", x.wallet)
 	}
 	return args
+}
+
+// SetRandomXMode chooses the RandomX mode for the next launch. It does not
+// restart a running miner: the mode is fixed for the life of the dataset, and
+// switching it live would cost the same re-initialisation SetDuty exists to
+// avoid.
+func (x *XMRig) SetRandomXMode(mode string) {
+	x.mu.Lock()
+	x.randomxMode = mode
+	x.mu.Unlock()
+}
+
+// SetAffinity confines every thread of the running miner to cpus, without a
+// restart. It re-applies to all threads on each call, so calling it every
+// scheduler tick also catches the workers xmrig spawns once its dataset is
+// ready. A nil or empty set is a no-op; so is a platform without per-thread
+// affinity.
+func (x *XMRig) SetAffinity(cpus []int) error {
+	pid := x.PID()
+	if pid == 0 || len(cpus) == 0 {
+		return nil
+	}
+	return setAffinity(pid, cpus)
 }
 
 // Stop gracefully terminates XMRig.
