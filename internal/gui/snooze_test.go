@@ -9,7 +9,6 @@ import (
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/core"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
 )
 
 func TestNextMorning(t *testing.T) {
@@ -51,21 +50,28 @@ func TestPausedStatus(t *testing.T) {
 	}
 }
 
-func TestTrayPauseIsASnoozeMenuUntilPaused(t *testing.T) {
+func TestFyneTrayPauseIsASnoozeMenuUntilPaused(t *testing.T) {
 	test.NewApp()
 	u := &uiApp{sup: core.New(config.Defaults())}
-	u.mToggle = fyne.NewMenuItem(labelPauseMenu, nil)
-	u.setToggle(scheduler.OverrideNone, labelPauseMenu)
-	if u.mToggle.ChildMenu == nil || len(u.mToggle.ChildMenu.Items) != 3 || u.mToggle.Action != nil {
-		t.Fatalf("while mining: %+v", u.mToggle)
+	tr := &fyneTray{u: u, pause: fyne.NewMenuItem(labelPauseMenu, nil)}
+	tr.setToggle(trayView{pauseLabel: labelPauseMenu})
+	if tr.pause.ChildMenu == nil || len(tr.pause.ChildMenu.Items) != 3 || tr.pause.Action != nil {
+		t.Fatalf("while mining: %+v", tr.pause)
 	}
 	for i, want := range []string{snoozeHour, snoozeTomorrow, snoozeResume} {
-		if got := u.mToggle.ChildMenu.Items[i].Label; got != want {
+		if got := tr.pause.ChildMenu.Items[i].Label; got != want {
 			t.Errorf("snooze %d = %q, want %q", i, got, want)
 		}
 	}
-	u.setToggle(scheduler.OverridePause, labelResume)
-	if u.mToggle.ChildMenu != nil || u.mToggle.Action == nil || u.mToggle.Label != labelResume {
-		t.Errorf("while paused: %+v, want a single Resume action", u.mToggle)
+	tr.setToggle(trayView{paused: true})
+	if tr.pause.ChildMenu != nil || tr.pause.Action == nil || tr.pause.Label != labelResume {
+		t.Errorf("while paused: %+v, want a single Resume action", tr.pause)
+	}
+}
+
+func TestTrayViewWaitsForTheMiner(t *testing.T) {
+	u := &uiApp{sup: core.New(config.Defaults())}
+	if _, ok := u.computeTrayView(time.Now()); ok {
+		t.Error("a tray view was computed before mining started")
 	}
 }
