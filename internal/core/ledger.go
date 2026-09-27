@@ -45,3 +45,21 @@ func saveLedgerEvery(l *stats.Ledger, path string, interval time.Duration, stop 
 		}
 	}
 }
+
+// payoutsPath is where the record of seen payouts lives, beside the ledger.
+func payoutsPath() string {
+	return filepath.Join(filepath.Dir(autoinstall.BinDir()), "payouts.json")
+}
+
+// recordPayout takes one payout line from p2pool. It saves straight away:
+// payouts are rare, and one lost to a crash before the next timed save is
+// exactly the one the user would have wanted to see.
+func recordPayout(p *stats.Payouts, path string, height, atomic uint64, at time.Time) {
+	if !p.Record(height, atomic, at) {
+		return // the second log line of a payout already recorded
+	}
+	log.Printf("Payout seen: %d.%012d XMR in block %d", atomic/1_000_000_000_000, atomic%1_000_000_000_000, height)
+	if err := p.Save(path); err != nil {
+		log.Printf("payouts: could not save: %v", err)
+	}
+}
