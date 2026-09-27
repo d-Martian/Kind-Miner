@@ -30,6 +30,7 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 - **Starts with your machine.** Optional login-item registration on Linux, macOS, and Windows.
 - **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down — which catches the clogged-fan case a fixed °C limit misses.
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
+- **Snooze from the tray.** Pause for an hour, until tomorrow morning (06:00), or until you resume — and a snooze ends by itself. A pause survives a restart, so a reboot never brings the miner back early.
 - **Tor-native.** Routes through a Tor hidden service by default. Your IP is not visible to the node operator.
 - **Zero-setup dependencies.** XMRig and P2Pool are downloaded automatically on first run (SHA256-verified). You need: a Monero wallet address, and Tor running.
 - **Graphical or terminal.** Double-click for a full window — four-step setup, live dashboard, and a tabbed settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.

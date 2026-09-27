@@ -142,6 +142,12 @@ type Scheduler struct {
 	state    State
 	pausedBy string
 	override Override
+	// pauseUntil is when a snoozed pause ends; zero while the pause is "until
+	// I resume", or when there is no pause at all.
+	pauseUntil time.Time
+	// onPauseChange is told whenever the pause starts, ends or changes, so the
+	// supervisor can keep it across a restart. See SetPauseHook.
+	onPauseChange func(paused bool, until time.Time)
 	// hold is a fault outside the machine that makes mining pointless — p2pool
 	// on an island, say — named for the user. Empty when nothing holds it.
 	hold string
@@ -349,16 +355,70 @@ func (s *Scheduler) SetKindness(l kindness.Level) {
 }
 
 // SetOverride records a user instruction. The two overrides are mutually
-// exclusive, so setting one clears the other.
+// exclusive, so setting one clears the other. A pause set this way lasts until
+// the user resumes; PauseUntil sets one that ends by itself.
 func (s *Scheduler) SetOverride(o Override) {
+	s.setOverride(o, time.Time{})
+}
+
+// PauseUntil pauses mining until the given time, after which the scheduler
+// resumes on its own — the tray's "1 hour" and "until tomorrow". A zero time
+// is "until I resume".
+func (s *Scheduler) PauseUntil(until time.Time) {
+	s.setOverride(OverridePause, until)
+}
+
+func (s *Scheduler) setOverride(o Override, until time.Time) {
+	if o != OverridePause {
+		until = time.Time{}
+	}
 	s.mu.Lock()
 	s.override = o
+	s.pauseUntil = until
+	hook := s.onPauseChange
 	s.mu.Unlock()
+	if hook != nil {
+		hook(o == OverridePause, until)
+	}
 	if o == OverridePause {
 		s.apply(0, "manual pause")
 		return
 	}
 	// The next tick re-evaluates and starts mining if conditions allow.
+}
+
+// PausedUntil reports the user's pause: whether there is one, and when it
+// ends. until is zero for a pause that lasts until the user resumes.
+func (s *Scheduler) PausedUntil() (until time.Time, paused bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pauseUntil, s.override == OverridePause
+}
+
+// SetPauseHook registers fn to hear every change to the user's pause,
+// including a snooze running out. It is how the supervisor keeps a pause
+// across a restart: kind-miner starts with the computer, and a reboot must
+// not quietly undo "until tomorrow".
+func (s *Scheduler) SetPauseHook(fn func(paused bool, until time.Time)) {
+	s.mu.Lock()
+	s.onPauseChange = fn
+	s.mu.Unlock()
+}
+
+// snoozeOver reports whether a timed pause has run out.
+func snoozeOver(until, now time.Time) bool {
+	return !until.IsZero() && !now.Before(until)
+}
+
+// endExpiredSnooze lifts a timed pause whose time has come. Called each tick,
+// so a snooze ends within one tick of its deadline.
+func (s *Scheduler) endExpiredSnooze(now time.Time) {
+	s.mu.Lock()
+	expired := s.override == OverridePause && snoozeOver(s.pauseUntil, now)
+	s.mu.Unlock()
+	if expired {
+		s.setOverride(OverrideNone, time.Time{})
+	}
 }
 
 // Override returns the current user override.
@@ -593,6 +653,7 @@ func scaleRate(r float64) float64 {
 }
 
 func (s *Scheduler) tick() {
+	s.endExpiredSnooze(time.Now())
 	s.mu.Lock()
 	p := policy{
 		hold:            s.hold,

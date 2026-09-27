@@ -178,3 +178,32 @@ func TestRecordPayoutSavesOncePerBlock(t *testing.T) {
 		t.Errorf("reloaded %v (err %v), want the one payout", q.Recent(5), err)
 	}
 }
+
+func TestSnoozeFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snooze.json")
+	now := time.Date(2026, 9, 27, 22, 0, 0, 0, time.UTC)
+	morning := now.Add(8 * time.Hour)
+
+	if paused, _ := loadSnooze(path, now); paused {
+		t.Error("no file read as a pause")
+	}
+	saveSnooze(path, true, morning)
+	if paused, until := loadSnooze(path, now.Add(time.Hour)); !paused || !until.Equal(morning) {
+		t.Errorf("after a reboot mid-snooze: paused %v until %v", paused, until)
+	}
+	if paused, _ := loadSnooze(path, morning.Add(time.Minute)); paused {
+		t.Error("a snooze that ran out while the machine was off came back")
+	}
+	saveSnooze(path, true, time.Time{})
+	if paused, until := loadSnooze(path, now.Add(1000*time.Hour)); !paused || !until.IsZero() {
+		t.Error("until I resume did not survive")
+	}
+	saveSnooze(path, false, time.Time{})
+	if paused, _ := loadSnooze(path, now); paused {
+		t.Error("resuming did not clear the saved pause")
+	}
+	os.WriteFile(path, []byte("{half"), 0o644)
+	if paused, _ := loadSnooze(path, now); paused {
+		t.Error("a corrupt file paused mining")
+	}
+}
