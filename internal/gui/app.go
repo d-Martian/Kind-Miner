@@ -33,6 +33,10 @@ var windowSize = fyne.NewSize(760, 560)
 // look wrong stretched to the dashboard's width.
 var setupSize = fyne.NewSize(560, 460)
 
+// onboardingSize is taller than setupSize so the startup disclosure and
+// "More options" sit on screen under the address field without scrolling.
+var onboardingSize = fyne.NewSize(560, 600)
+
 // currentApp holds the running Fyne app so Quit can be invoked from a signal
 // handler in package main. Only one app exists per process.
 var currentApp fyne.App
@@ -64,6 +68,9 @@ type uiApp struct {
 	// hasTray records whether a system-tray / menu-bar host exists. It drives
 	// close-to-tray vs close-to-quit, and whether a tray icon is registered.
 	hasTray bool
+	// tuckAfterStart is set by first-run setup: once mining starts, the window
+	// hides into the tray and a notification says where it went.
+	tuckAfterStart bool
 
 	// dash is the live dashboard, created when that screen is first shown.
 	dash *dashboard
@@ -101,7 +108,7 @@ func RunGraphical(sup *core.Supervisor, firstRun bool) {
 	u.installTray()
 
 	if firstRun {
-		u.setScreen(u.onboardingScreen(), setupSize)
+		u.setScreen(u.onboardingScreen(), onboardingSize)
 	} else {
 		u.startStartup()
 	}
@@ -182,6 +189,22 @@ func (u *uiApp) runStartup() {
 	}
 	u.setScreen(u.dashboardScreen(), windowSize)
 	u.startRefresh()
+	u.tuckIntoTray()
+}
+
+// tuckIntoTray ends first-run setup the way the rest of kind-miner's life goes:
+// out of sight in the tray. It waits for mining to have started rather than
+// hiding the moment Start is pressed, because the first start downloads and
+// syncs for a while, the progress screen is what explains that, and a failure
+// needs a window to say so in. Without a tray there is nowhere to go, so the
+// window stays.
+func (u *uiApp) tuckIntoTray() {
+	if !u.tuckAfterStart || !u.hasTray {
+		return
+	}
+	u.tuckAfterStart = false
+	u.win.Hide()
+	u.app.SendNotification(fyne.NewNotification(TrayNoticeTitle, TrayNoticeBody))
 }
 
 // ---- screens ----
