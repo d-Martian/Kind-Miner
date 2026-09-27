@@ -130,32 +130,15 @@ chmod +x kind-miner
 ./kind-miner --no-tray        # --headless is an alias
 ```
 
-On first run with no config file, kind-miner asks four questions — where your rewards go, how to reach the Monero network, which xmrig and p2pool to run, and how kind to be — then writes `~/.config/kind-miner/config.yaml` and starts mining. Launched from a terminal it runs a short text wizard instead, and a headless launch with no display writes a config template for you to edit.
+On first run with no config file, kind-miner asks one thing: where your rewards go. Under the address field, a pre-ticked box says it will start with your computer and mine gently in the background — untick it and it won't. "More options" lets you use your own Monero node instead of ours over Tor. Everything else starts from a default: the automatic node, the nano sidechain, the bundled binaries, the Polite preset, and pausing on battery; all of it is in Settings. Once mining has started, the window tucks into the system tray and a notification says where it went.
+
+Launched from a terminal, kind-miner runs a short text wizard instead, and a headless launch with no display writes a config template for you to edit.
 
 ---
 
-## Keeping your machine awake
+## Sleep
 
-Kind-miner only mines when the machine is on. Most operating systems will suspend the machine automatically after a period of inactivity — when that happens, mining stops until you wake it up.
-
-To mine overnight or continuously, turn off automatic sleep:
-
-**Linux — GNOME**  
-Settings → Power → Automatic Suspend → set to **Off**
-
-**Linux — KDE Plasma**  
-System Settings → Power Management → Energy Saving → uncheck **Suspend session**
-
-**Linux — command line**
-```sh
-sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
-```
-
-**macOS**  
-System Settings → Battery (or Energy Saver) → set **Turn display off after** to **Never**, and enable **Prevent automatic sleeping when the display is off**
-
-**Windows**  
-Control Panel → Power Options → Change plan settings → set **Put the computer to sleep** to **Never**
+kind-miner mines while your machine is awake and stops when it sleeps. It never keeps a machine awake, and we don't suggest turning sleep off to mine more: a kind miner uses the time you leave it, not time it takes.
 
 ---
 
@@ -217,9 +200,9 @@ mode: p2pool-remote
 # Leave blank to use the kind-miner Nodo (Tor, ZMQ confirmed).
 remote_node: ""
 
-# P2Pool sidechain: "main" above ~50 kH/s, "mini" for most desktops,
-# "nano" below ~1 kH/s.
-p2pool_chain: mini
+# P2Pool sidechain: "nano" (the default; its 18-hour window keeps even a
+# laptop paid), "mini" for a busier chain, "main" above ~50 kH/s.
+p2pool_chain: nano
 
 # Set to true to let kind-miner manage the p2pool subprocess.
 manage_p2pool: true

@@ -32,7 +32,8 @@ mode: p2pool-remote
 remote_node: ""
 
 # P2Pool sidechain — "main", "mini" or "nano"; anything else is rejected at
-# startup, and leaving it blank falls back to "mini".
+# startup. New setups use nano; a config that leaves this blank or leaves it
+# out keeps "mini", the default when such configs were written.
 #
 # The chains differ in how hard a share is to find. What matters is landing
 # shares often enough to stay inside the payout window (six hours on main and
@@ -41,12 +42,12 @@ remote_node: ""
 # like the miner being broken.
 #
 #   main   above roughly 50 kH/s
-#   mini   most desktops — the default
-#   nano   below about 1 kH/s
+#   mini   a busier chain for desktops; the default before nano
+#   nano   the default — its 18-hour window keeps even a laptop paid steadily
 #
 # The Connection tab tells you how often you are actually landing shares and
 # whether a different chain would suit the machine better.
-p2pool_chain: mini
+p2pool_chain: nano
 
 # Start kind-miner automatically when you log in. Changing this from the
 # settings window also creates or removes the login entry your OS uses (an XDG
