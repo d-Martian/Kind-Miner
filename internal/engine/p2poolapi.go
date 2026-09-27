@@ -254,14 +254,37 @@ func (s P2PoolStats) EstimatedXMRPerDay(hashrate float64) (float64, bool) {
 	return blocksPerDay * float64(s.BlockReward) / atomicUnitsPerXMR, true
 }
 
+// secondsPerMonth is an average month, 30.4375 days: a year of 365.25 days
+// over twelve.
+const secondsPerMonth = 2_629_800
+
+// EstimatedXMRPerMonth is EstimatedXMRPerDay over an average month:
+// H × 2,629,800 s × R ÷ D. Monthly is the unit the tray quotes, because a
+// desktop's daily figure has too many leading zeros to read at a glance.
+func (s P2PoolStats) EstimatedXMRPerMonth(hashrate float64) (float64, bool) {
+	perDay, ok := s.EstimatedXMRPerDay(hashrate)
+	if !ok {
+		return 0, false
+	}
+	return perDay * secondsPerMonth / (24 * 60 * 60), true
+}
+
 // ShareInterval returns the average time between this miner's p2pool shares.
 // Landing shares is what puts a miner in the payout window, so it is the
 // number that decides whether the chosen sidechain suits the machine.
 func (s P2PoolStats) ShareInterval() (time.Duration, bool) {
-	if s.MinerHashrate15m == 0 || s.SidechainDifficulty == 0 {
+	return s.ShareIntervalAt(float64(s.MinerHashrate15m))
+}
+
+// ShareIntervalAt is ShareInterval for a hashrate kind-miner measured itself,
+// such as the 30-minute rate from the ledger. p2pool's own 15-minute figure
+// only counts hashes it received, so it overstates a throttled miner's pace
+// the same way XMRig's does.
+func (s P2PoolStats) ShareIntervalAt(hashrate float64) (time.Duration, bool) {
+	if hashrate <= 0 || s.SidechainDifficulty == 0 {
 		return 0, false
 	}
-	secs := float64(s.SidechainDifficulty) / float64(s.MinerHashrate15m)
+	secs := float64(s.SidechainDifficulty) / hashrate
 	return time.Duration(secs * float64(time.Second)), true
 }
 

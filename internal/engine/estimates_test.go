@@ -210,3 +210,28 @@ func TestReadStatsCarriesTheChainsBlockTime(t *testing.T) {
 		}
 	}
 }
+
+func TestEstimatedXMRPerMonth(t *testing.T) {
+	// One hash meets D with probability 1/D: 1 kH/s against D = 2.6298e11 finds
+	// 1e3 × 2,629,800 / 2.6298e11 = 0.01 blocks a month, at 0.6 XMR each.
+	s := P2PoolStats{NetworkDifficulty: 262_980_000_000, BlockReward: 600_000_000_000}
+	got, ok := s.EstimatedXMRPerMonth(1000)
+	if !ok || got < 0.005999 || got > 0.006001 {
+		t.Errorf("XMR/month = %v, %v; want 0.006", got, ok)
+	}
+	if _, ok := s.EstimatedXMRPerMonth(0); ok {
+		t.Error("a zero hashrate produced an estimate")
+	}
+}
+
+func TestShareIntervalAt(t *testing.T) {
+	s := P2PoolStats{SidechainDifficulty: 12_000_000, MinerHashrate15m: 6000}
+	// A throttled miner measured at half p2pool's figure lands shares half as
+	// often; the ledger's rate, not p2pool's, is the honest input.
+	if got, _ := s.ShareIntervalAt(3000); got != 4000*time.Second {
+		t.Errorf("ShareIntervalAt(3000) = %v, want 4000s", got)
+	}
+	if got, _ := s.ShareInterval(); got != 2000*time.Second {
+		t.Errorf("ShareInterval = %v, want p2pool's 2000s", got)
+	}
+}

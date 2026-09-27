@@ -84,11 +84,13 @@ func (u *uiApp) newDashboard() *dashboard {
 	// one section per tile.
 	d.hashDetail = newKVList().
 		Add("60s average", emDash).
-		Add("Since start", emDash).
+		Add("30 min", emDash).
+		Add("24 h", emDash).
 		Add("Peak", emDash).
 		Add("Threads", emDash)
 	d.incomeDetail = newKVList().
 		Add("Est. per week", emDash).
+		Add("Est. per month", emDash).
 		Add("Network hashrate", emDash).
 		Add("Difficulty", emDash).
 		Add("Your share of the next block", emDash)
@@ -296,9 +298,9 @@ func (d *dashboard) refreshHashrate(history []stats.Sample, sched *scheduler.Sch
 	if mean, ok := stats.Mean(history, time.Minute, stats.Hashrate); ok {
 		d.hashDetail.Set("60s average", formatHashrate(mean))
 	}
-	if mean, ok := stats.MeanAll(history, stats.Hashrate); ok {
-		d.hashDetail.Set("Since start", formatHashrate(mean))
-	}
+	r := currentRates(history, sched.Ledger(), time.Now())
+	d.hashDetail.Set("30 min", rateOrDash(r.m30, r.m30OK))
+	d.hashDetail.Set("24 h", rateOrDash(r.d24, r.d24OK))
 	if peak, ok := stats.Peak(history, stats.Hashrate); ok {
 		d.hashDetail.Set("Peak", formatHashrate(peak))
 	}
@@ -316,17 +318,25 @@ func (d *dashboard) refreshEarnings(history []stats.Sample) {
 	if !ok {
 		return
 	}
-	// The income estimate uses a long average: a five-second hashrate would
-	// make the figure jump every time the miner stepped aside, implying the
-	// day's earnings had changed when only the moment had.
-	hashrate, _ := stats.MeanAll(history, stats.Hashrate)
-	if hashrate <= 0 {
+	// The income estimate uses the longest average the ledger can vouch for:
+	// a five-second hashrate would make the figure jump every time the miner
+	// stepped aside, implying the day's earnings had changed when only the
+	// moment had.
+	var ledger *stats.Ledger
+	if sched := d.u.sup.Scheduler(); sched != nil {
+		ledger = sched.Ledger()
+	}
+	hashrate, ok := currentRates(history, ledger, time.Now()).longest()
+	if !ok || hashrate <= 0 {
 		hashrate = float64(st.MinerHashrate15m)
 	}
 
 	if perDay, ok := st.EstimatedXMRPerDay(hashrate); ok {
 		d.income.Set(formatXMR(perDay, 5), "")
 		d.incomeDetail.Set("Est. per week", formatXMR(perDay*7, 4)+" XMR")
+	}
+	if perMonth, ok := st.EstimatedXMRPerMonth(hashrate); ok {
+		d.incomeDetail.Set("Est. per month", formatXMR(perMonth, monthlyDecimals([]float64{perMonth}))+" XMR")
 	}
 	if netHR, ok := st.NetworkHashrate(); ok {
 		d.incomeDetail.Set("Network hashrate", formatHashrate(netHR))

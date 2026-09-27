@@ -18,7 +18,6 @@ import (
 	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/kindness"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
-	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
 const appID = "io.github.kind_miner.KindMiner"
@@ -79,6 +78,7 @@ type uiApp struct {
 	trayMenu   *fyne.Menu
 	mStatus    *fyne.MenuItem
 	mHashrate  *fyne.MenuItem
+	mIncome    *fyne.MenuItem
 	mUptime    *fyne.MenuItem
 	mShares    *fyne.MenuItem
 	mReward    *fyne.MenuItem
@@ -390,7 +390,8 @@ func (u *uiApp) installTray() {
 	// Status lines rather than actions: they say what the miner is doing, what
 	// it has done, and what it is working towards, without opening the window.
 	u.mStatus = disabledItem(statusIdle)
-	u.mHashrate = disabledItem("Hashrate " + emDash)
+	u.mHashrate = disabledItem(formatRates(rates{}))
+	u.mIncome = disabledItem("≈ " + emDash + " XMR/month")
 	u.mUptime = disabledItem("Uptime " + emDash)
 	u.mShares = disabledItem("Shares " + emDash)
 	u.mReward = disabledItem(rewardEstimating)
@@ -402,6 +403,7 @@ func (u *uiApp) installTray() {
 	items := []*fyne.MenuItem{
 		u.mStatus,
 		u.mHashrate,
+		u.mIncome,
 		u.mUptime,
 		u.mShares,
 		u.mReward,
@@ -515,10 +517,9 @@ func (u *uiApp) refreshTray() {
 	}
 
 	status := trayStatusLine(s.IdleCountdown, override, state, reason)
-	hashrate := emDash
-	if mean, ok := stats.Mean(history, hashrateWindow, stats.Hashrate); ok {
-		hashrate = formatHashrate(mean)
-	}
+	r := currentRates(history, s.Ledger(), time.Now())
+	hashrate := formatRates(r)
+	income := "≈ " + emDash + " XMR/month"
 	uptime := emDash
 	if up, ok := u.sup.Uptime(); ok {
 		uptime = formatUptime(up)
@@ -530,6 +531,10 @@ func (u *uiApp) refreshTray() {
 			if occupancy, ok := st.WindowOccupancy(); ok {
 				shares += fmt.Sprintf(" · %s of the payout window", formatPercent(occupancy))
 			}
+			if next := nextShareLabel(r, st); next != "" {
+				shares += " · " + next
+			}
+			income = formatMonthly(r, st)
 			reward = rewardLabel(st, true)
 		}
 	}
@@ -541,7 +546,7 @@ func (u *uiApp) refreshTray() {
 
 	key := trayMenuKey{
 		controls: status + "\x00" + toggleLabel + "\x00" + mineNowLabel + "\x00" + string(preset.Level),
-		stats:    hashrate + "\x00" + uptime + "\x00" + shares + "\x00" + reward,
+		stats:    hashrate + "\x00" + income + "\x00" + uptime + "\x00" + shares + "\x00" + reward,
 	}
 	now := time.Now()
 	if !shouldReapplyMenu(key, u.lastMenu, now.Sub(u.lastMenuAt)) {
@@ -550,7 +555,8 @@ func (u *uiApp) refreshTray() {
 	u.lastMenu, u.lastMenuAt = key, now
 
 	setItem(u.mStatus, status)
-	setItem(u.mHashrate, "Hashrate  "+hashrate)
+	setItem(u.mHashrate, hashrate)
+	setItem(u.mIncome, income)
 	setItem(u.mUptime, "Uptime  "+uptime)
 	setItem(u.mShares, "Shares  "+shares)
 	setItem(u.mReward, reward)
