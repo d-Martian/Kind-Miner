@@ -1,0 +1,7 @@
+2026-09-27 10:00:01.1204 P2PServer peer 185.2.3.4:37890 is ahead on mainchain (height 3412340, your height 3412339). Is your monerod stuck or lagging?
+2026-09-27 10:00:02.3371 StratumServer SHARE FOUND: mainchain height 3412340, sidechain height 1436001, diff 134000124, client 127.0.0.1:51234, user 4ABC, effort 81.214%
+2026-09-27 10:02:14.9105 P2Pool Your wallet 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A got a payout of 0.000812345678 XMR in block 3412341
+2026-09-27 10:02:14.9113 SideChain Your wallet 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A got a payout of 0.000812345678 XMR in block 3412341
+2026-09-27 11:40:00.0001 P2Pool Your wallet 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A didn't get a payout in block 3412389 because you had no shares in PPLNS window
+2026-09-27 13:15:42.5550 [1;36mP2Pool [0mYour wallet [1;32m44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A[0m got a payout of [1;32m1.000000000001 XMR[0m in block [1;32m3412440[0m
+2026-09-27 13:16:00.0000 P2Pool Somebody wrote "got a payout of 5 XMR in block 1" in a chat message

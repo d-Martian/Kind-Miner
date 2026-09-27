@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +83,7 @@ type uiApp struct {
 	mUptime    *fyne.MenuItem
 	mShares    *fyne.MenuItem
 	mReward    *fyne.MenuItem
+	mPayouts   *fyne.MenuItem
 	mKindness  *fyne.MenuItem
 	mKindItems []*fyne.MenuItem
 	mToggle    *fyne.MenuItem
@@ -395,6 +397,8 @@ func (u *uiApp) installTray() {
 	u.mUptime = disabledItem("Uptime " + emDash)
 	u.mShares = disabledItem("Shares " + emDash)
 	u.mReward = disabledItem(rewardEstimating)
+	u.mPayouts = fyne.NewMenuItem(payoutsMenuLabel, nil)
+	u.mPayouts.ChildMenu = payoutsMenu(payoutLines(nil, time.Now()))
 
 	u.mToggle = fyne.NewMenuItem("Pause mining", u.onToggle)
 	u.mMineNow = fyne.NewMenuItem(labelMineNow, u.onMineNowToggle)
@@ -407,6 +411,7 @@ func (u *uiApp) installTray() {
 		u.mUptime,
 		u.mShares,
 		u.mReward,
+		u.mPayouts,
 	}
 	items = append(items,
 		fyne.NewMenuItemSeparator(),
@@ -538,6 +543,7 @@ func (u *uiApp) refreshTray() {
 			reward = rewardLabel(st, true)
 		}
 	}
+	payouts := payoutLines(u.sup.Payouts().Recent(payoutsShown), time.Now())
 	toggleLabel := pauseLabel(override, state == scheduler.StatePaused)
 	mineNowLabel := labelMineNow
 	if override == scheduler.OverrideMine {
@@ -546,7 +552,8 @@ func (u *uiApp) refreshTray() {
 
 	key := trayMenuKey{
 		controls: status + "\x00" + toggleLabel + "\x00" + mineNowLabel + "\x00" + string(preset.Level),
-		stats:    hashrate + "\x00" + income + "\x00" + uptime + "\x00" + shares + "\x00" + reward,
+		stats: hashrate + "\x00" + income + "\x00" + uptime + "\x00" + shares + "\x00" + reward +
+			"\x00" + strings.Join(payouts, "\x00"),
 	}
 	now := time.Now()
 	if !shouldReapplyMenu(key, u.lastMenu, now.Sub(u.lastMenuAt)) {
@@ -560,6 +567,9 @@ func (u *uiApp) refreshTray() {
 	setItem(u.mUptime, "Uptime  "+uptime)
 	setItem(u.mShares, "Shares  "+shares)
 	setItem(u.mReward, reward)
+	if u.mPayouts != nil {
+		u.mPayouts.ChildMenu = payoutsMenu(payouts)
+	}
 	setItem(u.mToggle, toggleLabel)
 	setItem(u.mMineNow, mineNowLabel)
 	for i, item := range u.mKindItems {

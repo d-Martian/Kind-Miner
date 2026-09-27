@@ -157,3 +157,24 @@ func TestLedgerSavesOnATimerAndStops(t *testing.T) {
 		t.Error("the saved minute did not come back on restore")
 	}
 }
+
+func TestRecordPayoutSavesOncePerBlock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "payouts.json")
+	p := stats.NewPayouts()
+	now := time.Now()
+	recordPayout(p, path, 3412341, 812345678, now)
+	first, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("a new payout was not saved: %v", err)
+	}
+	// p2pool's second line for the same block must not rewrite the file.
+	time.Sleep(10 * time.Millisecond)
+	recordPayout(p, path, 3412341, 812345678, now.Add(time.Millisecond))
+	if second, _ := os.Stat(path); !second.ModTime().Equal(first.ModTime()) {
+		t.Error("the duplicate log line rewrote the payouts file")
+	}
+	q := stats.NewPayouts()
+	if err := q.Load(path); err != nil || len(q.Recent(5)) != 1 {
+		t.Errorf("reloaded %v (err %v), want the one payout", q.Recent(5), err)
+	}
+}
