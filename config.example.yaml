@@ -4,7 +4,7 @@
 # Your Monero wallet address (required)
 wallet: ""
 
-# Connection mode: p2pool-remote | p2pool-local | pool
+# Connection mode: p2pool-remote | p2pool-local
 #
 #   p2pool-remote  Runs p2pool locally, connects to a remote monerod node.
 #                  0% fee, trustless payouts, no local blockchain needed.
@@ -18,8 +18,11 @@ wallet: ""
 #                  and restarts itself when those settings change there.
 #                  Kind Miner only reads Nodo's config; it never writes to it.
 #
-#   pool           Connects XMRig directly to a traditional Stratum pool.
-#                  Simplest setup, but pool takes a small fee (~0.6–1%).
+# The old "pool" mode (XMRig straight to a Stratum pool) has been removed: it
+# told a pool operator your wallet address, paid them a fee, and connected
+# outside Tor. A config that still says mode: pool is moved to p2pool-remote
+# when it loads. For a slow machine, p2pool_chain: nano (below) is the answer
+# pool mode used to be.
 mode: p2pool-remote
 
 # --- p2pool-remote / p2pool-local settings ---
@@ -85,12 +88,6 @@ manage_tor: true
 
 # Path to the tor binary. Leave blank to use a bundled tor, then search PATH.
 tor_path: ""
-
-# --- pool mode settings ---
-
-# Stratum pool URL (used when mode: pool).
-# Example: "pool.supportxmr.com:3333"
-pool_url: ""
 
 # --- XMRig settings ---
 
