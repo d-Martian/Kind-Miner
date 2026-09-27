@@ -219,6 +219,11 @@ func (d *dashboard) refresh() {
 func (d *dashboard) refreshStatus(sched *scheduler.Scheduler, state scheduler.State, reason string, override scheduler.Override, preset kindness.Preset) {
 	_, held := sched.Held()
 	text, tint := statusSummary(state, reason, held, override, preset, sched.IdleCountdown)
+	if until, paused := sched.PausedUntil(); paused && !until.IsZero() {
+		// A snooze from the tray ends by itself; saying when is the difference
+		// between "paused" and "forgotten".
+		text = pausedStatus(until, time.Now()) + " — resumes on its own"
+	}
 	d.pill.Set(text, tint)
 
 	if up, ok := d.u.sup.Uptime(); ok {

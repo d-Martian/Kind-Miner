@@ -159,3 +159,63 @@ func TestSetKindnessTakesEffect(t *testing.T) {
 		t.Errorf("Preset() after an unknown level has ceiling %.2f, want the default's", got.Ceiling)
 	}
 }
+
+func TestSnoozeOver(t *testing.T) {
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name  string
+		until time.Time
+		want  bool
+	}{
+		{"until I resume never runs out", time.Time{}, false},
+		{"a snooze with time left", now.Add(time.Minute), false},
+		{"a snooze at its deadline", now, true},
+		{"a snooze past its deadline", now.Add(-time.Second), true},
+	}
+	for _, c := range cases {
+		if got := snoozeOver(c.until, now); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestTimedPauseEndsByItselfAndSaysSo(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{})
+	var heard []bool
+	s.SetPauseHook(func(paused bool, until time.Time) { heard = append(heard, paused) })
+
+	now := time.Now()
+	s.PauseUntil(now.Add(time.Hour))
+	if until, paused := s.PausedUntil(); !paused || !until.Equal(now.Add(time.Hour)) {
+		t.Fatalf("PausedUntil = %v, %v", until, paused)
+	}
+	s.endExpiredSnooze(now.Add(30 * time.Minute))
+	if _, paused := s.PausedUntil(); !paused {
+		t.Fatal("the snooze ended early")
+	}
+	s.endExpiredSnooze(now.Add(time.Hour))
+	if _, paused := s.PausedUntil(); paused || s.Override() != OverrideNone {
+		t.Error("the snooze did not end at its deadline")
+	}
+	if len(heard) != 2 || !heard[0] || heard[1] {
+		t.Errorf("hook heard %v, want the pause then its end", heard)
+	}
+}
+
+func TestPauseUntilIResumeNeverExpires(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{})
+	s.SetOverride(OverridePause)
+	s.endExpiredSnooze(time.Now().Add(365 * 24 * time.Hour))
+	if _, paused := s.PausedUntil(); !paused {
+		t.Error("an indefinite pause lifted itself")
+	}
+}
+
+func TestMineNowClearsASnooze(t *testing.T) {
+	s := newTestScheduler(0, OverrideNone, fakeIdle{})
+	s.PauseUntil(time.Now().Add(time.Hour))
+	s.SetOverride(OverrideMine)
+	if until, paused := s.PausedUntil(); paused || !until.IsZero() {
+		t.Errorf("after mine-now: paused %v until %v", paused, until)
+	}
+}
