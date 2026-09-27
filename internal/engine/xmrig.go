@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -44,6 +45,9 @@ type XMRig struct {
 	cancel   context.CancelFunc
 	hashrate float64
 	paused   bool
+	// closed is set by Close: the app is shutting down, and a Start from the
+	// scheduler's memory restart must not bring the miner back after it.
+	closed bool
 
 	// duty is the fraction of wall-clock time the miner is allowed to run,
 	// applied by dutyLoop. 1 runs flat out, 0 keeps it suspended. dutyStop ends
@@ -87,10 +91,26 @@ func NewXMRig(binPath, poolURL string, threads, apiPort int) *XMRig {
 func (x *XMRig) Start() error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
+	if x.closed {
+		return errXMRigClosed
+	}
 	if x.cmd != nil {
 		return nil
 	}
 	return x.start()
+}
+
+var errXMRigClosed = errors.New("xmrig has been shut down")
+
+// Close stops the miner for good. Stop alone is not enough at shutdown: the
+// scheduler stops the miner when memory runs short and starts it again later,
+// and a restart racing the shutdown would leave a miner running with the app
+// gone — the failure Stop's own comment records.
+func (x *XMRig) Close() {
+	x.mu.Lock()
+	x.closed = true
+	x.stop()
+	x.mu.Unlock()
 }
 
 // start is the unlocked implementation.
