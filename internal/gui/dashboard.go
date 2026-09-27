@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"fmt"
 	"image/color"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/kindness"
 	"github.com/kind-miner/kind-miner/internal/monitor"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
@@ -320,13 +322,11 @@ func (d *dashboard) refreshHashrate(history []stats.Sample, sched *scheduler.Sch
 }
 
 func (d *dashboard) refreshEarnings(history []stats.Sample) {
-	p2pool := d.u.sup.P2Pool()
-	if p2pool == nil {
-		d.income.Set(emDash, "")
-		return
-	}
-	st, ok := p2pool.Stats()
+	st, ok := d.u.sup.PoolStats()
 	if !ok {
+		if d.u.sup.P2Pool() == nil && !d.u.sup.Hubbed() {
+			d.income.Set(emDash, "")
+		}
 		return
 	}
 	// The income estimate uses the longest average the ledger can vouch for:
@@ -391,6 +391,11 @@ func (d *dashboard) refreshConnection(cfg *config.Config) {
 	// whoever runs p2pool.
 	d.linkDetail.Set(WiFiPowerSaveKey, wifiPowerSaveText(d.u.sup.WiFiPowerSave()))
 
+	if d.u.sup.Hubbed() {
+		d.refreshHub()
+		return
+	}
+
 	p2pool := d.u.sup.P2Pool()
 	if p2pool == nil {
 		// manage_p2pool is off: the user runs p2pool, and all kind-miner can
@@ -427,6 +432,53 @@ func (d *dashboard) refreshConnection(cfg *config.Config) {
 		d.linkDetail.Set("Time in the payout window", formatPercent(occupancy))
 	}
 	d.linkDetail.Set("Next reward", rewardValue(st, true))
+}
+
+// refreshHub fills the connection card on a machine paired with a hub: the
+// household's figures, since this machine has no p2pool of its own.
+func (d *dashboard) refreshHub() {
+	addr, _ := d.u.sup.Node()
+	d.linkDetail.Set("Hub", addr)
+	h, ok, err := d.u.sup.Household()
+	switch {
+	case errors.Is(err, hub.ErrWrongHub):
+		// xmrig refuses it too, so nothing is being mined for a stranger —
+		// but the user needs to know the pairing no longer matches.
+		d.link.Set(hubWrongCert, "")
+		d.link.SetColor(colorError)
+	case err != nil || !ok:
+		d.link.Set(hubUnreachable, "")
+		d.link.SetColor(colorAccent)
+	default:
+		d.link.Set(hubConnected, "")
+		d.link.SetColor(colorOK)
+	}
+	if !ok {
+		return
+	}
+	d.linkDetail.Set("Household", householdLine(h.Workers))
+	d.linkDetail.Set("P2Pool chain", h.Chain)
+	if !h.StatsOK {
+		return
+	}
+	d.linkDetail.Set("Shares found", fmt.Sprintf("%d", h.Stats.SharesFound))
+	d.linkDetail.Set("Next reward", rewardValue(h.Stats, true))
+}
+
+// householdLine summarises who is mining to the hub: "3 devices · 4.1 kH/s".
+func householdLine(workers []hub.Worker) string {
+	if len(workers) == 0 {
+		return emDash
+	}
+	var total float64
+	for _, w := range workers {
+		total += float64(w.Hashrate)
+	}
+	noun := "devices"
+	if len(workers) == 1 {
+		noun = "device"
+	}
+	return fmt.Sprintf("%d %s · %s", len(workers), noun, formatHashrate(total))
 }
 
 func (d *dashboard) refreshChart(history []stats.Sample, cfg *config.Config, preset kindness.Preset, paused bool) {

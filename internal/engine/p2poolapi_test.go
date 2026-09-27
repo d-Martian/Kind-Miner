@@ -36,7 +36,7 @@ func writeAPIFiles(t *testing.T, network, pool, local string) string {
 const (
 	sampleNetwork = `{"difficulty":410000000000,"hash":"abc","height":3100000,"reward":600000000000,"timestamp":1700000000}`
 	samplePool    = `{"pool_list":["pplns"],"pool_statistics":{"hashRate":9500000,"miners":1200,"totalHashes":123456789,"lastBlockFoundTime":1700000000,"lastBlockFound":3099000,"totalBlocksFound":500,"pplnsWeight":1234,"pplnsWindowSize":2160,"sidechainDifficulty":37000000,"sidechainHeight":8000000}}`
-	sampleLocal   = `{"hashrate_15m":2500,"hashrate_1h":2400,"hashrate_24h":2300,"total_hashes":9000000,"total_stratum_shares":12,"last_share_found_time":1700000000,"shares_found":7,"shares_failed":0,"average_effort":98.5,"current_effort":42.1,"connections":1,"incoming_connections":0,"block_reward_share_percent":0.83,"wallet":"4ABC","workers":[]}`
+	sampleLocal   = `{"hashrate_15m":2500,"hashrate_1h":2400,"hashrate_24h":2300,"total_hashes":9000000,"total_stratum_shares":12,"last_share_found_time":1700000000,"shares_found":7,"shares_failed":0,"average_effort":98.5,"current_effort":42.1,"connections":1,"incoming_connections":0,"block_reward_share_percent":0.83,"wallet":"4ABC","workers":["192.168.8.20:51234,3600,120000,4000,garage-server","127.0.0.1:40000,12,1000,0,not logged in"]}`
 )
 
 func TestReadStats(t *testing.T) {
@@ -69,6 +69,9 @@ func TestReadStats(t *testing.T) {
 	}
 	if s.RewardSharePercent != 0.83 {
 		t.Errorf("RewardSharePercent = %v, want 0.83", s.RewardSharePercent)
+	} // Kept raw; hub.ParseWorker reads the entries.
+	if len(s.Workers) != 2 || s.Workers[0] != "192.168.8.20:51234,3600,120000,4000,garage-server" {
+		t.Errorf("Workers = %q", s.Workers)
 	}
 }
 

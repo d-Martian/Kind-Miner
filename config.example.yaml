@@ -4,7 +4,7 @@
 # Your Monero wallet address (required)
 wallet: ""
 
-# Connection mode: p2pool-remote | p2pool-local
+# Connection mode: p2pool-remote | p2pool-local | hub
 #
 #   p2pool-remote  Runs p2pool locally, connects to a remote monerod node.
 #                  0% fee, trustless payouts, no local blockchain needed.
@@ -17,6 +17,11 @@ wallet: ""
 #                  Nodo's UI, skips its own RandomX dataset (--no-randomx),
 #                  and restarts itself when those settings change there.
 #                  Kind Miner only reads Nodo's config; it never writes to it.
+#
+#   hub            Runs only XMRig, mining to a household hub — another
+#                  machine in the house (usually a Nodo) running kind-minerd
+#                  with hub.serve on. Set hub_code below. The hub pays its
+#                  owner's wallet; wallet above may be left blank.
 #
 # The old "pool" mode (XMRig straight to a Stratum pool) has been removed: it
 # told a pool operator your wallet address, paid them a fee, and connected
@@ -168,6 +173,25 @@ temp_limit_celsius: 95
 #
 # Takes effect on restart.
 mine_on_nodo: false
+
+# --- Household hub ---
+
+# hub mode: the code `kind-minerd pair` prints on the hub. It carries the
+# hub's address, its certificate fingerprint (xmrig refuses any other
+# certificate, so a machine on the LAN cannot pose as the hub) and the token
+# for its statistics. worker_name is this machine's name in the hub's device
+# list; blank uses the hostname. Both need a restart.
+hub_code: ""
+worker_name: ""
+
+# Serve p2pool to the rest of the house: stratum over TLS on stratum_port and
+# the household statistics on api_port, both on every interface. Off by
+# default. Needs manage_p2pool; one hub pays one wallet — this config's.
+# Needs a restart; then run `kind-minerd pair` for the code.
+hub:
+  serve: false
+  stratum_port: 18087
+  api_port: 18088
 
 # --- Dashboard chart ---
 
