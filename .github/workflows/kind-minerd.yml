@@ -31,6 +31,14 @@ jobs:
         # With CGO_ENABLED=0 every file that imports "C" is left out, so a
         # dependency that needs cgo shows up as a failed build, not in a list.
         run: CGO_ENABLED=0 go build -o /dev/null ./cmd/kind-minerd
+      - name: The systemd units are valid
+        run: |
+          # verify wants ExecStart to exist, so point it at a fresh build.
+          dir="$RUNNER_TEMP/units"; mkdir -p "$dir"
+          cp packaging/systemd/* "$dir/"
+          CGO_ENABLED=0 go build -o "$dir/kind-minerd" ./cmd/kind-minerd
+          sed -i "s|/opt/kind-miner/kind-minerd|$dir/kind-minerd|" "$dir/kind-minerd.service"
+          cd "$dir" && systemd-analyze verify --man=no ./kind-miner.slice ./kind-minerd.service
       - name: Test without cgo
         run: CGO_ENABLED=0 go test ./cmd/kind-minerd ./internal/core ./internal/config ./internal/instance
 
