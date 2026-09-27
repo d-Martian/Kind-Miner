@@ -96,3 +96,16 @@ func ExecPath() (string, error) {
 	}
 	return p, nil
 }
+
+// RequestBackground asks, inside a Flatpak, for permission to keep running with
+// no window open — which is how kind-miner lives on a desktop without a tray.
+// keepAutostart repeats the user's start-at-login choice, since the same portal
+// request also sets that. Outside a sandbox there is nothing to ask, and it
+// returns nil.
+func RequestBackground(o Options, keepAutostart bool) error {
+	o, err := o.resolve()
+	if err != nil {
+		return err
+	}
+	return requestBackgroundPermission(o, keepAutostart)
+}
