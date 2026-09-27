@@ -114,8 +114,8 @@ func TestDefaults(t *testing.T) {
 	if cfg.Mode != ModeP2PoolRemote {
 		t.Errorf("default mode = %q, want %q", cfg.Mode, ModeP2PoolRemote)
 	}
-	if cfg.P2PoolChain != ChainMini {
-		t.Errorf("default p2pool_chain = %q, want mini", cfg.P2PoolChain)
+	if cfg.P2PoolChain != ChainNano {
+		t.Errorf("default p2pool_chain = %q, want nano", cfg.P2PoolChain)
 	}
 	if !cfg.ManageP2Pool {
 		t.Error("default manage_p2pool should be true")
@@ -164,8 +164,11 @@ func TestLoadChainDefaults(t *testing.T) {
 		yaml string
 		want string
 	}{
-		{"key absent", "wallet: 4ABC\n", ChainMini},
-		{"key present but empty", "wallet: 4ABC\np2pool_chain:\n", ChainMini},
+		// New configs default to nano; one that never named a chain was
+		// written when mini was the default, and must not be moved.
+		{"key absent keeps the old default", "wallet: 4ABC\n", ChainMini},
+		{"key present but empty keeps the old default", "wallet: 4ABC\np2pool_chain:\n", ChainMini},
+		{"explicit mini is kept", "wallet: 4ABC\np2pool_chain: mini\n", ChainMini},
 		{"explicit main is kept", "wallet: 4ABC\np2pool_chain: main\n", ChainMain},
 		{"explicit nano is kept", "wallet: 4ABC\np2pool_chain: nano\n", ChainNano},
 	}

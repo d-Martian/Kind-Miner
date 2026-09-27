@@ -2,7 +2,6 @@ package gui
 
 import (
 	"errors"
-	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -50,10 +49,7 @@ func TestCaptureScreenshots(t *testing.T) {
 		size    fyne.Size
 		content func() fyne.CanvasObject
 	}{
-		{"onboarding-wallet", fyne.NewSize(560, 440), onboardingPane(cfg, 1)},
-		{"onboarding-connection", fyne.NewSize(560, 440), onboardingPane(cfg, 2)},
-		{"onboarding-binaries", fyne.NewSize(560, 440), onboardingPane(cfg, 3)},
-		{"onboarding-kindness", fyne.NewSize(560, 440), onboardingPane(cfg, 4)},
+		{"onboarding", onboardingSize, onboardingPane(cfg)},
 		{"dashboard", windowSize, func() fyne.CanvasObject {
 			// A supervisor that was never started: Config answers, Scheduler
 			// does not, so the dashboard renders its resting state. The chart
@@ -130,13 +126,12 @@ func demoHistory() []stats.Sample {
 	return out
 }
 
-// onboardingPane builds one setup step in isolation, without a supervisor —
-// the screens only read the config.
-func onboardingPane(cfg *config.Config, step int) func() fyne.CanvasObject {
+// onboardingPane builds the setup screen in isolation, without a supervisor —
+// it only reads the config.
+func onboardingPane(cfg *config.Config) func() fyne.CanvasObject {
 	return func() fyne.CanvasObject {
-		o := &onboarding{cfg: cfg, step: step}
+		o := &onboarding{cfg: cfg}
 		o.build()
-		o.show()
 		return o.object
 	}
 }
@@ -154,13 +149,10 @@ func TestScreensRender(t *testing.T) {
 	u := &uiApp{sup: core.New(cfg)}
 
 	screens := map[string]fyne.CanvasObject{
-		"onboarding": onboardingPane(cfg, 1)(),
+		"onboarding": onboardingPane(cfg)(),
 		"dashboard":  u.dashboardScreen(),
 		"progress":   u.progressScreen(core.StepStartP2Pool),
 		"error":      u.errorScreen(errRender),
-	}
-	for i := 1; i <= onboardingSteps; i++ {
-		screens[fmt.Sprintf("onboarding-step-%d", i)] = onboardingPane(cfg, i)()
 	}
 
 	for name, content := range screens {

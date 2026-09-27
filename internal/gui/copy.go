@@ -3,27 +3,30 @@ package gui
 // Copy strings shown to users during onboarding. Kept here so the writing can
 // be tuned without hunting through layout code.
 
-// First-run setup, one constant per screen. The writing carries most of the
-// weight here: these four screens are the only place a user is told what
-// P2Pool is, why their own node is better, and what "kindness" buys them.
+// First-run setup: one screen. The writing carries most of the weight: this is
+// the only place a user is told what P2Pool is, and that kind-miner will start
+// with their computer.
 const (
 	OnboardWalletTitle = "Where should your rewards go?"
 	OnboardWalletBody  = "kind-miner mines on P2Pool: a peer-to-peer pool with no operator, no account and no fee. Your machine works alongside other miners, and when the group finds a block the reward is split by the work each miner did and paid straight to the addresses written into the block itself. Nobody holds your coins, including us."
 	OnboardWalletNote  = "Use a primary address — it starts with 4 and is 95 characters. Subaddresses and integrated addresses cannot receive P2Pool payouts, because the reward arrives as a coinbase output."
 
-	OnboardNodeTitle = "How should we reach the Monero network?"
-	OnboardNodeBody  = "P2Pool needs block templates from a Monero node. Running your own is the private option and the one we'd pick, but it wants around 180 GB of disk and a day or two to sync."
-	OnboardNodeNote  = "Our node is reached as a Tor hidden service, so the operator never learns your IP — but you are trusting our copy of the chain, and templates arrive a beat later."
+	// OnboardStartupLabel is the autostart disclosure. It is worded as what
+	// will happen, not as a setting, because it is on unless unticked.
+	OnboardStartupLabel = "Starts with your computer and mines gently in the background"
 
-	OnboardChainNote = "P2Pool has three sidechains, differing in how hard a share is to find. mini suits most desktops: you stay in the payout window continuously instead of earning in rare lumps. Pick nano below about 1 kH/s, main above roughly 50 kH/s. kind-miner will tell you if you outgrow the one you choose."
+	OnboardMoreOptions = "More options"
+	OnboardNodeNote    = "Our node is reached as a Tor hidden service, so the operator never learns your IP — but you are trusting our copy of the chain. Your own node is the private option; it wants around 180 GB of disk and a day or two to sync."
+	OnboardMoreLater   = "Everything else — how much of the machine to use, the P2Pool sidechain, your own xmrig and p2pool — is in Settings, and has a sensible default until you look."
 
-	OnboardBinariesTitle = "Which xmrig and p2pool should we run?"
-	OnboardBinariesBody  = "kind-miner does not mine by itself — it supervises xmrig and p2pool, the two programs that do the work."
-	OnboardBinariesNote  = "The bundled binaries are pinned to versions tested against this release, SHA256-verified before every start, and built reproducibly: compile them yourself from the pinned source and you get byte-identical files. kind-miner never runs a miner you did not choose, and never mines to any address but yours."
+	OnboardStart = "Start mining"
+)
 
-	OnboardKindnessTitle = "How kind should it be?"
-	OnboardKindnessBody  = "Kindness sets how much of the machine the miner may take, and how fast it gets out of the way when you want it back. Every preset gives ground quickly and takes it back slowly — the difference is how much ground there is."
-	OnboardKindnessNote  = "You can change this at any time from the tray, without stopping mining. Until you have been away from the keyboard for a few minutes, mining is held to the Ghost ceiling whatever you pick here."
+// Shown once, when first-run setup finishes and the window tucks itself into
+// the tray. Without it the window simply vanishes, which reads as a crash.
+const (
+	TrayNoticeTitle = "kind-miner is mining"
+	TrayNoticeBody  = "It lives in your system tray now. Click the icon to see what it's doing, pause it, or change how much of the machine it takes."
 )
 
 // Wallet entry and its validation messages.
