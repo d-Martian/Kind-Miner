@@ -147,12 +147,13 @@ func SelectBest(customAddr string) (Node, error) {
 					"  macOS:   brew install tor && brew services start tor\n" +
 					"  Windows: https://www.torproject.org/download/\n" +
 					"\n" +
-					"Alternatively, set mode: pool in your config to use a traditional pool.")
+					"Or run your own node: set mode: p2pool-local in your config.")
 		}
 		return Node{}, fmt.Errorf(
 			"the kind-miner node is unreachable — check the log above for details.\n" +
 				"The node may be briefly offline; kind-miner will retry automatically.\n" +
-				"If the problem persists, set mode: pool in your config to use a traditional pool.")
+				"If the problem persists, set remote_node to another node with ZMQ enabled,\n" +
+				"or run your own: mode: p2pool-local.")
 	}
 
 	// Prefer the Nodo (TorOnly) when Tor is available; otherwise pick fastest.

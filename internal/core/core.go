@@ -78,7 +78,7 @@ type Supervisor struct {
 	tor     *engine.Tor
 	// relay carries RPC and ZMQ to an onion node over Tor; nil for any other.
 	relay *nodes.Relay
-	// islandStop ends the sidechain health check; nil in pool mode.
+	// islandStop ends the sidechain health check; nil when p2pool is not ours.
 	islandStop chan struct{}
 
 	mu sync.Mutex
@@ -132,7 +132,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		s.cfg.XMRigBinPath = xmrigPath
 	}
 
-	if s.cfg.Mode != config.ModePool && s.cfg.ManageP2Pool {
+	if s.cfg.ManageP2Pool {
 		emit(StepInstallP2Pool)
 		p2poolPath, err := autoinstall.EnsureP2Pool(binDir)
 		if err != nil {
@@ -141,11 +141,6 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		if s.cfg.P2PoolBinPath == "" {
 			s.cfg.P2PoolBinPath = p2poolPath
 		}
-	}
-
-	poolURL, err := resolvePool(s.cfg)
-	if err != nil {
-		return err
 	}
 
 	// Start optional managed subprocesses.
@@ -162,7 +157,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		}
 	}
 
-	if s.cfg.Mode != config.ModePool && s.cfg.ManageP2Pool {
+	if s.cfg.ManageP2Pool {
 		s.ensureTor(emit)
 		emit(StepSelectNode)
 		node, err := resolveNode(s.cfg)
@@ -242,7 +237,9 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	// Checked here rather than at startup: p2pool has already taken its share
 	// of the pool by now, and its share is the whole problem.
 	s.checkHugePages(threads)
-	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, poolURL, s.cfg.Wallet, threads, 8080)
+	// Always the local p2pool: the one kind-miner manages, or with
+	// manage_p2pool off, the one the user runs on the same port.
+	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, StratumAddr(), threads, 8080)
 	if s.cfg.MineOnNodo {
 		total, available, ok := monitor.Memory()
 		mode := randomXModeFor(available, ok)
@@ -281,7 +278,7 @@ func (s *Supervisor) Uptime() (time.Duration, bool) {
 }
 
 // Node returns the monerod address p2pool is following and whether it is
-// reached over Tor. The address is empty in pool mode and before Start.
+// reached over Tor. The address is empty with manage_p2pool off and before Start.
 func (s *Supervisor) Node() (addr string, viaTor bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -369,7 +366,7 @@ func (s *Supervisor) Scheduler() *scheduler.Scheduler { return s.sched }
 // XMRig returns the running miner, or nil before Start succeeds.
 func (s *Supervisor) XMRig() *engine.XMRig { return s.xmrig }
 
-// P2Pool returns the running p2pool manager, or nil in pool mode or before
+// P2Pool returns the running p2pool manager, or nil with manage_p2pool off or before
 // Start succeeds.
 func (s *Supervisor) P2Pool() *engine.P2Pool { return s.p2pool }
 
@@ -421,15 +418,9 @@ func (s *Supervisor) Shutdown() {
 	}
 }
 
-// resolvePool returns the XMRig pool URL based on the configured mode.
-func resolvePool(cfg *config.Config) (string, error) {
-	switch cfg.Mode {
-	case config.ModePool:
-		return cfg.PoolURL, nil
-	default:
-		// p2pool modes: XMRig connects to the local p2pool Stratum port.
-		return fmt.Sprintf("127.0.0.1:%d", stratumPort), nil
-	}
+// StratumAddr is where the miner connects: p2pool's Stratum port on loopback.
+func StratumAddr() string {
+	return fmt.Sprintf("127.0.0.1:%d", stratumPort)
 }
 
 // resolveNode returns the monerod node for p2pool to connect to.
@@ -512,7 +503,7 @@ func (s *Supervisor) ensureTor(emit func(Step)) {
 
 // torNeeded reports whether the active configuration will connect to a .onion
 // monerod and therefore needs Tor. The default remote node (the Nodo) is
-// .onion; a custom clearnet remote_node, or the local/pool modes, do not.
+// .onion; a custom clearnet remote_node, or the local mode, do not.
 func (s *Supervisor) torNeeded() bool {
 	if s.cfg.Mode != config.ModeP2PoolRemote {
 		return false

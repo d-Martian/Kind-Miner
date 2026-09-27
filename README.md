@@ -210,7 +210,7 @@ Config lives at `~/.config/kind-miner/config.yaml` (Linux/macOS) or `%APPDATA%\k
 # Your Monero wallet address. Required.
 wallet: "4..."
 
-# Connection mode: p2pool-remote | p2pool-local | pool
+# Connection mode: p2pool-remote | p2pool-local
 mode: p2pool-remote
 
 # p2pool-remote: which monerod node p2pool connects to.
@@ -223,9 +223,6 @@ p2pool_chain: mini
 
 # Set to true to let kind-miner manage the p2pool subprocess.
 manage_p2pool: true
-
-# Traditional pool URL — only used when mode: pool.
-pool_url: ""
 
 # Maximum XMRig threads. 0 = auto — min(logical cores, L3 / 2 MiB), which is
 # the most RandomX can use before threads start evicting each other (recommended).
@@ -296,13 +293,9 @@ You run your own `monerod` locally. Maximum trustlessness — you validate every
 
 Set `manage_monerod: true` to have kind-miner start and stop `monerod` for you.
 
-### `pool`
+### No `pool` mode
 
-```
-XMRig → pool (Stratum) → Monero network
-```
-
-XMRig connects directly to a Stratum pool. Simpler, but the pool operator knows your wallet address, takes a fee (typically 0.6–1%), and controls payouts. Suitable for machines where your hashrate is too low for P2Pool shares to arrive in reasonable time.
+Earlier versions could send XMRig straight to a Stratum pool. That told the pool operator your wallet address, paid them a fee, and connected outside Tor, so it has been removed. A config that still says `mode: pool` is moved to `p2pool-remote` when it loads, with one line in the log. If your machine is too slow for P2Pool shares to arrive often — the reason pool mode used to be suggested — set `p2pool_chain: nano`.
 
 ---
 

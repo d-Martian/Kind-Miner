@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/kindness"
 	"github.com/kind-miner/kind-miner/internal/monitor"
@@ -365,15 +366,17 @@ func (d *dashboard) refreshPower(history []stats.Sample) {
 }
 
 func (d *dashboard) refreshConnection(cfg *config.Config) {
-	// Set before the pool-mode return below: a sleeping radio stalls the
-	// network whichever way the miner is pointed.
+	// Set before the early return below: a sleeping radio stalls the network
+	// whoever runs p2pool.
 	d.linkDetail.Set(WiFiPowerSaveKey, wifiPowerSaveText(d.u.sup.WiFiPowerSave()))
 
 	p2pool := d.u.sup.P2Pool()
 	if p2pool == nil {
-		d.link.Set("Pool", "")
+		// manage_p2pool is off: the user runs p2pool, and all kind-miner can
+		// say is where the miner is pointed.
+		d.link.Set("Your p2pool", "")
 		d.link.SetColor(colorForeground)
-		d.linkDetail.Set("Node", cfg.PoolURL)
+		d.linkDetail.Set("Node", core.StratumAddr())
 		return
 	}
 	if p2pool.Ready() {
