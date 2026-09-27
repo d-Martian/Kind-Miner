@@ -1,0 +1,20 @@
+# A top-level slice for mining, beside system.slice rather than inside it.
+#
+# CPU weight is shared out level by level: everything in system.slice —
+# monerod, the light-wallet server, Tor, Nodo's Monday 04:00 update run —
+# competes as one against this slice, and this slice's weight is "idle". So
+# any of them that wants a core takes it from the miner outright, however
+# many threads the miner runs, and the miner gets only what nobody else is
+# using. That is the kernel-level half of kind-miner's promise on a node; the
+# duty cycle and the Nodo guard (mine_on_nodo) are the other half.
+
+[Unit]
+Description=kind-miner: mining that yields to everything else
+Documentation=https://github.com/kind-miner/kind-miner
+Before=slices.target
+
+[Slice]
+# cpu.idle=1 on systemd 250 and later. On older systemd the value is refused;
+# CPUWeight=1 is the nearest equivalent there.
+CPUWeight=idle
+IOWeight=1

@@ -110,3 +110,26 @@ func TestInit(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestConfigFor(t *testing.T) {
+	none := func(string) bool { return false }
+	some := func(p string) bool { return p == serviceConfig }
+	cases := []struct {
+		name, flag, creds string
+		uid               int
+		exists            func(string) bool
+		want              string
+	}{
+		{"--config wins", "/x.yaml", "/run/credentials/kind-minerd.service", 0, some, "/x.yaml"},
+		{"the service reads its credential", "", "/run/credentials/kind-minerd.service", 61234, none,
+			"/run/credentials/kind-minerd.service/config.yaml"},
+		{"root sets up the service's config", "", "", 0, none, serviceConfig},
+		{"a user asking about a configured service", "", "", 1000, some, serviceConfig},
+		{"a user with no service keeps their own", "", "", 1000, none, ""},
+	}
+	for _, c := range cases {
+		if got := configFor(c.flag, c.creds, c.uid, c.exists); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}

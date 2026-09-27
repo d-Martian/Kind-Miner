@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -58,8 +59,8 @@ func main() {
 	force := fs.Bool("force", false, "overwrite an existing config (init)")
 	asJSON := fs.Bool("json", false, "machine-readable output (status)")
 	_ = fs.Parse(args)
-	if *configPath != "" {
-		config.SetPath(*configPath)
+	if p := configFor(*configPath, os.Getenv("CREDENTIALS_DIRECTORY"), os.Getuid(), exists); p != "" {
+		config.SetPath(p)
 	}
 
 	var err error
@@ -85,6 +86,36 @@ func main() {
 		fmt.Fprintf(os.Stderr, "kind-minerd: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// serviceConfig is where the system service's config lives. The unit hands it
+// to the daemon with LoadCredential=, so it can stay root-owned and 0600: the
+// service's dynamic user reads its private copy, never this file.
+const serviceConfig = "/etc/kind-miner/config.yaml"
+
+// configFor picks the config path. An explicit --config wins; the service
+// reads the credential systemd passed it; root — setting up or checking the
+// service from a shell — uses the service's config; anyone else keeps the
+// per-user default (returned as "").
+func configFor(flagPath, credentialsDir string, uid int, exists func(string) bool) string {
+	switch {
+	case flagPath != "":
+		return flagPath
+	case credentialsDir != "":
+		return filepath.Join(credentialsDir, "config.yaml")
+	case uid == 0:
+		return serviceConfig
+	case exists(serviceConfig):
+		// A user running status or doctor on a box where the service is set
+		// up is asking about the service.
+		return serviceConfig
+	}
+	return ""
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // runInit writes a config for the given wallet. It asks nothing else: the
