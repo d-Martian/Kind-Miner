@@ -91,6 +91,21 @@ repositories; when a pin stops installing, the build fails and the toolchain has
 to be re-pinned and the hashes re-published. libuv, hwloc and the xmrig tarball
 are pinned on first download (OpenSSL matches upstream's published SHA256).
 
+## kind-minerd
+
+The headless daemon builds from the same script with `KM_TARGET=kind-minerd`,
+which switches the package and sets `CGO_ENABLED=0`. With no C in the build it
+cross-compiles, and reproduces, from any host:
+
+```sh
+make reproduce-minerd                                   # this host's arch
+KM_TARGET=kind-minerd GOARCH=arm64 scripts/reproduce.sh # e.g. for a Nodo
+```
+
+`.github/workflows/kind-minerd.yml` builds it twice for amd64 and arm64 from
+different paths and compares the hashes, and fails if it ever depends on Fyne
+or stops building without cgo.
+
 ## Build-flag parity
 
 The same compiler flags are used in three places and must stay in sync:
@@ -109,5 +124,6 @@ All CI runs on GitHub Actions:
 |---|---|---|
 | `.github/workflows/repro-verify.yml` | push, PR, manual | Rebuilds the binary from two different paths and fails if the SHA256 differ |
 | `.github/workflows/release.yml` | `v*` tag | Native per-OS builds + deterministic archives, uploaded to a draft release |
+| `.github/workflows/kind-minerd.yml` | push, PR, manual | kind-minerd has no Fyne dependency, builds with `CGO_ENABLED=0`, and rebuilds bit-for-bit for amd64 and arm64 |
 | `.github/workflows/xmrig-build.yml` | changes to the xmrig recipe or pins, manual | Builds the patched xmrig twice on native x86_64 and aarch64 runners, fails if the SHA256 differ, and checks the donation patch took |
 | `.github/workflows/dependency-watch.yml` | weekly cron, manual | Opens a tracking issue when XMRig/P2Pool publish a new release |

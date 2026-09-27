@@ -24,6 +24,11 @@ const (
 	Running
 )
 
+// AppID is kind-miner's reverse-DNS identity — the desktop file, the Flatpak
+// ID, and the single-instance bus name. The GUI and kind-minerd claim the same
+// name, so the two never mine side by side.
+const AppID = "io.github.kind_miner.KindMiner"
+
 // Claim tries to become the running instance for appID. activate is called,
 // on some goroutine, each time a later launch asks to be shown. release gives
 // the name up, for shutdown.

@@ -141,6 +141,22 @@ Launched from a terminal, kind-miner runs a short text wizard instead, and a hea
 
 ---
 
+## Headless: kind-minerd
+
+For a box with no screen — a Nodo, a home server — there is `kind-minerd`, the
+same miner without the window. It is a static binary with no graphical
+dependencies (built with `CGO_ENABLED=0`), for x86-64 and arm64.
+
+```sh
+kind-minerd init --address 4…   # write a config for your wallet
+kind-minerd run                 # mine until stopped (what a service runs)
+kind-minerd status              # what it is doing   (--json for scripts)
+kind-minerd doctor              # one sentence on what is wrong, if anything
+```
+
+Only one kind-miner runs per session: the daemon and the desktop app will not
+mine side by side.
+
 ## Sleep
 
 kind-miner mines while your machine is awake and stops when it sleeps. It never keeps a machine awake, and we don't suggest turning sleep off to mine more: a kind miner uses the time you leave it, not time it takes.
