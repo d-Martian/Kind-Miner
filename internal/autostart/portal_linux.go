@@ -26,6 +26,13 @@ const portalTimeout = 2 * time.Minute
 //
 // Spec: org.freedesktop.portal.Background.RequestBackground.
 func portalAutostart(o Options, enable bool) error {
+	return requestBackground(o, enable, "Start "+o.Name+" when you log in")
+}
+
+// requestBackground is the portal call itself. autostart says whether the
+// login entry should exist afterwards; reason is what the permission dialog
+// tells the user.
+func requestBackground(o Options, enable bool, reason string) error {
 	conn, err := dbus.SessionBus()
 	if err != nil {
 		return fmt.Errorf("session bus: %w", err)
@@ -57,7 +64,7 @@ func portalAutostart(o Options, enable bool) error {
 	cmd := append([]string{filepath.Base(o.Exec)}, o.Args...)
 	opts := map[string]dbus.Variant{
 		"handle_token": dbus.MakeVariant(token),
-		"reason":       dbus.MakeVariant("Start " + o.Name + " when you log in"),
+		"reason":       dbus.MakeVariant(reason),
 		"autostart":    dbus.MakeVariant(enable),
 		"commandline":  dbus.MakeVariant(cmd),
 	}
