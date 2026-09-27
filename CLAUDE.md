@@ -121,9 +121,13 @@ bumping Fyne:
 - No chart widget and no path API — the dashboard plot is rasterised with
   `x/image/vector` into a `canvas.Raster` (`chart.go`, `chartdraw.go`).
 - No card/tile/pill widgets — composed by hand in `widgets.go`.
-- A single tray menu item cannot be refreshed; changing one label means
-  re-applying the whole menu, which closes it if open. `app.go` guards this with
-  `lastMenuKey` (re-apply only when the rendered text actually changed).
+- Fyne's tray cannot refresh a single item — changing one label re-applies the
+  whole menu with new item IDs, which closes it if open — and Fyne 2.8 still
+  works this way. So on Linux/BSD kind-miner drives `fyne.io/systray` itself
+  (`tray_systray.go`): items are created once and updated in place. macOS and
+  Windows keep Fyne's tray (`tray_fyne.go`, re-apply guarded by
+  `shouldReapplyMenu`), because there systray needs the native event loop Fyne
+  owns. Both render the same `trayView` (`tray.go`).
 - `setScreen` re-asserts window size on every screen swap, because Fyne shrinks
   the window to content minimum on `SetContent` and never grows it back.
 
