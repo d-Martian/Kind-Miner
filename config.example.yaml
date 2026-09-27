@@ -28,7 +28,12 @@ mode: p2pool-remote
 # --- p2pool-remote / p2pool-local settings ---
 
 # Remote monerod RPC URL (used when mode: p2pool-remote).
-# Leave blank to auto-select from the built-in community node list.
+# Leave blank to choose automatically: a synced monerod on this machine if
+# there is one (RPC on 127.0.0.1:18081, ZMQ on 18083 — start monerod with
+# --zmq-pub tcp://127.0.0.1:18083), otherwise the kind-miner Nodo over Tor —
+# switching to the local node, without a restart, once it is ready.
+# Only .onion nodes go through Tor; any other node here is reached directly,
+# because Tor would slow every block template for no privacy gain.
 remote_node: ""
 
 # P2Pool sidechain — "main", "mini" or "nano"; anything else is rejected at
