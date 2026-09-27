@@ -433,7 +433,7 @@ func (s *Supervisor) Shutdown() {
 	// everything Start launched, or a future change to either one silently
 	// orphans a mining process.
 	if s.xmrig != nil {
-		s.xmrig.Stop()
+		s.xmrig.Close()
 	}
 	s.mu.Lock()
 	if s.nodoStop != nil {

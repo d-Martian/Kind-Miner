@@ -80,6 +80,14 @@ const (
 // to show a countdown instead.
 const ReasonWaitingForIdle = "waiting for you to go idle"
 
+// ReasonGame and ReasonMemoryShort are the reasons for the two stops that
+// come from outside the CPU reading: a game has GameMode on, and the machine is
+// short of memory, so the miner has been stopped to give its dataset back.
+const (
+	ReasonGame        = "a game is running"
+	ReasonMemoryShort = "memory is short; the miner has let go of its 2 GB"
+)
+
 // ReasonNodeSyncing is the state reason while mining on a Nodo waits for the
 // node to finish syncing.
 const ReasonNodeSyncing = "Monero node is syncing"
@@ -118,6 +126,16 @@ type Scheduler struct {
 	// ledger is the per-minute record behind the 30-minute and 24-hour rates.
 	// It outlives the ring: the supervisor saves it and loads it back on start.
 	ledger *stats.Ledger
+
+	// gameMode reports a game holding Feral's GameMode; nil in tests.
+	gameMode *monitor.GameMode
+	// sampleMemory reads memory pressure; nil in tests that do not exercise
+	// it. memGuard turns the readings into stop and restart decisions, and
+	// memStopped remembers which side of that the miner is on. Only the tick
+	// goroutine touches them.
+	sampleMemory func() monitor.MemorySample
+	memGuard     memoryGuard
+	memStopped   bool
 
 	// nodo is the guest-on-a-node control, nil unless mine_on_nodo is set.
 	nodo *nodoControl
@@ -213,6 +231,9 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 		idle:            monitor.NewIdle(),
 		history:         stats.NewRing(historyCapacity),
 		ledger:          stats.NewLedger(),
+		gameMode:        monitor.NewGameMode(),
+		sampleMemory:    monitor.SampleMemory,
+		memGuard:        memoryGuard{footprint: monitor.RandomXHugePageBytes(Threads(cfg))},
 		cores:           runtime.NumCPU(),
 		maxThreads:      Threads(cfg),
 		preset:          cfg.Preset(),
@@ -525,6 +546,10 @@ type conditions struct {
 	// nodeSyncing reports the Monero node this machine serves still catching
 	// up. Only set on a Nodo, and only when the node actually said so.
 	nodeSyncing bool
+	// gameActive reports a game holding GameMode.
+	gameActive bool
+	// memoryShort reports the memory guard holding the miner stopped.
+	memoryShort bool
 }
 
 // decide turns a policy and an observation into the CPU allowance the miner may
@@ -546,6 +571,11 @@ func decide(p policy, c conditions, override Override) (target float64, reason s
 	if override == OverridePause {
 		return 0, "manual pause", true
 	}
+	// The most urgent machine condition: the miner is already stopped, not
+	// just suspended, and saying so explains the missing process.
+	if c.memoryShort {
+		return 0, ReasonMemoryShort, true
+	}
 	// Ahead of every machine condition: while the hold stands, mining earns
 	// nothing whatever the battery or the temperature say, and it is the one
 	// reason the user may have to act on.
@@ -563,6 +593,9 @@ func decide(p policy, c conditions, override Override) (target float64, reason s
 	// A syncing node is verifying every block it downloads and needs all of the
 	// machine; mining through it would stretch a sync of days into longer, on
 	// the one box whose purpose is the node.
+	if c.gameActive {
+		return 0, ReasonGame, true
+	}
 	if c.nodeSyncing {
 		return 0, ReasonNodeSyncing, true
 	}
@@ -667,6 +700,7 @@ func (s *Scheduler) tick() {
 	s.mu.Unlock()
 
 	c := s.observe(p, override)
+	s.stopOrRestartForMemory(c.memoryShort)
 	s.placeOnCores()
 	target, reason, hard := decide(p, c, override)
 
@@ -725,6 +759,13 @@ func (s *Scheduler) observe(p policy, override Override) conditions {
 		c.otherCPU = other
 	}
 	c.idleGated = s.idleGated(override)
+	if s.gameMode != nil {
+		active, known := s.gameMode.Active()
+		c.gameActive = known && active
+	}
+	if s.sampleMemory != nil {
+		c.memoryShort = s.memGuard.step(s.sampleMemory(), time.Now())
+	}
 	if s.nodo != nil && s.nodo.sync != nil {
 		synced, known := s.nodo.sync.Synced()
 		// Unknown is not "syncing": a node behind an RPC login cannot answer,

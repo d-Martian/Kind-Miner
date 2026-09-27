@@ -200,3 +200,11 @@ func TestP2PoolReportsPayoutsFromItsOutput(t *testing.T) {
 		t.Fatal("the payout line never reached the handler")
 	}
 }
+
+func TestXMRigStartRefusedAfterClose(t *testing.T) {
+	x := NewXMRig("/nonexistent/xmrig", "127.0.0.1:3333", 1, 0)
+	x.Close()
+	if err := x.Start(); err == nil {
+		t.Fatal("Start after Close launched a miner")
+	}
+}

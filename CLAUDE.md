@@ -92,7 +92,11 @@ period. RandomX spends ~3s allocating its dataset on every launch, so anything
 that restarts xmrig to throttle it re-initialises forever and never hashes.
 `SetThreads` exists but restarts the process and is reserved for a config
 change; the scheduler's `miner` interface deliberately **omits it** so this
-can't regress.
+can't regress. The one exception is memory: a suspended miner still holds its ~2.3 GB
+dataset, so under memory pressure the scheduler stops the process outright and
+starts it again only after a long calm (`scheduler/memory.go`, via the separate
+`starter` interface). Shutdown uses `XMRig.Close`, which refuses a later
+`Start`, so that restart can never outlive the app.
 
 ### Testability pattern
 
