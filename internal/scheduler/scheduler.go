@@ -115,6 +115,9 @@ type Scheduler struct {
 	power   *monitor.Power
 	idle    idleSource
 	history *stats.Ring
+	// ledger is the per-minute record behind the 30-minute and 24-hour rates.
+	// It outlives the ring: the supervisor saves it and loads it back on start.
+	ledger *stats.Ledger
 
 	// nodo is the guest-on-a-node control, nil unless mine_on_nodo is set.
 	nodo *nodoControl
@@ -203,6 +206,7 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 		power:           monitor.NewPower(),
 		idle:            monitor.NewIdle(),
 		history:         stats.NewRing(historyCapacity),
+		ledger:          stats.NewLedger(),
 		cores:           runtime.NumCPU(),
 		maxThreads:      Threads(cfg),
 		preset:          cfg.Preset(),
@@ -721,7 +725,14 @@ func (s *Scheduler) record(c conditions, allowed, runningDuty float64, backedOff
 		}
 	}
 	s.history.Add(sample)
+	if s.ledger != nil {
+		s.ledger.Add(sample)
+	}
 }
+
+// Ledger returns the per-minute hashrate record, for the rates and for the
+// supervisor to save and restore.
+func (s *Scheduler) Ledger() *stats.Ledger { return s.ledger }
 
 // History returns the rolling history of CPU, hashrate and power samples,
 // oldest first. Intended for the dashboard chart.

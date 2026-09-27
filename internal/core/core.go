@@ -83,6 +83,8 @@ type Supervisor struct {
 	localNode *nodes.Node
 	// localWatchStop ends the watch for a local node to become usable.
 	localWatchStop chan struct{}
+	// ledgerStop ends the periodic save of the hashrate ledger.
+	ledgerStop chan struct{}
 	// islandStop ends the sidechain health check; nil when p2pool is not ours.
 	islandStop chan struct{}
 
@@ -266,6 +268,9 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	}
 
 	s.sched = scheduler.New(s.cfg, s.xmrig)
+	restoreLedger(s.sched.Ledger(), ledgerPath())
+	s.ledgerStop = make(chan struct{})
+	go saveLedgerEvery(s.sched.Ledger(), ledgerPath(), ledgerSaveInterval, s.ledgerStop)
 	go s.sched.Start()
 	if s.p2pool != nil {
 		s.islandStop = make(chan struct{})
@@ -401,6 +406,14 @@ func (s *Supervisor) Shutdown() {
 	}
 	if s.sched != nil {
 		s.sched.Stop()
+		// After the scheduler, so its last tick is in the record.
+		if s.ledgerStop != nil {
+			close(s.ledgerStop)
+			s.ledgerStop = nil
+		}
+		if err := s.sched.Ledger().Save(ledgerPath()); err != nil {
+			log.Printf("hashrate history: could not save: %v", err)
+		}
 	}
 	// Explicit rather than left to the scheduler: Shutdown has to stop
 	// everything Start launched, or a future change to either one silently
