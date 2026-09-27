@@ -21,6 +21,7 @@ go test ./internal/gui -run TestScreensRender -v
 make reproduce        # canonical reproducible build (pinned stock toolchain)
 make verify-repro     # build twice locally, compare SHA256 — fast determinism check
 make vendor           # after any dependency change; vendor/ is committed
+make build-minerd     # the headless daemon: pure Go, CGO_ENABLED=0, no Fyne
 ```
 
 The GUI uses cgo (Fyne/GLFW/OpenGL), so the build host needs GL/X11/Wayland dev
@@ -44,6 +45,7 @@ subprocesses.**
 
 ```
 cmd/kind-miner  → decides UI mode (GUI / tray / headless), owns signals
+cmd/kind-minerd → the headless daemon (init/run/status/doctor); pure Go, never imports internal/gui
   internal/core → Supervisor: owns the whole mining stack for one config
     internal/autoinstall → downloads + SHA256-verifies xmrig, p2pool, tor
     internal/engine      → XMRig, P2Pool, Monerod, Tor subprocesses

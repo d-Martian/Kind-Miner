@@ -1,0 +1,61 @@
+name: kind-minerd
+
+# kind-minerd is the headless daemon for the Nodo and other boxes with no
+# screen. It must stay pure Go: one import of internal/gui would pull in Fyne,
+# and with it cgo, OpenGL and X11 — on an arm64 board that has none of them,
+# and in a build that could then no longer cross-compile reproducibly. This
+# workflow is the guard, plus proof that the binary rebuilds bit-for-bit.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  no-fyne:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: kind-minerd must not depend on Fyne
+        run: |
+          if go list -deps ./cmd/kind-minerd | grep -q '^fyne\.io/'; then
+            echo "kind-minerd depends on Fyne:"
+            go list -deps ./cmd/kind-minerd | grep '^fyne\.io/'
+            exit 1
+          fi
+      - name: kind-minerd must build without cgo
+        # With CGO_ENABLED=0 every file that imports "C" is left out, so a
+        # dependency that needs cgo shows up as a failed build, not in a list.
+        run: CGO_ENABLED=0 go build -o /dev/null ./cmd/kind-minerd
+      - name: Test without cgo
+        run: CGO_ENABLED=0 go test ./cmd/kind-minerd ./internal/core ./internal/config ./internal/instance
+
+  reproducible:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build twice from different paths and compare
+        env:
+          GOARCH: ${{ matrix.arch }}
+          KM_TARGET: kind-minerd
+          GOTOOLCHAIN: local
+        run: |
+          VER="$(git describe --tags --always)"
+          a="$(bash scripts/reproduce.sh "$VER" "$RUNNER_TEMP/a/kind-minerd" | cut -d' ' -f1)"
+          cp -r . "$RUNNER_TEMP/src-b"
+          b="$(cd "$RUNNER_TEMP/src-b" && bash scripts/reproduce.sh "$VER" "$RUNNER_TEMP/b/kind-minerd" | cut -d' ' -f1)"
+          echo "build A $a"
+          echo "build B $b"
+          test "$a" = "$b" || { echo "kind-minerd is NOT reproducible"; exit 1; }

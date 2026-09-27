@@ -17,11 +17,12 @@ import (
 	"github.com/kind-miner/kind-miner/internal/autostart"
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/core"
+	"github.com/kind-miner/kind-miner/internal/instance"
 	"github.com/kind-miner/kind-miner/internal/kindness"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
 )
 
-const appID = "io.github.kind_miner.KindMiner"
+const appID = instance.AppID
 
 // AppID is the app's reverse-DNS identity: the desktop file, the Flatpak ID,
 // and the single-instance bus name.
