@@ -155,8 +155,14 @@ func (u *uiApp) newDashboard() *dashboard {
 	d.kindness.Horizontal = true
 	d.kindness.Selected = kindness.Get(u.sup.Config().Kindness).Label
 
+	left := container.NewHBox(d.pause, d.mineNow)
+	if !u.hasTray {
+		// Without a tray, the tray's Quit has nowhere to live — and closing
+		// the window only tucks kind-miner away — so the window carries it.
+		left.Add(widget.NewButton("Quit", u.confirmQuit))
+	}
 	footer := container.NewBorder(nil, nil,
-		container.NewHBox(d.pause, d.mineNow),
+		left,
 		container.NewHBox(sectionLabel("Kindness"), d.kindness),
 	)
 

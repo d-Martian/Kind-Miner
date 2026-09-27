@@ -12,6 +12,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/gui"
+	"github.com/kind-miner/kind-miner/internal/instance"
 )
 
 var version = "dev"
@@ -31,6 +32,19 @@ func main() {
 	}
 	if *configPath != "" {
 		config.SetPath(*configPath)
+	}
+
+	// One kind-miner per session: a second one would be a second miner on the
+	// same cores. A second launch instead shows the running one's window —
+	// on a desktop with no tray, the only way back to it.
+	status, release := instance.Claim(gui.AppID, gui.Activate)
+	if status == instance.Running {
+		log.Println("kind-miner is already running; showing its window.")
+		return
+	}
+	defer release()
+	if status == instance.Held {
+		gui.EnableBackground()
 	}
 
 	mode := decideMode(*noTray || *headless, *forceGUI, isTerminal(), displayAvailable())

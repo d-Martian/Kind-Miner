@@ -114,3 +114,10 @@ func enabled(o Options) (bool, error) {
 		return false, err
 	}
 }
+
+func requestBackgroundPermission(o Options, keepAutostart bool) error {
+	if !inFlatpak() {
+		return nil
+	}
+	return requestBackground(o, keepAutostart, "Keep mining in the background when its window is closed")
+}
