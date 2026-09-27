@@ -1,0 +1,64 @@
+# kind-minerd as a system service — for a Nodo, or any box with no screen.
+#
+# Install the binary as /opt/kind-miner/kind-minerd, this file and
+# kind-miner.slice under /etc/systemd/system, then:
+#
+#   sudo kind-minerd init --address 4…     # writes /etc/kind-miner/config.yaml
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now kind-minerd
+#   kind-minerd status                     # or: kind-minerd doctor
+
+[Unit]
+Description=kind-miner headless daemon
+Documentation=https://github.com/kind-miner/kind-miner
+Wants=network-online.target
+After=network-online.target monerod.service tor.service
+
+[Service]
+Type=simple
+ExecStart=/opt/kind-miner/kind-minerd run
+Slice=kind-miner.slice
+Restart=on-failure
+RestartSec=30
+
+# No account to create or clean up: systemd makes a user for each run.
+DynamicUser=yes
+# /var/lib/kind-miner: engines, p2pool's data, the hashrate ledger, payouts.
+# kind-minerd finds it through $STATE_DIRECTORY.
+StateDirectory=kind-miner
+# /run/kind-miner: the status file `kind-minerd status` reads.
+RuntimeDirectory=kind-miner
+# The config stays root-owned and 0600; systemd hands the service a private
+# copy, which kind-minerd reads from $CREDENTIALS_DIRECTORY.
+LoadCredential=config.yaml:/etc/kind-miner/config.yaml
+
+# Yield on every resource, not just CPU.
+IOSchedulingClass=idle
+# First to go if memory runs out (xmrig raises its own score to 1000).
+OOMScoreAdjust=800
+
+# Read Nodo's /home/nodo/variables/config.json; write nothing outside the
+# state and runtime directories.
+ProtectHome=read-only
+ProtectSystem=strict
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+# Not MemoryDenyWriteExecute: RandomX compiles its program to machine code at
+# run time, so xmrig needs writable-then-executable memory to hash at all.
+
+[Install]
+WantedBy=multi-user.target

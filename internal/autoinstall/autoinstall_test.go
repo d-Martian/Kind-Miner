@@ -208,3 +208,10 @@ func TestInstallReason(t *testing.T) {
 		}
 	})
 }
+
+func TestBinDirUnderAService(t *testing.T) {
+	t.Setenv("STATE_DIRECTORY", "/var/lib/kind-miner")
+	if got := BinDir(); got != "/var/lib/kind-miner/bin" {
+		t.Errorf("BinDir = %q, want the service's state directory", got)
+	}
+}

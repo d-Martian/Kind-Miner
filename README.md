@@ -157,6 +157,26 @@ kind-minerd doctor              # one sentence on what is wrong, if anything
 Only one kind-miner runs per session: the daemon and the desktop app will not
 mine side by side.
 
+### As a service
+
+`packaging/systemd/` has a unit for the daemon and a slice to run it in:
+
+```sh
+sudo install -Dm755 kind-minerd /opt/kind-miner/kind-minerd
+sudo install -Dm644 packaging/systemd/kind-miner.slice packaging/systemd/kind-minerd.service -t /etc/systemd/system/
+sudo /opt/kind-miner/kind-minerd init --address 4…   # writes /etc/kind-miner/config.yaml
+sudo systemctl daemon-reload
+sudo systemctl enable --now kind-minerd
+kind-minerd status
+```
+
+The slice sits beside `system.slice` with idle CPU weight, so on a Nodo the
+node itself — monerod, the light-wallet server, Tor, Nodo's weekly update —
+always wins any core it wants. The service runs as a throwaway system user with
+idle I/O, can write only `/var/lib/kind-miner`, reads its config as a private
+copy (the file in `/etc` stays root-only), and is first to go if memory runs
+out.
+
 ## Sleep
 
 kind-miner mines while your machine is awake and stops when it sleeps. It never keeps a machine awake, and we don't suggest turning sleep off to mine more: a kind miner uses the time you leave it, not time it takes.
