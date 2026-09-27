@@ -26,7 +26,7 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 - **Shows you it is doing so.** The dashboard plots the miner's CPU against everything else's, with the reserved headroom shaded and each backoff marked. You can watch the miner step aside.
 - **Waits for you to step away.** Until your keyboard and mouse have been quiet for a while (5 minutes by default), mining is held to the Ghost ceiling whatever preset you picked. Reading a page or watching a video barely touches the CPU, so idle detection — not CPU load alone — is what decides.
 - **Mine now, kindly.** A toggle skips the wait when you want to mine on purpose. It skips *only* the wait: the CPU, battery, and temperature backoff all stay in force, so browsing and video stay smooth.
-- **Says what it has earned.** Hashrate, estimated XMR per day, how often you land a p2pool share, and how much of the payout window you occupy — in the window and in the tray.
+- **Says what it has earned.** Hashrate now, over 30 minutes and over 24 hours, each as an estimate of XMR per month; when your next p2pool share is due; and how much of the payout window you occupy — in the window and in the tray. The 30-minute and 24-hour figures come from kind-miner's own record, which counts paused time as zero and survives a restart, so they describe what the machine actually earns while it gets out of your way.
 - **Starts with your machine.** Optional login-item registration on Linux, macOS, and Windows.
 - **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down — which catches the clogged-fan case a fixed °C limit misses.
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.

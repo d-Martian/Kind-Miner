@@ -2,12 +2,15 @@ package core
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/nodes"
 	"github.com/kind-miner/kind-miner/internal/nodo"
+	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
 func TestTorNeeded(t *testing.T) {
@@ -120,5 +123,37 @@ func TestStatsDirFor(t *testing.T) {
 				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+func TestLedgerSavesOnATimerAndStops(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ledger.json")
+	l := stats.NewLedger()
+	l.Add(stats.Sample{At: time.Now(), Hashrate: 1000})
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() { saveLedgerEvery(l, path, 10*time.Millisecond, stop); close(done) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the ledger was never saved")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	close(stop)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the saver outlived Shutdown")
+	}
+
+	restored := stats.NewLedger()
+	restoreLedger(restored, path)
+	if _, ok := restored.Rate(time.Minute, time.Now()); !ok {
+		t.Error("the saved minute did not come back on restore")
 	}
 }
