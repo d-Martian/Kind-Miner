@@ -31,11 +31,14 @@ import (
 // dataset warm and gives smooth, fine-grained control the thread count cannot.
 type XMRig struct {
 	binPath string
-	// poolURL is the Stratum address: p2pool on loopback. The wallet is p2pool's
-	// business, so xmrig never sees it.
+	// poolURL is the Stratum address: p2pool on loopback, or a household hub
+	// on the LAN. The wallet is p2pool's business, so xmrig never sees it.
 	poolURL string
-	threads int
-	apiPort int
+	// poolUser and poolFingerprint are set for a hub; see UseHub.
+	poolUser        string
+	poolFingerprint string
+	threads         int
+	apiPort         int
 	// configPath, when set, is the JSON config xmrig runs from and watches.
 	// Rewriting it re-threads the running miner — see SetLayout. Empty runs
 	// from command-line flags, as before config files were used.
@@ -302,6 +305,14 @@ func (x *XMRig) buildArgs() []string {
 	}
 	args := []string{
 		"--url", x.poolURL,
+	}
+	if x.poolUser != "" {
+		args = append(args, "--user", x.poolUser)
+	}
+	if x.poolFingerprint != "" {
+		args = append(args, "--tls", "--tls-fingerprint", x.poolFingerprint)
+	}
+	args = append(args,
 		"--cpu-priority", "0",
 		"--no-color",
 		// Print a speed line every 10s so a hashrate is available from stdout
@@ -309,7 +320,7 @@ func (x *XMRig) buildArgs() []string {
 		"--print-time", "10",
 		"--http-host", "127.0.0.1",
 		"--http-port", strconv.Itoa(x.apiPort),
-	}
+	)
 	if x.threads > 0 {
 		args = append(args, "--threads", strconv.Itoa(x.threads))
 	}
@@ -362,6 +373,27 @@ func (x *XMRig) stop() {
 	x.cmd = nil
 	x.cancel = nil
 	x.paused = false
+}
+
+// UseHub makes xmrig mine to a household hub over TLS, trusting only the
+// certificate with this SHA-256 fingerprint (hex), and logging in as user —
+// the device's name in the hub's list. Call it before Start.
+//
+// xmrig checks the fingerprint itself and refuses the connection on a
+// mismatch, so a machine on the LAN answering at the hub's address gets no
+// work from this miner.
+func (x *XMRig) UseHub(user, fingerprint string) {
+	x.mu.Lock()
+	x.poolUser, x.poolFingerprint = user, fingerprint
+	x.mu.Unlock()
+}
+
+// SetUser sets the login xmrig sends: the name p2pool lists it under. It is
+// never the wallet, which stays with p2pool. Call it before Start.
+func (x *XMRig) SetUser(user string) {
+	x.mu.Lock()
+	x.poolUser = user
+	x.mu.Unlock()
 }
 
 // UseConfigFile makes xmrig run from a JSON config at path, written on every
@@ -433,8 +465,11 @@ type xmrigRandomX struct {
 }
 
 type xmrigPool struct {
-	URL       string `json:"url"`
-	Keepalive bool   `json:"keepalive"`
+	URL            string `json:"url"`
+	User           string `json:"user,omitempty"`
+	TLS            bool   `json:"tls,omitempty"`
+	TLSFingerprint string `json:"tls-fingerprint,omitempty"`
+	Keepalive      bool   `json:"keepalive"`
 }
 
 // configJSON renders the config for the current settings. Caller holds mu.
@@ -464,7 +499,13 @@ func (x *XMRig) configJSON() ([]byte, error) {
 		HTTP:      xmrigHTTP{Enabled: true, Host: "127.0.0.1", Port: x.apiPort, Restricted: true},
 		CPU:       xmrigCPU{Enabled: true, HugePages: true, Priority: 0, RX: rx},
 		RandomX:   xmrigRandomX{Mode: mode},
-		Pools:     []xmrigPool{{URL: x.poolURL, Keepalive: true}},
+		Pools: []xmrigPool{{
+			URL:            x.poolURL,
+			User:           x.poolUser,
+			TLS:            x.poolFingerprint != "",
+			TLSFingerprint: x.poolFingerprint,
+			Keepalive:      true,
+		}},
 	}, "", "  ")
 }
 

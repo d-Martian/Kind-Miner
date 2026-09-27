@@ -122,6 +122,32 @@ func TestP2PoolArgs(t *testing.T) {
 			}
 		}
 	})
+	t.Run("a hub serves TLS on its one stratum port", func(t *testing.T) {
+		p := NewP2Pool(P2PoolOptions{Wallet: "w", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "nano",
+			StratumPort: 18087, TLSCert: "/s/hub.crt", TLSKey: "/s/hub.key"})
+		args := p.buildArgs()
+		// One port only: p2pool 4.18 panics ("all sockets must be listening
+		// on the same port number") given 3333 and 18087 together.
+		if i := indexOf(args, "--stratum"); i < 0 || args[i+1] != "0.0.0.0:18087" {
+			t.Errorf("--stratum: %v", args)
+		}
+		cert, key := indexOf(args, "--tls-cert"), indexOf(args, "--tls-cert-key")
+		if cert < 0 || key < 0 || args[cert+1] != "/s/hub.crt" || args[key+1] != "/s/hub.key" {
+			t.Errorf("args lack the certificate pair: %v", args)
+		}
+	})
+	t.Run("half a TLS pair is not passed", func(t *testing.T) {
+		// p2pool refuses to start given only one of the TLS pair.
+		p := NewP2Pool(P2PoolOptions{Wallet: "w", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "nano",
+			StratumPort: 3333, TLSCert: "/s/hub.crt"})
+		args := p.buildArgs()
+		if i := indexOf(args, "--stratum"); args[i+1] != "0.0.0.0:3333" {
+			t.Errorf("--stratum %q", args[i+1])
+		}
+		if indexOf(args, "--tls-cert") >= 0 || indexOf(args, "--tls-cert-key") >= 0 {
+			t.Errorf("args carry half a TLS pair: %v", args)
+		}
+	})
 	t.Run("the Nodo profile has no use for light mode", func(t *testing.T) {
 		// --no-randomx allocates neither dataset nor cache; adding --light-mode
 		// would say nothing and suggest p2pool still hashes locally.

@@ -70,18 +70,17 @@ func (u *uiApp) computeTrayView(now time.Time) (trayView, bool) {
 	if up, ok := u.sup.Uptime(); ok {
 		v.uptime = formatUptime(up)
 	}
-	if p := u.sup.P2Pool(); p != nil {
-		if st, ok := p.Stats(); ok {
-			v.shares = fmt.Sprintf("%d found", st.SharesFound)
-			if occupancy, ok := st.WindowOccupancy(); ok {
-				v.shares += fmt.Sprintf(" · %s of the payout window", formatPercent(occupancy))
-			}
-			if next := nextShareLabel(r, st); next != "" {
-				v.shares += " · " + next
-			}
-			v.income = formatMonthly(r, st)
-			v.reward = rewardLabel(st, true)
+	// On a machine paired with a hub these are the household's figures.
+	if st, ok := u.sup.PoolStats(); ok {
+		v.shares = fmt.Sprintf("%d found", st.SharesFound)
+		if occupancy, ok := st.WindowOccupancy(); ok {
+			v.shares += fmt.Sprintf(" · %s of the payout window", formatPercent(occupancy))
 		}
+		if next := nextShareLabel(r, st); next != "" {
+			v.shares += " · " + next
+		}
+		v.income = formatMonthly(r, st)
+		v.reward = rewardLabel(st, true)
 	}
 	v.payouts = payoutLines(u.sup.Payouts().Recent(payoutsShown), now)
 	if !v.paused && state == scheduler.StatePaused {

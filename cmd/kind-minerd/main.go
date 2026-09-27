@@ -1,6 +1,6 @@
 // Command kind-minerd is kind-miner without a screen: the daemon that turns a
-// Nodo, or any headless box, into a miner and — later — the household's
-// p2pool hub.
+// Nodo, or any headless box, into a miner and, with hub.serve on, the
+// household's p2pool hub.
 //
 // It is built with CGO_ENABLED=0 and never links Fyne: a static binary with no
 // C toolchain behind it, which cross-compiles for arm64 and rebuilds
@@ -12,6 +12,7 @@
 //	kind-minerd run                 mine until stopped (what the service runs)
 //	kind-minerd status [--json]     what the running daemon is doing
 //	kind-minerd doctor              one sentence on what is wrong, if anything
+//	kind-minerd pair [--name N]     the code that pairs a device with this hub
 package main
 
 import (
@@ -40,7 +41,7 @@ commands:
   run                 mine until stopped
   status [--json]     what the running daemon is doing
   doctor              say what is wrong, if anything
-  pair                pair a desktop with this hub (not yet available)
+  pair [--name N]     print the code that pairs a device with this hub
   version             print the version
 
 common flags:
@@ -58,6 +59,8 @@ func main() {
 	address := fs.String("address", "", "Monero payout address (init)")
 	force := fs.Bool("force", false, "overwrite an existing config (init)")
 	asJSON := fs.Bool("json", false, "machine-readable output (status)")
+	name := fs.String("name", "", "device name for a plain-xmrig config (pair)")
+	host := fs.String("host", "", "address devices reach this hub at (pair; default: this machine's LAN address)")
 	_ = fs.Parse(args)
 	if p := configFor(*configPath, os.Getenv("CREDENTIALS_DIRECTORY"), os.Getuid(), exists); p != "" {
 		config.SetPath(p)
@@ -74,8 +77,7 @@ func main() {
 	case "doctor":
 		os.Exit(runDoctor(os.Stdout))
 	case "pair":
-		fmt.Println("Pairing arrives with the LAN hub; nothing to pair with yet.")
-		os.Exit(2)
+		err = runPair(os.Stdout, *name, *host)
 	case "version", "--version", "-version":
 		fmt.Printf("kind-minerd %s\n", version)
 	default:

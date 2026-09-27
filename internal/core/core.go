@@ -21,6 +21,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/autoinstall"
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/monitor"
 	"github.com/kind-miner/kind-miner/internal/nodes"
 	"github.com/kind-miner/kind-miner/internal/nodo"
@@ -110,6 +111,15 @@ type Supervisor struct {
 	// ends the watch on Nodo's config.json.
 	nodo     *nodo.Node
 	nodoStop chan struct{}
+
+	// hubAPI serves the household statistics when this machine is the hub.
+	hubAPI *hub.Server
+	// hhStop ends the polling of the hub a paired machine mines to; hh is its
+	// last answer (hhOK once there is one) and hhErr the last failure.
+	hhStop chan struct{}
+	hh     hub.Household
+	hhOK   bool
+	hhErr  error
 }
 
 // New creates a Supervisor for cfg. It does not start anything.
@@ -146,7 +156,24 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		s.cfg.XMRigBinPath = xmrigPath
 	}
 
-	if s.cfg.ManageP2Pool {
+	// A machine paired with a hub runs xmrig alone; everything else is the hub's.
+	var pairing hub.Pairing
+	if s.cfg.Mode == config.ModeHub {
+		if pairing, err = hub.ParseCode(s.cfg.HubCode); err != nil {
+			return fmt.Errorf("hub_code: %w", err)
+		}
+		s.mu.Lock()
+		s.nodeAddr = pairing.StratumAddr()
+		s.mu.Unlock()
+	}
+	var hubID hub.Identity
+	if hubServing(s.cfg) {
+		if hubID, err = hub.Ensure(HubDir()); err != nil {
+			return fmt.Errorf("setting up the household hub: %w", err)
+		}
+	}
+
+	if s.cfg.ManageP2Pool && s.cfg.Mode != config.ModeHub {
 		emit(StepInstallP2Pool)
 		p2poolPath, err := autoinstall.EnsureP2Pool(binDir)
 		if err != nil {
@@ -171,7 +198,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		}
 	}
 
-	if s.cfg.ManageP2Pool {
+	if s.cfg.ManageP2Pool && s.cfg.Mode != config.ModeHub {
 		// Looked for before Tor: a usable node on this machine means Tor is
 		// not needed at all.
 		s.findLocalNode(profile)
@@ -222,7 +249,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		if profile {
 			statsDir = nodoStatsDir(statsDir)
 		}
-		s.p2pool = engine.NewP2Pool(engine.P2PoolOptions{
+		opts := engine.P2PoolOptions{
 			BinPath:   s.cfg.P2PoolBinPath,
 			Wallet:    s.cfg.Wallet,
 			NodeHost:  follow.Host,
@@ -234,12 +261,16 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			// the 2 GB dataset — and the huge pages — to the miner.
 			LightMode:   true,
 			Chain:       s.cfg.P2PoolChain,
-			StratumPort: stratumPort,
+			StratumPort: s.stratumPort(),
 			SOCKS5Proxy: socks5Proxy,
 			WorkDir:     p2poolWorkDir,
 			// Statistics feed the reward estimate in the tray.
 			DataAPIDir: statsDir,
-		})
+		}
+		if hubServing(s.cfg) {
+			opts.TLSCert, opts.TLSKey = hubID.CertPath, hubID.KeyPath
+		}
+		s.p2pool = engine.NewP2Pool(opts)
 		if err := s.payouts.Load(payoutsPath()); err != nil {
 			log.Printf("payouts: starting afresh (%v)", err)
 		}
@@ -251,6 +282,9 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			return err
 		}
 		log.Println("p2pool ready.")
+		if hubServing(s.cfg) {
+			s.startHubAPI(hubID)
+		}
 		s.startLocalWatch(profile)
 		if profile {
 			s.watchNodo(onNodo)
@@ -266,9 +300,23 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	// Checked here rather than at startup: p2pool has already taken its share
 	// of the pool by now, and its share is the whole problem.
 	s.checkHugePages(threads)
-	// Always the local p2pool: the one kind-miner manages, or with
-	// manage_p2pool off, the one the user runs on the same port.
-	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, StratumAddr(), threads, 8080)
+	// The household hub over pinned TLS, or else the local p2pool: the one
+	// kind-miner manages, or with manage_p2pool off, the one the user runs on
+	// the default port.
+	if s.cfg.Mode == config.ModeHub {
+		s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, pairing.StratumAddr(), threads, 8080)
+		name := workerName(s.cfg)
+		s.xmrig.UseHub(name, pairing.FingerprintHex())
+		log.Printf("Mining to the household hub at %s as %q", pairing.StratumAddr(), name)
+		s.hhStop = make(chan struct{})
+		go s.watchHousehold(pairing, s.hhStop)
+	} else {
+		s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, fmt.Sprintf("127.0.0.1:%d", s.stratumPort()), threads, 8080)
+		if hubServing(s.cfg) {
+			// Named like every other device, so the hub's list includes itself.
+			s.xmrig.SetUser(workerName(s.cfg))
+		}
+	}
 	// xmrig runs from a config file it watches, so the scheduler can move it
 	// between thread layouts without a restart. It starts on the small one.
 	s.xmrig.UseConfigFile(filepath.Join(filepath.Dir(autoinstall.BinDir()), "xmrig.json"))
@@ -450,7 +498,18 @@ func (s *Supervisor) Shutdown() {
 		close(s.localWatchStop)
 		s.localWatchStop = nil
 	}
+	if s.hhStop != nil {
+		close(s.hhStop)
+		s.hhStop = nil
+	}
+	hubAPI := s.hubAPI
+	s.hubAPI = nil
 	s.mu.Unlock()
+	// Before p2pool: a paired desktop asking for numbers while p2pool writes
+	// its cache out would be told the household had gone quiet.
+	if hubAPI != nil {
+		hubAPI.Close()
+	}
 	// Close rather than Stop: the Nodo watch may be restarting p2pool at this
 	// very moment, and Close is what stops that restart from outliving us.
 	if s.p2pool != nil {
@@ -474,7 +533,20 @@ func (s *Supervisor) Shutdown() {
 	}
 }
 
-// StratumAddr is where the miner connects: p2pool's Stratum port on loopback.
+// stratumPort is the port our p2pool serves stratum on: the hub's, when this
+// machine is the hub. p2pool listens on a single port — given two it
+// refuses to run — so the hub's own miner connects to the LAN port too, in
+// the clear over loopback.
+func (s *Supervisor) stratumPort() int {
+	if hubServing(s.cfg) {
+		port, _ := s.cfg.HubPorts()
+		return port
+	}
+	return stratumPort
+}
+
+// StratumAddr is where the miner connects when kind-miner does not run p2pool
+// itself (manage_p2pool off): the default Stratum port on loopback.
 func StratumAddr() string {
 	return fmt.Sprintf("127.0.0.1:%d", stratumPort)
 }

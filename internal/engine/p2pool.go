@@ -28,6 +28,8 @@ type P2Pool struct {
 	lightMode   bool   // see P2PoolOptions.LightMode
 	chain       string // "mini" or "main"
 	stratumPort int    // local Stratum port XMRig connects to
+	tlsCert     string // see P2PoolOptions.TLSCert
+	tlsKey      string
 	socks5Proxy string // e.g. "127.0.0.1:9050" for Tor; empty = direct
 	workDir     string // p2pool's cwd — it writes p2pool.cache/log/peer lists there
 	dataAPIDir  string // --data-api target; empty disables the JSON statistics
@@ -80,8 +82,16 @@ type P2PoolOptions struct {
 	// Chain is "mini" or "main" (see config.ChainMini).
 	Chain string
 
-	// StratumPort is the local port XMRig connects to.
+	// StratumPort is the port XMRig connects to. p2pool listens on it on
+	// every interface.
 	StratumPort int
+
+	// TLSCert and TLSKey (PEM files) make p2pool speak TLS on its stratum
+	// port, for the hub: devices on the LAN pin the certificate. TLS is
+	// detected per connection, so the miner on the same machine keeps
+	// connecting in the clear over loopback, to the same port.
+	TLSCert string
+	TLSKey  string
 
 	// SOCKS5Proxy routes p2pool through Tor for .onion nodes; "" is direct.
 	SOCKS5Proxy string
@@ -108,6 +118,8 @@ func NewP2Pool(o P2PoolOptions) *P2Pool {
 		lightMode:   o.LightMode,
 		chain:       o.Chain,
 		stratumPort: o.StratumPort,
+		tlsCert:     o.TLSCert,
+		tlsKey:      o.TLSKey,
 		socks5Proxy: o.SOCKS5Proxy,
 		workDir:     o.WorkDir,
 		dataAPIDir:  o.DataAPIDir,
@@ -231,6 +243,10 @@ func (p *P2Pool) buildArgs() []string {
 		"--p2p", fmt.Sprintf("0.0.0.0:%d", p2pPortForChain(p.chain)),
 		"--no-color",
 	)
+	// p2pool refuses to start with only one of the pair.
+	if p.tlsCert != "" && p.tlsKey != "" {
+		args = append(args, "--tls-cert", p.tlsCert, "--tls-cert-key", p.tlsKey)
+	}
 	if p.socks5Proxy != "" {
 		args = append(args, "--socks5", p.socks5Proxy)
 	}

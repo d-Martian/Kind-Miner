@@ -80,3 +80,15 @@ const (
 	WiFiPowerSaveOn  = "On — may stall this network"
 	WiFiPowerSaveOff = "Off"
 )
+
+// hubModeNote explains the hub mode in the connection settings. It says whose
+// wallet is paid, because that is the thing a household member pairing their
+// laptop most needs to know before they do it.
+const hubModeNote = "Choose mode \"hub\" to mine to another machine in the house — usually a Nodo running kind-minerd with its hub turned on. Run kind-minerd pair on it and paste the code here. This computer then runs only the miner, and the hub pays its owner's wallet, not the address above."
+
+// Connection card labels for a machine paired with a hub.
+const (
+	hubConnected   = "Connected"
+	hubUnreachable = "Hub unreachable"
+	hubWrongCert   = "Not your hub"
+)

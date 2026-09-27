@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"strings"
 	"testing"
 
@@ -121,5 +122,23 @@ func TestHeldIsAmberAndSaysWhy(t *testing.T) {
 	}
 	if icon := trayIcon(scheduler.StatePaused, false); icon != resPaused {
 		t.Errorf("an ordinary stand-down got %v", icon.Name())
+	}
+}
+
+func TestHouseholdLine(t *testing.T) {
+	tests := []struct {
+		name    string
+		workers []hub.Worker
+		want    string
+	}{
+		// Nobody connected yet is unknown, not "0 devices".
+		{"no devices yet", nil, emDash},
+		{"one device", []hub.Worker{{Hashrate: 900}}, "1 device · " + formatHashrate(900)},
+		{"the household adds up", []hub.Worker{{Hashrate: 900}, {Hashrate: 3100}}, "2 devices · " + formatHashrate(4000)},
+	}
+	for _, tt := range tests {
+		if got := householdLine(tt.workers); got != tt.want {
+			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }

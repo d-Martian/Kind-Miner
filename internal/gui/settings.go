@@ -13,6 +13,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/autoinstall"
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/kindness"
 )
 
@@ -30,6 +31,8 @@ type settingsForm struct {
 	mode     *widget.Select
 	chain    *widget.Select
 	nodeAddr *widget.Entry
+	hubCode  *widget.Entry
+	worker   *widget.Entry
 
 	xmrigPath  *widget.Entry
 	p2poolPath *widget.Entry
@@ -57,6 +60,8 @@ type settingsForm struct {
 	modeAtOpen   string
 	chainAtOpen  string
 	nodeAtOpen   string
+	hubAtOpen    string
+	workerAtOpen string
 }
 
 // showSettings opens the settings window, or focuses it if already open.
@@ -101,7 +106,7 @@ func (u *uiApp) showSettings() {
 			return
 		}
 		if f.needsRestart(cfg) {
-			status.Text = "Saved. Restart kind-miner to apply the wallet, mode, node or sidechain change."
+			status.Text = "Saved. Restart kind-miner to apply the wallet, mode, node, hub or sidechain change."
 			status.Color = colorOK
 			status.Refresh()
 			return
@@ -129,6 +134,7 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 	f.mode = widget.NewSelect([]string{
 		string(config.ModeP2PoolRemote),
 		string(config.ModeP2PoolLocal),
+		string(config.ModeHub),
 	}, nil)
 	f.mode.SetSelected(string(cfg.Mode))
 
@@ -138,6 +144,13 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 	f.nodeAddr = widget.NewEntry()
 	f.nodeAddr.SetPlaceHolder("leave blank for the kind-miner Nodo, over Tor")
 	f.nodeAddr.SetText(cfg.RemoteNode)
+
+	f.hubCode = widget.NewEntry()
+	f.hubCode.SetPlaceHolder("km1-… from kind-minerd pair on the hub")
+	f.hubCode.SetText(cfg.HubCode)
+	f.worker = widget.NewEntry()
+	f.worker.SetPlaceHolder("blank uses this computer's name")
+	f.worker.SetText(cfg.WorkerName)
 
 	f.xmrigPath = widget.NewEntry()
 	f.xmrigPath.SetText(cfg.XMRigBinPath)
@@ -199,6 +212,8 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 	f.modeAtOpen = string(cfg.Mode)
 	f.chainAtOpen = cfg.P2PoolChain
 	f.nodeAtOpen = cfg.RemoteNode
+	f.hubAtOpen = cfg.HubCode
+	f.workerAtOpen = cfg.WorkerName
 
 	return f
 }
@@ -234,11 +249,9 @@ const (
 
 func (f *settingsForm) payoutTab(u *uiApp) fyne.CanvasObject {
 	facts := newKVList()
-	if p := u.sup.P2Pool(); p != nil {
-		if st, ok := p.Stats(); ok {
-			facts.Add("Shares found", fmt.Sprintf("%d", st.SharesFound))
-			facts.Add("Your share of the next block", fmt.Sprintf("%.3f%%", st.RewardSharePercent))
-		}
+	if st, ok := u.sup.PoolStats(); ok {
+		facts.Add("Shares found", fmt.Sprintf("%d", st.SharesFound))
+		facts.Add("Your share of the next block", fmt.Sprintf("%.3f%%", st.RewardSharePercent))
 	}
 
 	return container.NewVBox(
@@ -269,6 +282,11 @@ func (f *settingsForm) connectionTab(u *uiApp) fyne.CanvasObject {
 		sectionLabel("P2Pool sidechain"),
 		f.chain,
 		suggestion,
+		sectionLabel("Mine to a hub"),
+		note(hubModeNote),
+		f.hubCode,
+		sectionLabel("This computer's name on the hub"),
+		f.worker,
 	)
 }
 
@@ -342,8 +360,18 @@ func (f *settingsForm) advancedTab() fyne.CanvasObject {
 // Order matters: nothing is written to cfg until every field has parsed, so a
 // rejected form leaves the running configuration exactly as it was.
 func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
-	if msg := ValidateAddress(f.wallet.Text); msg != "" {
-		return msg
+	// A machine mining to a hub is paid through the hub owner's wallet; its
+	// own address field may be blank.
+	hubbed := config.Mode(f.mode.Selected) == config.ModeHub
+	if !(hubbed && strings.TrimSpace(f.wallet.Text) == "") {
+		if msg := ValidateAddress(f.wallet.Text); msg != "" {
+			return msg
+		}
+	}
+	if hubbed {
+		if _, err := hub.ParseCode(f.hubCode.Text); err != nil {
+			return "Pairing code: " + err.Error()
+		}
 	}
 	tempVal, err := strconv.ParseFloat(strings.TrimSpace(f.tempLimit.Text), 64)
 	if err != nil {
@@ -374,6 +402,8 @@ func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
 	cfg.Mode = config.Mode(f.mode.Selected)
 	cfg.P2PoolChain = f.chain.Selected
 	cfg.RemoteNode = strings.TrimSpace(f.nodeAddr.Text)
+	cfg.HubCode = strings.TrimSpace(f.hubCode.Text)
+	cfg.WorkerName = strings.TrimSpace(f.worker.Text)
 	cfg.Kindness = level
 	cfg.PauseOnBattery = f.battery.Checked
 	cfg.ThermalGovernor = f.thermal.Checked
@@ -422,7 +452,9 @@ func (f *settingsForm) needsRestart(cfg *config.Config) bool {
 	return cfg.Wallet != f.walletAtOpen ||
 		string(cfg.Mode) != f.modeAtOpen ||
 		cfg.P2PoolChain != f.chainAtOpen ||
-		cfg.RemoteNode != f.nodeAtOpen
+		cfg.RemoteNode != f.nodeAtOpen ||
+		cfg.HubCode != f.hubAtOpen ||
+		cfg.WorkerName != f.workerAtOpen
 }
 
 // ---- helpers ----
