@@ -129,21 +129,7 @@ func (p *ServicePressure) Pressured() (pressured, known bool) {
 // psiSomeAvg10 reads the "some avg10" figure from a cpu.pressure file: the
 // percentage of the last ten seconds in which at least one task in the group
 // was runnable but waiting for a CPU.
-func psiSomeAvg10(text string) (float64, bool) {
-	for _, line := range strings.Split(text, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 0 || fields[0] != "some" {
-			continue
-		}
-		for _, f := range fields[1:] {
-			if v, ok := strings.CutPrefix(f, "avg10="); ok {
-				n, err := strconv.ParseFloat(v, 64)
-				return n, err == nil
-			}
-		}
-	}
-	return 0, false
-}
+func psiSomeAvg10(text string) (float64, bool) { return psiAvg10(text, "some") }
 
 // cpuStatUsage reads usage_usec from a cgroup v2 cpu.stat file.
 func cpuStatUsage(text string) (int64, bool) {

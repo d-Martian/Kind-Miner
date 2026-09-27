@@ -30,6 +30,8 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 - **Starts with your machine.** Optional login-item registration on Linux, macOS, and Windows.
 - **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down — which catches the clogged-fan case a fixed °C limit misses.
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
+- **Steps aside for games.** When a game turns on [GameMode](https://github.com/FeralInteractive/gamemode) (or you launch one with `gamemoderun`), mining pauses until it ends.
+- **Gives memory back.** When the machine starts thrashing — sustained memory stalls, or free memory below a small margin — the miner is stopped outright, not just paused, so its ~2 GB returns at once. It starts again only after ten calm minutes with room to spare.
 - **Snooze from the tray.** Pause for an hour, until tomorrow morning (06:00), or until you resume — and a snooze ends by itself. A pause survives a restart, so a reboot never brings the miner back early.
 - **Tor-native.** Routes through a Tor hidden service by default. Your IP is not visible to the node operator.
 - **Zero-setup dependencies.** XMRig and P2Pool are downloaded automatically on first run (SHA256-verified). You need: a Monero wallet address, and Tor running.
