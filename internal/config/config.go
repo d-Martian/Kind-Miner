@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -20,8 +21,15 @@ type Mode string
 const (
 	ModeP2PoolRemote Mode = "p2pool-remote"
 	ModeP2PoolLocal  Mode = "p2pool-local"
-	ModePool         Mode = "pool"
 )
+
+// modePool is the removed direct-to-pool mode, kept only so configs written
+// while it existed still load. It sent the wallet address to a pool operator,
+// took a fee, and connected outside Tor — the opposite of what kind-miner is
+// for — and doubled everything that had to be tested. Load moves it to the
+// default mode; for a machine too slow for mini, the nano sidechain is what
+// pool mode used to be recommended for.
+const modePool Mode = "pool"
 
 // Sensitivity is the superseded throttle control, kept only so configs written
 // before kindness existed still load. Load migrates it and Save drops it.
@@ -73,8 +81,9 @@ type Config struct {
 	ManageP2Pool  bool   `yaml:"manage_p2pool"`
 	P2PoolBinPath string `yaml:"p2pool_path"`
 
-	// pool mode
-	PoolURL string `yaml:"pool_url"`
+	// PoolURL belonged to the removed pool mode. It is read so old configs
+	// load, then cleared — omitempty keeps it out of everything we write.
+	PoolURL string `yaml:"pool_url,omitempty"`
 
 	// xmrig
 	XMRigBinPath string `yaml:"xmrig_path"`
@@ -227,6 +236,7 @@ func Load() (*Config, error) {
 		cfg.P2PoolChain = ChainMini
 	}
 	cfg.migrateKindness()
+	cfg.migratePoolMode()
 	if cfg.Chart.WindowSeconds <= 0 {
 		cfg.Chart.WindowSeconds = Defaults().Chart.WindowSeconds
 	}
@@ -250,6 +260,18 @@ func (c *Config) migrateKindness() {
 	c.ThrottleSensitivity = ""
 }
 
+// migratePoolMode moves a config off the removed pool mode, onto the default:
+// p2pool over Tor. It says so once in the log, because unlike a renamed key
+// this changes where the machine mines.
+func (c *Config) migratePoolMode() {
+	if c.Mode == modePool {
+		log.Printf("Pool mode has been removed; mining with p2pool (%s) instead. "+
+			"On a machine under about 1 kH/s, set p2pool_chain: nano.", ModeP2PoolRemote)
+		c.Mode = ModeP2PoolRemote
+	}
+	c.PoolURL = ""
+}
+
 func (c *Config) Save() error {
 	if err := os.MkdirAll(Dir(), 0o755); err != nil {
 		return err
@@ -266,12 +288,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("wallet address is required")
 	}
 	switch c.Mode {
-	case ModeP2PoolRemote, ModeP2PoolLocal, ModePool:
+	case ModeP2PoolRemote, ModeP2PoolLocal:
 	default:
-		return fmt.Errorf("mode must be p2pool-remote, p2pool-local, or pool")
-	}
-	if c.Mode == ModePool && c.PoolURL == "" {
-		return fmt.Errorf("pool_url is required when mode is 'pool'")
+		return fmt.Errorf("mode must be p2pool-remote or p2pool-local")
 	}
 	// Empty is what a config written before kindness existed looks like after
 	// migration has been skipped (e.g. a struct built by hand in a test), so it

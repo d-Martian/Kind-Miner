@@ -380,13 +380,8 @@ func (u *uiApp) installTray() {
 		u.mStatus,
 		u.mHashrate,
 		u.mUptime,
-	}
-	// In pool mode there is no p2pool sidechain, so there are no shares to
-	// count and nothing to estimate.
-	if u.sup.Config() != nil && u.sup.Config().Mode != config.ModePool {
-		items = append(items, u.mShares, u.mReward)
-	} else {
-		u.mShares, u.mReward = nil, nil
+		u.mShares,
+		u.mReward,
 	}
 	items = append(items,
 		fyne.NewMenuItemSeparator(),
