@@ -37,8 +37,13 @@ type daemonStatus struct {
 	Payouts     int      `json:"payouts_seen"`
 }
 
-// statusPath is the status file: systemd's RuntimeDirectory= when running as
-// the service, the user's runtime directory otherwise.
+// serviceStatus is where the system service's status file lives: its
+// RuntimeDirectory=, which systemd creates world-readable.
+const serviceStatus = "/run/kind-miner/status.json"
+
+// statusPath is where this process writes its status: systemd's
+// RuntimeDirectory= when running as the service, the user's runtime directory
+// otherwise.
 func statusPath() string {
 	if d := os.Getenv("RUNTIME_DIRECTORY"); d != "" {
 		return filepath.Join(d, "status.json")
@@ -47,6 +52,16 @@ func statusPath() string {
 		return filepath.Join(d, "kind-miner", "status.json")
 	}
 	return filepath.Join(os.TempDir(), fmt.Sprintf("kind-miner-%d", os.Getuid()), "status.json")
+}
+
+// readPath is where status and doctor look: the service's file when there is
+// one — an admin asking over SSH means the service, not a daemon of their own
+// — else this user's.
+func readPath() string {
+	if exists(serviceStatus) {
+		return serviceStatus
+	}
+	return statusPath()
 }
 
 func snapshot(sup *core.Supervisor, now time.Time) daemonStatus {
@@ -128,7 +143,7 @@ func readStatus(path string, now time.Time) (daemonStatus, bool, error) {
 // runStatus prints the status and returns the exit code: 0 running, 3 not
 // (the LSB code for "not running", which scripts can test for).
 func runStatus(asJSON bool, w io.Writer) int {
-	st, running, err := readStatus(statusPath(), time.Now())
+	st, running, err := readStatus(readPath(), time.Now())
 	if err != nil {
 		fmt.Fprintf(w, "cannot read status: %v\n", err)
 		return 1

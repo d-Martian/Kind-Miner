@@ -85,7 +85,7 @@ func gatherFacts() facts {
 	if _, _, err := nodo.Detect(); err != nil {
 		f.nodoErr = err
 	}
-	f.status, f.running, _ = readStatus(statusPath(), time.Now())
+	f.status, f.running, _ = readStatus(readPath(), time.Now())
 	f.manageTor = cfg.ManageTor
 	if cfg.Mode == config.ModeP2PoolRemote {
 		host := cfg.RemoteNode

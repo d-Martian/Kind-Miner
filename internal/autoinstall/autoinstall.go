@@ -26,6 +26,12 @@ import (
 // When running inside a Flatpak or AppImage the executable path is read-only,
 // so both cases redirect to XDG_DATA_HOME instead.
 func BinDir() string {
+	// A systemd service (kind-minerd's unit) runs as a dynamic user that can
+	// write only the StateDirectory systemd made for it; the install prefix
+	// beside the executable is read-only to it.
+	if dir := os.Getenv("STATE_DIRECTORY"); dir != "" {
+		return filepath.Join(dir, "bin")
+	}
 	// Flatpak: exe lives under /app/bin (read-only squashfs)
 	if _, err := os.Stat("/.flatpak-info"); err == nil {
 		return xdgDataBin()
