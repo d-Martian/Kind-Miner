@@ -16,7 +16,10 @@
 #           version   defaults to `git describe`
 #           output    defaults to ./kind-miner
 #
-# Env:    GOTOOLCHAIN   override the pinned toolchain (e.g. =local for a fast,
+# Env:    KM_TARGET     kind-miner (default: the GUI app, cgo) or kind-minerd
+#                       (the headless daemon: pure Go, CGO_ENABLED=0, which is
+#                       what makes it cross-compile reproducibly)
+#         GOTOOLCHAIN   override the pinned toolchain (e.g. =local for a fast,
 #                       offline determinism check via `make verify-repro`)
 #         SOURCE_DATE_EPOCH  override the commit-derived timestamp
 #
@@ -29,7 +32,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 VERSION="${1:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
-OUTPUT="${2:-kind-miner}"
+OUTPUT="${2:-${KM_TARGET:-kind-miner}}"
 
 # Pinned stock toolchain. Keep in sync with the `toolchain` line in go.mod.
 # Callers may export GOTOOLCHAIN=local to reproduce with the installed Go.
@@ -38,7 +41,17 @@ export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.0}"
 # Hermetic environment.
 export GOENV=off                     # ignore ~/.config/go/env entirely
 export GOFLAGS=''
-export CGO_ENABLED=1                 # Fyne's GLFW/OpenGL driver needs cgo
+case "${KM_TARGET:-kind-miner}" in
+  kind-miner)
+    PKG=./cmd/kind-miner
+    export CGO_ENABLED=1             # Fyne's GLFW/OpenGL driver needs cgo
+    ;;
+  kind-minerd)
+    PKG=./cmd/kind-minerd
+    export CGO_ENABLED=0             # never links Fyne, so needs no C at all
+    ;;
+  *) echo "unknown KM_TARGET ${KM_TARGET}" >&2; exit 1 ;;
+esac
 unset CGO_CFLAGS CGO_CPPFLAGS CGO_CXXFLAGS CGO_LDFLAGS
 export LC_ALL=C LANG=C TZ=UTC
 umask 022
@@ -61,6 +74,6 @@ go build \
   -buildvcs=false \
   -ldflags "-s -w -buildid= -X main.version=${VERSION}" \
   -o "${OUTPUT}" \
-  ./cmd/kind-miner
+  "${PKG}"
 
 sha256sum "${OUTPUT}"
