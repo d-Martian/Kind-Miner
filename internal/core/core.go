@@ -269,6 +269,12 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	// Always the local p2pool: the one kind-miner manages, or with
 	// manage_p2pool off, the one the user runs on the same port.
 	s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, StratumAddr(), threads, 8080)
+	// xmrig runs from a config file it watches, so the scheduler can move it
+	// between thread layouts without a restart. It starts on the small one.
+	s.xmrig.UseConfigFile(filepath.Join(filepath.Dir(autoinstall.BinDir()), "xmrig.json"))
+	if present, _, ok := scheduler.Layouts(s.cfg); ok {
+		s.xmrig.SetLayout(present)
+	}
 	if s.cfg.MineOnNodo {
 		total, available, ok := monitor.Memory()
 		mode := randomXModeFor(available, ok)

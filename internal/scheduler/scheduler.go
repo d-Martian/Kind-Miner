@@ -137,6 +137,15 @@ type Scheduler struct {
 	memGuard     memoryGuard
 	memStopped   bool
 
+	// layouts are the present and idle thread layouts, when the topology
+	// could be read (see layout.go); layoutNow is the one xmrig runs, touched
+	// only by the tick goroutine. layoutThreads is its size, under mu, for the
+	// duty arithmetic.
+	layouts       layouts
+	haveLayouts   bool
+	layoutNow     []int
+	layoutThreads int
+
 	// nodo is the guest-on-a-node control, nil unless mine_on_nodo is set.
 	nodo *nodoControl
 
@@ -249,6 +258,13 @@ func New(cfg *config.Config, xmrig *engine.XMRig) *Scheduler {
 	if cfg.MineOnNodo {
 		s.nodo = newNodoControl()
 	}
+	if present, idle, ok := Layouts(cfg); ok {
+		// The supervisor launches xmrig on the present layout: at start
+		// someone is usually there, and the idle gate opens it up later.
+		s.layouts, s.haveLayouts = layouts{present: present, idle: idle}, true
+		s.layoutNow = present
+		s.layoutThreads = len(present)
+	}
 	return s
 }
 
@@ -352,6 +368,9 @@ func (s *Scheduler) Allowance() (share, duty float64) {
 func (s *Scheduler) ActiveThreads() (active, total int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.layoutThreads > 0 {
+		return int(float64(s.layoutThreads)*s.duty + 0.5), s.layoutThreads
+	}
 	running := s.maxThreads
 	if s.activeCores > 0 && s.activeCores < running {
 		running = s.activeCores
@@ -701,6 +720,7 @@ func (s *Scheduler) tick() {
 
 	c := s.observe(p, override)
 	s.stopOrRestartForMemory(c.memoryShort)
+	s.placeLayout(c.idleGated)
 	s.placeOnCores()
 	target, reason, hard := decide(p, c, override)
 
@@ -901,6 +921,9 @@ func (s *Scheduler) minerFullShare() float64 {
 		return 1
 	}
 	threads := s.maxThreads
+	if s.layoutThreads > 0 {
+		threads = s.layoutThreads
+	}
 	// More threads than cores to run them on time-share those cores; they
 	// cannot occupy more of the machine than the cores they are confined to.
 	if s.activeCores > 0 && s.activeCores < threads {
