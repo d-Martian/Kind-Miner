@@ -29,6 +29,11 @@ import (
 // nearest it can express.
 var scopeProperties = []string{"CPUWeight=idle", "CPUWeight=1"}
 
+// useScopes lets tests that launch a stand-in script skip the scope: the
+// scope waits for the process to become the named binary, which a script
+// never does.
+var useScopes = true
+
 // scopeSeq makes each scope's unit name unique. systemd refuses to start a
 // scope whose name is still loaded, and a restarted miner can race the
 // collection of the previous one.
