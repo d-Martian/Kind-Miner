@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -31,8 +30,9 @@ import (
 // dataset warm and gives smooth, fine-grained control the thread count cannot.
 type XMRig struct {
 	binPath string
-	poolURL string // stratum URL: "127.0.0.1:3333" (p2pool) or "pool.host:port"
-	wallet  string // only used for direct pool mode; p2pool manages the wallet itself
+	// poolURL is the Stratum address: p2pool on loopback. The wallet is p2pool's
+	// business, so xmrig never sees it.
+	poolURL string
 	threads int
 	apiPort int
 	// randomxMode is passed to --randomx-mode when set: "fast" keeps the ~2 GB
@@ -74,11 +74,10 @@ type xmrigSummary struct {
 var hashrateLineRe = regexp.MustCompile(`(?i)(?:10s/60s/15m\s+)?(\d+(?:\.\d+)?)\s+[kKmMgG]?H/s`)
 
 // NewXMRig creates a manager. binPath may be empty to auto-locate.
-func NewXMRig(binPath, poolURL, wallet string, threads, apiPort int) *XMRig {
+func NewXMRig(binPath, poolURL string, threads, apiPort int) *XMRig {
 	return &XMRig{
 		binPath: binPath,
 		poolURL: poolURL,
-		wallet:  wallet,
 		threads: threads,
 		apiPort: apiPort,
 	}
@@ -281,11 +280,6 @@ func (x *XMRig) buildArgs() []string {
 	}
 	if x.randomxMode != "" {
 		args = append(args, "--randomx-mode", x.randomxMode)
-	}
-	// In pool mode, XMRig needs a worker identifier; use the wallet address.
-	// In p2pool mode the wallet is configured in p2pool itself.
-	if x.wallet != "" && !strings.HasPrefix(x.poolURL, "127.0.0.1") {
-		args = append(args, "--user", x.wallet)
 	}
 	return args
 }

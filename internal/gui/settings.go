@@ -129,7 +129,6 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 	f.mode = widget.NewSelect([]string{
 		string(config.ModeP2PoolRemote),
 		string(config.ModeP2PoolLocal),
-		string(config.ModePool),
 	}, nil)
 	f.mode.SetSelected(string(cfg.Mode))
 

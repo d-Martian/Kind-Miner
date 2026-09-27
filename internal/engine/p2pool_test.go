@@ -145,3 +145,15 @@ func TestP2PoolStartRefusedAfterClose(t *testing.T) {
 		t.Fatal("Reconnect started p2pool again after Close")
 	}
 }
+
+func TestXMRigArgsNeverCarryTheWallet(t *testing.T) {
+	// The wallet is p2pool's to hold. With pool mode gone xmrig only ever
+	// talks to p2pool on loopback, and must not be handed the address to
+	// forward anywhere.
+	args := NewXMRig("", "127.0.0.1:3333", 4, 8080).buildArgs()
+	for i, a := range args {
+		if a == "--user" || a == "-u" {
+			t.Errorf("xmrig args pass %s %q: %v", a, args[i+1], args)
+		}
+	}
+}

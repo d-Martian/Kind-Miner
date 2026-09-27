@@ -20,10 +20,6 @@ func TestValidate(t *testing.T) {
 			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite},
 		},
 		{
-			name: "valid pool mode",
-			cfg:  Config{Wallet: "4ABC", Mode: ModePool, PoolURL: "pool.host:3333", Kindness: kindness.Ghost},
-		},
-		{
 			name:    "missing wallet",
 			cfg:     Config{Mode: ModeP2PoolRemote, Kindness: kindness.Polite},
 			wantErr: true,
@@ -34,8 +30,9 @@ func TestValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "pool mode missing pool_url",
-			cfg:     Config{Wallet: "4ABC", Mode: ModePool, Kindness: kindness.Polite},
+			// Only a hand-built struct can get here: Load migrates the old mode.
+			name:    "the removed pool mode is rejected",
+			cfg:     Config{Wallet: "4ABC", Mode: modePool, Kindness: kindness.Polite},
 			wantErr: true,
 		},
 		{
@@ -301,5 +298,36 @@ func TestPresetFollowsConfig(t *testing.T) {
 	empty := &Config{}
 	if got := empty.Preset(); got.Ceiling <= 0 {
 		t.Errorf("Preset() on an empty config has ceiling %.2f, want the default's", got.Ceiling)
+	}
+}
+
+func TestLoadMigratesPoolMode(t *testing.T) {
+	cfg := loadYAML(t, "wallet: 4ABC\nmode: pool\npool_url: pool.example:3333\n")
+	if cfg.Mode != ModeP2PoolRemote {
+		t.Errorf("mode = %q, want the default %q", cfg.Mode, ModeP2PoolRemote)
+	}
+	if cfg.PoolURL != "" {
+		t.Errorf("pool_url = %q, want it cleared", cfg.PoolURL)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("a migrated pool config does not validate: %v", err)
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "pool_url") || strings.Contains(string(data), "mode: pool") {
+		t.Errorf("saved config still carries pool mode:\n%s", data)
+	}
+}
+
+func TestLoadLeavesP2PoolModesAlone(t *testing.T) {
+	for _, mode := range []Mode{ModeP2PoolRemote, ModeP2PoolLocal} {
+		if cfg := loadYAML(t, "wallet: 4ABC\nmode: "+string(mode)+"\n"); cfg.Mode != mode {
+			t.Errorf("mode %q loaded as %q", mode, cfg.Mode)
+		}
 	}
 }
