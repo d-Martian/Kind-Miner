@@ -282,6 +282,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 
 	s.sched = scheduler.New(s.cfg, s.xmrig)
 	restoreLedger(s.sched.Ledger(), ledgerPath())
+	keepPauseAcrossRestarts(s.sched, snoozePath())
 	s.ledgerStop = make(chan struct{})
 	go saveLedgerEvery(s.sched.Ledger(), ledgerPath(), ledgerSaveInterval, s.ledgerStop)
 	go s.sched.Start()

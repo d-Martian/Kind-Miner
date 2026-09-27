@@ -400,7 +400,8 @@ func (u *uiApp) installTray() {
 	u.mPayouts = fyne.NewMenuItem(payoutsMenuLabel, nil)
 	u.mPayouts.ChildMenu = payoutsMenu(payoutLines(nil, time.Now()))
 
-	u.mToggle = fyne.NewMenuItem("Pause mining", u.onToggle)
+	u.mToggle = fyne.NewMenuItem(labelPauseMenu, nil)
+	u.mToggle.ChildMenu = u.snoozeMenu()
 	u.mMineNow = fyne.NewMenuItem(labelMineNow, u.onMineNowToggle)
 	u.mKindness = u.buildKindnessMenu()
 
@@ -522,6 +523,9 @@ func (u *uiApp) refreshTray() {
 	}
 
 	status := trayStatusLine(s.IdleCountdown, override, state, reason)
+	if until, paused := s.PausedUntil(); paused {
+		status = pausedStatus(until, time.Now())
+	}
 	r := currentRates(history, s.Ledger(), time.Now())
 	hashrate := formatRates(r)
 	income := "≈ " + emDash + " XMR/month"
@@ -544,7 +548,15 @@ func (u *uiApp) refreshTray() {
 		}
 	}
 	payouts := payoutLines(u.sup.Payouts().Recent(payoutsShown), time.Now())
-	toggleLabel := pauseLabel(override, state == scheduler.StatePaused)
+	// The tray's pause is a submenu of snoozes; the scheduler standing the
+	// miner down by itself still reads "Keep paused", as on the dashboard.
+	toggleLabel := labelPauseMenu
+	switch {
+	case override == scheduler.OverridePause:
+		toggleLabel = labelResume // setToggle turns the submenu into one action
+	case state == scheduler.StatePaused:
+		toggleLabel = labelKeepPaused
+	}
 	mineNowLabel := labelMineNow
 	if override == scheduler.OverrideMine {
 		mineNowLabel = labelMineAuto
@@ -570,7 +582,7 @@ func (u *uiApp) refreshTray() {
 	if u.mPayouts != nil {
 		u.mPayouts.ChildMenu = payoutsMenu(payouts)
 	}
-	setItem(u.mToggle, toggleLabel)
+	u.setToggle(override, toggleLabel)
 	setItem(u.mMineNow, mineNowLabel)
 	for i, item := range u.mKindItems {
 		if i < len(kindness.Order) {
