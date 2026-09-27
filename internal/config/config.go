@@ -50,17 +50,22 @@ var kindnessForSensitivity = map[Sensitivity]kindness.Level{
 	SensitivityLow:    kindness.Balanced,
 }
 
-// P2Pool sidechains. mini is the default: its share difficulty is roughly 100x
-// lower than the main chain, so a desktop-sized miner finds shares — and
-// therefore earns — often enough to matter. nano is lower again, for machines
-// under about 1 kH/s. The value is validated rather than passed through
-// because an unrecognised chain makes p2pool silently join the main chain,
-// where a small miner may never earn a payout.
+// P2Pool sidechains. nano is the default for new configs: its blocks come every
+// 30 seconds against the same 2160-block window, so a share keeps earning for
+// 18 hours, and even a laptop lands shares often enough to stay in the window
+// and be paid steadily. mini's share difficulty is higher, suiting desktops
+// that want a busier chain; main is for large miners. The value is validated
+// rather than passed through because an unrecognised chain makes p2pool
+// silently join the main chain, where a small miner may never earn a payout.
 const (
 	ChainMini = "mini"
 	ChainMain = "main"
 	ChainNano = "nano"
 )
+
+// legacyDefaultChain is the sidechain a config that does not name one was
+// written to mean: mini, the default before nano.
+const legacyDefaultChain = ChainMini
 
 // Chains lists the sidechains in the order the UI offers them.
 var Chains = []string{ChainMain, ChainMini, ChainNano}
@@ -169,7 +174,7 @@ var ChartWindows = []int{30, 60, 120}
 func Defaults() *Config {
 	return &Config{
 		Mode:                 ModeP2PoolRemote,
-		P2PoolChain:          ChainMini,
+		P2PoolChain:          ChainNano,
 		ManageP2Pool:         true,
 		ManageTor:            true,
 		Kindness:             kindness.Default,
@@ -226,14 +231,19 @@ func Load() (*Config, error) {
 	// the default — the difference decides whether the old throttle setting
 	// still gets a say.
 	cfg.Kindness = ""
+	// Blanked for the same reason: new configs default to nano, but a config
+	// without the key was written when mini was the default, and switching
+	// its sidechain on load would drop the user out of mini's payout window
+	// without a word.
+	cfg.P2PoolChain = ""
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
-	// A key present but empty (`p2pool_chain:` with nothing after it) overwrites
-	// the default with "", which downstream reads as the main chain. Restore the
-	// default instead of silently switching sidechains.
+	// Absent, or present but empty (`p2pool_chain:` with nothing after it):
+	// either way the config never chose, so it keeps what it meant when it was
+	// written. "" must never survive, since p2pool reads it as the main chain.
 	if cfg.P2PoolChain == "" {
-		cfg.P2PoolChain = ChainMini
+		cfg.P2PoolChain = legacyDefaultChain
 	}
 	cfg.migrateKindness()
 	cfg.migratePoolMode()
