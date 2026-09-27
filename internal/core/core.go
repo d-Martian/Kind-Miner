@@ -25,6 +25,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/nodes"
 	"github.com/kind-miner/kind-miner/internal/nodo"
 	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
 // stratumPort is the local port p2pool exposes and XMRig connects to.
@@ -85,6 +86,9 @@ type Supervisor struct {
 	localWatchStop chan struct{}
 	// ledgerStop ends the periodic save of the hashrate ledger.
 	ledgerStop chan struct{}
+	// payouts is the record of payouts seen in p2pool's log. Never nil, so the
+	// tray can show "none yet" before mining starts.
+	payouts *stats.Payouts
 	// islandStop ends the sidechain health check; nil when p2pool is not ours.
 	islandStop chan struct{}
 
@@ -110,8 +114,11 @@ type Supervisor struct {
 
 // New creates a Supervisor for cfg. It does not start anything.
 func New(cfg *config.Config) *Supervisor {
-	return &Supervisor{cfg: cfg}
+	return &Supervisor{cfg: cfg, payouts: stats.NewPayouts()}
 }
+
+// Payouts returns the record of payouts seen while kind-miner was running.
+func (s *Supervisor) Payouts() *stats.Payouts { return s.payouts }
 
 // Start installs any missing binaries, launches the configured subprocesses,
 // and starts the scheduler loop in a background goroutine. progress (may be
@@ -232,6 +239,12 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			WorkDir:     p2poolWorkDir,
 			// Statistics feed the reward estimate in the tray.
 			DataAPIDir: statsDir,
+		})
+		if err := s.payouts.Load(payoutsPath()); err != nil {
+			log.Printf("payouts: starting afresh (%v)", err)
+		}
+		s.p2pool.SetPayoutHandler(func(height, atomic uint64) {
+			recordPayout(s.payouts, payoutsPath(), height, atomic, time.Now())
 		})
 		log.Println("Starting p2pool (syncing sidechain…)")
 		if err := s.p2pool.Start(3 * time.Minute); err != nil {
