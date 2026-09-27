@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/kind-miner/kind-miner/internal/autostart"
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/kindness"
@@ -22,6 +24,10 @@ import (
 )
 
 const appID = "io.github.kind_miner.KindMiner"
+
+// AppID is the app's reverse-DNS identity: the desktop file, the Flatpak ID,
+// and the single-instance bus name.
+const AppID = appID
 
 // windowSize is the dashboard's default geometry. It is wide enough for four
 // stat tiles and a chart with a legible time axis, which is what the layout
@@ -71,6 +77,9 @@ type uiApp struct {
 	// tuckAfterStart is set by first-run setup: once mining starts, the window
 	// hides into the tray and a notification says where it went.
 	tuckAfterStart bool
+	// backgroundNoticed records that the "still mining" notice has been shown,
+	// so closing the window again stays quiet.
+	backgroundNoticed bool
 
 	// dash is the live dashboard, created when that screen is first shown.
 	dash *dashboard
@@ -150,11 +159,17 @@ func newUIApp(sup *core.Supervisor) *uiApp {
 	// tucks kind-miner away and it keeps mining. Without one (e.g. stock GNOME
 	// with no AppIndicator extension), hiding would strand the app with no way
 	// back — and orphan its StatusNotifierItem — so closing quits cleanly.
-	if u.hasTray {
+	switch {
+	case u.hasTray:
 		w.SetCloseIntercept(func() { w.Hide() })
-	} else {
+	case background:
+		// No tray, but launching kind-miner again brings this window back
+		// (see EnableBackground), so closing it need not stop mining.
+		w.SetCloseIntercept(u.hideToBackground)
+	default:
 		w.SetCloseIntercept(func() { a.Quit() })
 	}
+	activeUI = u
 
 	return u
 }
@@ -325,12 +340,12 @@ func (u *uiApp) onSettings() {
 // — which stops mining — asks first. With no tray (quitting is the only exit)
 // or before mining has started, it quits immediately.
 func (u *uiApp) confirmQuit() {
-	if !u.hasTray || u.sup.Scheduler() == nil {
+	if (!u.hasTray && !background) || u.sup.Scheduler() == nil {
 		u.app.Quit()
 		return
 	}
 	dialog.ShowConfirm("Quit kind-miner?",
-		"This stops mining. To keep mining in the background, close this window instead.",
+		quitWarning,
 		func(ok bool) {
 			if ok {
 				u.app.Quit()
@@ -630,4 +645,55 @@ func stepBlurb(step core.Step) string {
 		return MinerBlurb
 	}
 	return ""
+}
+
+// Background mode: stock GNOME has no system tray, so there is nowhere for a
+// hidden window to be reopened from — except the app launcher. Once the
+// process holds the single-instance name, launching kind-miner again reaches
+// this one and shows its window (see internal/instance), which makes closing
+// the window safe: it hides, and mining carries on.
+
+// background is set by EnableBackground; activeUI is the window a relaunch
+// brings forward.
+var (
+	background bool
+	activeUI   *uiApp
+)
+
+// EnableBackground tells the GUI that relaunching reaches this process, so a
+// window closed on a desktop without a tray can hide instead of quitting. Call
+// it before RunGraphical.
+func EnableBackground() { background = true }
+
+// Activate shows the running window. The single-instance listener calls it
+// when kind-miner is launched a second time.
+func Activate() {
+	if u := activeUI; u != nil {
+		u.showWindow()
+	}
+}
+
+const (
+	backgroundNoticeTitle = "kind-miner is still mining"
+	backgroundNoticeBody  = "Its window is closed, but mining carries on. Open kind-miner again from your apps to see it, or to quit."
+	quitWarning           = "This stops mining. To keep mining in the background, close this window instead."
+)
+
+// hideToBackground closes the window without stopping mining. The first time,
+// it says where kind-miner went — a window that vanishes with no tray icon to
+// show for it otherwise reads as a crash — and, inside a Flatpak, asks the
+// portal for permission to keep running with no window.
+func (u *uiApp) hideToBackground() {
+	u.win.Hide()
+	if u.backgroundNoticed {
+		return
+	}
+	u.backgroundNoticed = true
+	u.app.SendNotification(fyne.NewNotification(backgroundNoticeTitle, backgroundNoticeBody))
+	cfg := u.sup.Config()
+	go func() {
+		if err := autostart.RequestBackground(autostartOptions(), cfg.RunAtStartup); err != nil {
+			log.Printf("background permission: %v", err)
+		}
+	}()
 }

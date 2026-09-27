@@ -33,6 +33,7 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
 - **Steps aside for games.** When a game turns on [GameMode](https://github.com/FeralInteractive/gamemode) (or you launch one with `gamemoderun`), mining pauses until it ends.
 - **Gives memory back.** When the machine starts thrashing — sustained memory stalls, or free memory below a small margin — the miner is stopped outright, not just paused, so its ~2 GB returns at once. It starts again only after ten calm minutes with room to spare.
+- **Works without a tray.** Stock GNOME has no system tray. There, closing the window keeps kind-miner mining in the background (inside a Flatpak it asks the desktop for permission first), and opening kind-miner again from your apps brings the running window back, with a Quit button in it. On every desktop, launching it a second time shows the one already running instead of starting a second miner.
 - **Snooze from the tray.** Pause for an hour, until tomorrow morning (06:00), or until you resume — and a snooze ends by itself. A pause survives a restart, so a reboot never brings the miner back early.
 - **Tor-native.** Routes through a Tor hidden service by default. Your IP is not visible to the node operator.
 - **Zero-setup dependencies.** XMRig and P2Pool are downloaded automatically on first run (SHA256-verified). You need: a Monero wallet address, and Tor running.

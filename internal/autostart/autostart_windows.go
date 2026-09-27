@@ -70,3 +70,6 @@ func enabled(o Options) (bool, error) {
 		return false, err
 	}
 }
+
+// Only a Flatpak needs permission to run without a window.
+func requestBackgroundPermission(Options, bool) error { return nil }
