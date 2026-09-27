@@ -36,6 +36,13 @@ type XMRig struct {
 	poolURL string
 	threads int
 	apiPort int
+	// configPath, when set, is the JSON config xmrig runs from and watches.
+	// Rewriting it re-threads the running miner — see SetLayout. Empty runs
+	// from command-line flags, as before config files were used.
+	configPath string
+	// layout is the list of CPUs xmrig runs one thread on each of. Empty lets
+	// xmrig lay out `threads` threads itself.
+	layout []int
 	// randomxMode is passed to --randomx-mode when set: "fast" keeps the ~2 GB
 	// dataset, "light" a 256 MB cache at a fraction of the hashrate.
 	randomxMode string
@@ -120,6 +127,11 @@ func (x *XMRig) start() error {
 		return err
 	}
 
+	if x.configPath != "" {
+		if err := x.writeConfig(); err != nil {
+			return fmt.Errorf("writing xmrig config: %w", err)
+		}
+	}
 	name, args, scoped := launchCommand(bin, x.buildArgs())
 	cmd, stdout, cancel, err := launchProcess(name, args)
 	if err != nil {
@@ -210,7 +222,7 @@ func (x *XMRig) Duty() float64 {
 }
 
 // dutyLoop drives SIGSTOP/SIGCONT so the process runs for duty of each period.
-// It is bound to one process: SetThreads restarts the loop against the new one,
+// It is bound to one process: a restart starts a new loop against the new one,
 // and a stale loop exits when its stop channel closes.
 func (x *XMRig) dutyLoop(stop <-chan struct{}, proc *os.Process) {
 	wait := func(d time.Duration) bool {
@@ -285,6 +297,9 @@ func (x *XMRig) unsuspend(proc *os.Process) {
 }
 
 func (x *XMRig) buildArgs() []string {
+	if x.configPath != "" {
+		return []string{"--config=" + x.configPath}
+	}
 	args := []string{
 		"--url", x.poolURL,
 		"--cpu-priority", "0",
@@ -349,23 +364,126 @@ func (x *XMRig) stop() {
 	x.paused = false
 }
 
-// SetThreads changes the thread count XMRig runs with. Because xmrig cannot be
-// re-threaded live, this restarts the process — so it is reserved for a config
-// change (the user editing max_threads), never used for moment-to-moment
-// throttling, which SetDuty handles without a restart. It is a no-op if the
-// count is unchanged.
-func (x *XMRig) SetThreads(n int) error {
+// UseConfigFile makes xmrig run from a JSON config at path, written on every
+// start and watched by xmrig for changes. Call it before Start.
+func (x *XMRig) UseConfigFile(path string) {
+	x.mu.Lock()
+	x.configPath = path
+	x.mu.Unlock()
+}
+
+// SetLayout sets the CPUs xmrig runs a thread on, one each.
+//
+// On a running miner it rewrites the watched config and xmrig re-threads in
+// place: measured on 6.26, the old threads stop and the new ones are hashing
+// again about 7 ms later, and the RandomX dataset is kept — no re-init, no
+// reallocation. (The note this replaces said xmrig could not be re-threaded
+// live; that was true of the command-line flags, not of the config watch.)
+// It is still not the throttle — the duty cycle is — but it lets the
+// scheduler change which cores that duty cycle applies to.
+//
+// Before Start it only records the layout. It is an error on a miner running
+// from flags, which has no file to rewrite.
+func (x *XMRig) SetLayout(cpus []int) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	if x.threads == n {
-		return nil
-	}
-	x.threads = n
+	x.layout = append([]int(nil), cpus...)
 	if x.cmd == nil {
 		return nil
 	}
-	x.stop()
-	return x.start()
+	if x.configPath == "" {
+		return errors.New("xmrig is running from flags; its layout cannot change live")
+	}
+	return x.writeConfig()
+}
+
+// xmrigConfig is the subset of xmrig's config.json kind-miner sets. Field
+// names are xmrig's; re-check them when the xmrig pin moves.
+type xmrigConfig struct {
+	Autosave    bool         `json:"autosave"`
+	Colors      bool         `json:"colors"`
+	DonateLevel int          `json:"donate-level"`
+	PrintTime   int          `json:"print-time"`
+	Watch       bool         `json:"watch"`
+	HTTP        xmrigHTTP    `json:"http"`
+	CPU         xmrigCPU     `json:"cpu"`
+	RandomX     xmrigRandomX `json:"randomx"`
+	Pools       []xmrigPool  `json:"pools"`
+}
+
+type xmrigHTTP struct {
+	Enabled    bool   `json:"enabled"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Restricted bool   `json:"restricted"`
+}
+
+type xmrigCPU struct {
+	Enabled   bool  `json:"enabled"`
+	HugePages bool  `json:"huge-pages"`
+	Priority  int   `json:"priority"`
+	RX        []int `json:"rx,omitempty"`
+}
+
+type xmrigRandomX struct {
+	Mode       string `json:"mode"`
+	OneGBPages bool   `json:"1gb-pages"`
+	RdMSR      bool   `json:"rdmsr"`
+	WrMSR      bool   `json:"wrmsr"`
+}
+
+type xmrigPool struct {
+	URL       string `json:"url"`
+	Keepalive bool   `json:"keepalive"`
+}
+
+// configJSON renders the config for the current settings. Caller holds mu.
+//
+// It says what the command-line flags said, plus two things they could not:
+// the thread layout, and that xmrig must not touch model-specific registers.
+// MSR tweaks are system-wide and need root; kind-miner runs unprivileged and
+// promises no system-wide tweaks, so they are off rather than merely failing.
+func (x *XMRig) configJSON() ([]byte, error) {
+	rx := x.layout
+	if len(rx) == 0 && x.threads > 0 {
+		// A count without a layout: that many threads, placed by xmrig
+		// (-1 is xmrig's "no affinity").
+		rx = make([]int, x.threads)
+		for i := range rx {
+			rx[i] = -1
+		}
+	}
+	mode := x.randomxMode
+	if mode == "" {
+		mode = "auto"
+	}
+	return json.MarshalIndent(xmrigConfig{
+		Colors:    false,
+		PrintTime: 10,
+		Watch:     true,
+		HTTP:      xmrigHTTP{Enabled: true, Host: "127.0.0.1", Port: x.apiPort, Restricted: true},
+		CPU:       xmrigCPU{Enabled: true, HugePages: true, Priority: 0, RX: rx},
+		RandomX:   xmrigRandomX{Mode: mode},
+		Pools:     []xmrigPool{{URL: x.poolURL, Keepalive: true}},
+	}, "", "  ")
+}
+
+// writeConfig replaces the config file atomically. A rename, not a rewrite in
+// place: xmrig reloads on the change, and must never read half a file. (The
+// watch was checked to follow a rename.) Caller holds mu.
+func (x *XMRig) writeConfig() error {
+	data, err := x.configJSON()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(x.configPath), 0o755); err != nil {
+		return err
+	}
+	tmp := x.configPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, x.configPath)
 }
 
 // Hashrate returns the most recent 10-second average hashrate in H/s.

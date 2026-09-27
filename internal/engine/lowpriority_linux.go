@@ -55,6 +55,9 @@ func scopeSupport() string {
 // launchCommand returns the command that starts bin at the lowest priority
 // this session offers, and whether it runs in an idle scope.
 func launchCommand(bin string, args []string) (string, []string, bool) {
+	if !useScopes {
+		return bin, args, false
+	}
 	prop := scopeSupport()
 	if prop == "" {
 		return bin, args, false
