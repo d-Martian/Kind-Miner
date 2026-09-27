@@ -78,6 +78,11 @@ type Supervisor struct {
 	tor     *engine.Tor
 	// relay carries RPC and ZMQ to an onion node over Tor; nil for any other.
 	relay *nodes.Relay
+	// localNode is the monerod found running on this machine, when automatic
+	// node selection found a usable one; nil otherwise.
+	localNode *nodes.Node
+	// localWatchStop ends the watch for a local node to become usable.
+	localWatchStop chan struct{}
 	// islandStop ends the sidechain health check; nil when p2pool is not ours.
 	islandStop chan struct{}
 
@@ -158,14 +163,22 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	}
 
 	if s.cfg.ManageP2Pool {
+		// Looked for before Tor: a usable node on this machine means Tor is
+		// not needed at all.
+		s.findLocalNode(profile)
 		s.ensureTor(emit)
 		emit(StepSelectNode)
-		node, err := resolveNode(s.cfg)
-		if err != nil {
-			return err
-		}
-		if profile {
+		var node nodes.Node
+		switch {
+		case profile:
 			node = nodoNode(onNodo)
+		case s.localNode != nil:
+			node = *s.localNode
+		default:
+			var err error
+			if node, err = resolveNode(s.cfg); err != nil {
+				return err
+			}
 		}
 		log.Printf("Using monerod node: %s", node.Addr())
 
@@ -173,7 +186,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		// node the loopback relay standing in for it.
 		follow := node
 		var socks5Proxy string
-		if node.TorOnly || strings.HasSuffix(node.Host, ".onion") {
+		if routesOverTor(node) {
 			// p2pool's --socks5 keeps its peer traffic on Tor, but it cannot carry
 			// ZMQ, so the node itself is reached through the relay.
 			socks5Proxy = "127.0.0.1:9050"
@@ -223,6 +236,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			return err
 		}
 		log.Println("p2pool ready.")
+		s.startLocalWatch(profile)
 		if profile {
 			s.watchNodo(onNodo)
 		}
@@ -399,6 +413,10 @@ func (s *Supervisor) Shutdown() {
 		close(s.nodoStop)
 		s.nodoStop = nil
 	}
+	if s.localWatchStop != nil {
+		close(s.localWatchStop)
+		s.localWatchStop = nil
+	}
 	s.mu.Unlock()
 	// Close rather than Stop: the Nodo watch may be restarting p2pool at this
 	// very moment, and Close is what stops that restart from outliving us.
@@ -409,12 +427,17 @@ func (s *Supervisor) Shutdown() {
 		s.monerod.Stop()
 	}
 	// After p2pool, which would otherwise log a burst of failed RPC calls
-	// against a relay that had vanished underneath it.
-	if s.relay != nil {
-		s.relay.Close()
+	// against a relay that had vanished underneath it. Taken under the lock:
+	// a switch to the local node may have handed them off already.
+	s.mu.Lock()
+	relay, tor := s.relay, s.tor
+	s.relay, s.tor = nil, nil
+	s.mu.Unlock()
+	if relay != nil {
+		relay.Close()
 	}
-	if s.tor != nil {
-		s.tor.Stop()
+	if tor != nil {
+		tor.Stop()
 	}
 }
 
@@ -505,7 +528,7 @@ func (s *Supervisor) ensureTor(emit func(Step)) {
 // monerod and therefore needs Tor. The default remote node (the Nodo) is
 // .onion; a custom clearnet remote_node, or the local mode, do not.
 func (s *Supervisor) torNeeded() bool {
-	if s.cfg.Mode != config.ModeP2PoolRemote {
+	if s.cfg.Mode != config.ModeP2PoolRemote || s.localNode != nil {
 		return false
 	}
 	if s.cfg.RemoteNode == "" {

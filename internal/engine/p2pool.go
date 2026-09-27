@@ -268,6 +268,19 @@ func (p *P2Pool) Close() {
 	p.Stop()
 }
 
+// Retarget restarts p2pool against a different node: another host, its RPC and
+// ZMQ ports, and the SOCKS proxy to reach it through ("" for direct). Used when
+// a local node becomes usable mid-session. Like Reconnect it is refused after
+// Close, so it cannot bring p2pool back during shutdown.
+func (p *P2Pool) Retarget(host string, rpcPort, zmqPort int, socks5Proxy string, timeout time.Duration) error {
+	p.Stop()
+	p.mu.Lock()
+	p.nodeHost, p.rpcPort, p.zmqPort = host, rpcPort, zmqPort
+	p.socks5Proxy, p.rpcLogin = socks5Proxy, ""
+	p.mu.Unlock()
+	return p.Start(timeout)
+}
+
 // Stop terminates the p2pool subprocess.
 func (p *P2Pool) Stop() {
 	p.mu.Lock()

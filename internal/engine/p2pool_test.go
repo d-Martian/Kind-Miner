@@ -157,3 +157,26 @@ func TestXMRigArgsNeverCarryTheWallet(t *testing.T) {
 		}
 	}
 }
+
+func TestP2PoolRetargetDropsTorForALocalNode(t *testing.T) {
+	bin := fakeP2Pool(t, `echo "StratumServer event loop started"; sleep 60`)
+	p := NewP2Pool(P2PoolOptions{BinPath: bin, Wallet: "w", NodeHost: "127.0.0.2", RPCPort: 18089, ZMQPort: 18083,
+		SOCKS5Proxy: "127.0.0.1:9050", Chain: "nano", StratumPort: 3333})
+	defer p.Close()
+	if err := p.Start(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Retarget("127.0.0.1", 18081, 18083, "", 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(p.buildArgs(), " ")
+	if !strings.Contains(args, "--host 127.0.0.1 --rpc-port 18081 --zmq-port 18083") {
+		t.Errorf("args after retarget: %s", args)
+	}
+	if strings.Contains(args, "--socks5") {
+		t.Errorf("a local node is still reached through Tor: %s", args)
+	}
+	if !p.Ready() {
+		t.Error("p2pool is not running after the retarget")
+	}
+}

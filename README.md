@@ -214,7 +214,7 @@ wallet: "4..."
 mode: p2pool-remote
 
 # p2pool-remote: which monerod node p2pool connects to.
-# Leave blank to use the kind-miner Nodo (Tor, ZMQ confirmed).
+# Leave blank to choose automatically: a synced local monerod with ZMQ, else the kind-miner Nodo over Tor.
 remote_node: ""
 
 # P2Pool sidechain: "main" above ~50 kH/s, "mini" for most desktops,
@@ -281,7 +281,9 @@ XMRig → p2pool (local) ──Tor──→ monerod Nodo (.onion) → Monero net
 
 P2Pool runs on your machine. It connects to the kind-miner Nodo — a dedicated Monero full node running as a Tor hidden service, with ZMQ enabled for p2pool. Your IP is not exposed to the node. Payouts arrive directly in your wallet from the P2Pool sharechain. No fee.
 
-**Requires:** Tor running at `127.0.0.1:9050`.
+**A node on this machine comes first.** With no `remote_node` set, kind-miner looks for a monerod already running here before anything else. If it is synced and publishes ZMQ (`monerod --zmq-pub tcp://127.0.0.1:18083`), p2pool uses it directly and Tor is never started. If it is still syncing, has no ZMQ, or wants an RPC login, the log says which and what to change, and mining uses the Nodo in the meantime. kind-miner keeps checking once a minute and moves p2pool onto the local node, off Tor, as soon as it is ready — or if you start one later — without a restart.
+
+**Tor only for onions.** A `remote_node` on your LAN or the open internet is reached directly; only a `.onion` address goes through Tor, which kind-miner starts for you when it is needed.
 
 ### `p2pool-local`
 
