@@ -40,6 +40,8 @@ type P2Pool struct {
 	// shutdown cannot bring p2pool back once it has been put away.
 	closed   bool
 	lastLine string // most recent output line, for early-exit diagnostics
+	// onPayout receives every payout line p2pool prints; see SetPayoutHandler.
+	onPayout func(height, atomic uint64)
 
 	statsState
 	statsStop chan struct{}
@@ -281,6 +283,17 @@ func (p *P2Pool) Retarget(host string, rpcPort, zmqPort int, socks5Proxy string,
 	return p.Start(timeout)
 }
 
+// SetPayoutHandler registers fn to receive each payout p2pool announces, as
+// the block height and the amount in atomic units. p2pool announces a payout
+// twice (see stats.Payouts), so fn sees it twice; the handler survives Stop,
+// Reconnect and Retarget, since the payouts belong to the wallet, not to one
+// p2pool process.
+func (p *P2Pool) SetPayoutHandler(fn func(height, atomic uint64)) {
+	p.mu.Lock()
+	p.onPayout = fn
+	p.mu.Unlock()
+}
+
 // Stop terminates the p2pool subprocess.
 func (p *P2Pool) Stop() {
 	p.mu.Lock()
@@ -319,6 +332,14 @@ func (p *P2Pool) readOutput(r io.Reader, readyCh chan<- struct{}, exitCh chan<- 
 			p.lastLine = line
 		}
 		p.mu.Unlock()
+		if height, atomic, ok := PayoutFromLog(line); ok {
+			p.mu.Lock()
+			handle := p.onPayout
+			p.mu.Unlock()
+			if handle != nil {
+				handle(height, atomic)
+			}
+		}
 		if !signalled && isP2PoolReady(line) {
 			p.mu.Lock()
 			p.ready = true

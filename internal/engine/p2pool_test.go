@@ -180,3 +180,23 @@ func TestP2PoolRetargetDropsTorForALocalNode(t *testing.T) {
 		t.Error("p2pool is not running after the retarget")
 	}
 }
+
+func TestP2PoolReportsPayoutsFromItsOutput(t *testing.T) {
+	line := "2026-09-27 10:02:14.9105 P2Pool Your wallet 4AB got a payout of 0.000812345678 XMR in block 3412341"
+	bin := fakeP2Pool(t, `echo "StratumServer event loop started"; echo "`+line+`"; sleep 60`)
+	p := NewP2Pool(P2PoolOptions{BinPath: bin, Wallet: "w", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "nano", StratumPort: 3333})
+	defer p.Close()
+	got := make(chan [2]uint64, 4)
+	p.SetPayoutHandler(func(h, a uint64) { got <- [2]uint64{h, a} })
+	if err := p.Start(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case g := <-got:
+		if g != [2]uint64{3412341, 812345678} {
+			t.Errorf("payout = %v", g)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the payout line never reached the handler")
+	}
+}
