@@ -39,7 +39,8 @@ func runPair(w io.Writer, name, host string) error {
 	if !cfg.Hub.Serve {
 		return fmt.Errorf("this machine is not serving the hub yet: add\n\n  hub:\n    serve: true\n\nto %s and restart kind-minerd", config.Path())
 	}
-	id, err := hub.Load(hubDirFor(config.Path()))
+	dir := hubDirFor(config.Path())
+	id, err := hub.Load(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return errors.New("the hub has not started yet: restart kind-minerd (systemctl restart kind-minerd), then pair again")
 	}
@@ -51,10 +52,26 @@ func runPair(w io.Writer, name, host string) error {
 			return fmt.Errorf("cannot tell this machine's LAN address (%v); give it with --host", err)
 		}
 	}
+	var onion string
+	if cfg.Hub.Onion {
+		if onion, err = hub.ReadOnion(dir); err != nil {
+			return fmt.Errorf("reading the hub's onion address: %w", err)
+		}
+		if onion == "" {
+			// Still a usable pairing — the LAN part works now — so it is
+			// printed, with what it lacks said plainly.
+			fmt.Fprintln(w, "The hub's onion service has not started yet, so this code works on the LAN only.\n"+
+				"Pair again in a minute for one that also works away from home.")
+			fmt.Fprintln(w)
+		}
+	}
 	stratumPort, apiPort := cfg.HubPorts()
-	p := id.PairingFor(host, stratumPort, apiPort)
+	p := id.PairingFor(host, onion, stratumPort, apiPort)
 
 	fmt.Fprintf(w, "Pairing code for the hub at %s:\n\n  %s\n\n", host, p.Code())
+	if onion != "" {
+		fmt.Fprintf(w, "Away from home, paired devices reach it through Tor at %s.\n", onion)
+	}
 	fmt.Fprintln(w, "On a desktop: Settings → Connection, choose mode \"hub\", and paste the code.")
 	fmt.Fprintf(w, "Certificate fingerprint (SHA-256): %s\n", p.FingerprintHex())
 	if name == "" {
@@ -63,6 +80,9 @@ func runPair(w io.Writer, name, host string) error {
 	}
 	fmt.Fprintf(w, "\nFor %q running plain xmrig, use these pools in its config.json.\n"+
 		"It shows up as %q in kind-minerd status:\n\n%s\n", name, hub.WorkerName(name), hub.DeviceConfig(p, name))
+	if onion != "" {
+		fmt.Fprintf(w, "The second pool reaches the hub through a Tor running on that device at %s.\n", hub.TorSOCKS)
+	}
 	return nil
 }
 

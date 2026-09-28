@@ -37,8 +37,12 @@ type XMRig struct {
 	// poolUser and poolFingerprint are set for a hub; see UseHub.
 	poolUser        string
 	poolFingerprint string
-	threads         int
-	apiPort         int
+	// fallbackURL is a second route to the same hub, through the SOCKS proxy
+	// fallbackSOCKS; see UseHubFallback.
+	fallbackURL   string
+	fallbackSOCKS string
+	threads       int
+	apiPort       int
 	// configPath, when set, is the JSON config xmrig runs from and watches.
 	// Rewriting it re-threads the running miner — see SetLayout. Empty runs
 	// from command-line flags, as before config files were used.
@@ -388,6 +392,22 @@ func (x *XMRig) UseHub(user, fingerprint string) {
 	x.mu.Unlock()
 }
 
+// UseHubFallback adds a second way to the hub: url through the SOCKS5 proxy
+// at socks — the hub's onion through this machine's Tor — with the same
+// login and the same certificate pin, since TLS still runs end to end to the
+// hub's p2pool. Call it after UseHub and before Start.
+//
+// xmrig moves to it when the first pool has failed its retries, and keeps
+// retrying the first all the while: when that logs in again xmrig switches
+// back and drops the fallback (FailoverStrategy::onLoginSuccess in 6.26). A
+// laptop mines over Tor while it is away and over the LAN once it is home,
+// with nothing restarted. It needs the config file; flags cannot say it.
+func (x *XMRig) UseHubFallback(url, socks string) {
+	x.mu.Lock()
+	x.fallbackURL, x.fallbackSOCKS = url, socks
+	x.mu.Unlock()
+}
+
 // SetUser sets the login xmrig sends: the name p2pool lists it under. It is
 // never the wallet, which stays with p2pool. Call it before Start.
 func (x *XMRig) SetUser(user string) {
@@ -469,6 +489,7 @@ type xmrigPool struct {
 	User           string `json:"user,omitempty"`
 	TLS            bool   `json:"tls,omitempty"`
 	TLSFingerprint string `json:"tls-fingerprint,omitempty"`
+	SOCKS5         string `json:"socks5,omitempty"`
 	Keepalive      bool   `json:"keepalive"`
 }
 
@@ -499,14 +520,26 @@ func (x *XMRig) configJSON() ([]byte, error) {
 		HTTP:      xmrigHTTP{Enabled: true, Host: "127.0.0.1", Port: x.apiPort, Restricted: true},
 		CPU:       xmrigCPU{Enabled: true, HugePages: true, Priority: 0, RX: rx},
 		RandomX:   xmrigRandomX{Mode: mode},
-		Pools: []xmrigPool{{
-			URL:            x.poolURL,
-			User:           x.poolUser,
-			TLS:            x.poolFingerprint != "",
-			TLSFingerprint: x.poolFingerprint,
-			Keepalive:      true,
-		}},
+		Pools:     x.pools(),
 	}, "", "  ")
+}
+
+// pools is the pool list: the pool, then a fallback to it if there is one.
+// Caller holds mu.
+func (x *XMRig) pools() []xmrigPool {
+	pool := xmrigPool{
+		URL:            x.poolURL,
+		User:           x.poolUser,
+		TLS:            x.poolFingerprint != "",
+		TLSFingerprint: x.poolFingerprint,
+		Keepalive:      true,
+	}
+	pools := []xmrigPool{pool}
+	if x.fallbackURL != "" {
+		pool.URL, pool.SOCKS5 = x.fallbackURL, x.fallbackSOCKS
+		pools = append(pools, pool)
+	}
+	return pools
 }
 
 // writeConfig replaces the config file atomically. A rename, not a rewrite in

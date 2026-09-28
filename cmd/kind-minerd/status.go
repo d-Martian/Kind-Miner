@@ -42,6 +42,7 @@ type daemonStatus struct {
 	// could not. Workers is the household, by the name each device logged
 	// in with — the hub's own miner included.
 	HubPort  int          `json:"hub_port,omitempty"`
+	HubOnion string       `json:"hub_onion,omitempty"`
 	MinesTo  string       `json:"mines_to,omitempty"`
 	HubError string       `json:"hub_error,omitempty"`
 	Workers  []hub.Worker `json:"workers,omitempty"`
@@ -114,6 +115,7 @@ func snapshot(sup *core.Supervisor, now time.Time) daemonStatus {
 		}
 	case cfg.Hub.Serve:
 		st.HubPort, _ = cfg.HubPorts()
+		st.HubOnion = sup.HubOnion()
 		st.Workers = sup.Workers()
 	}
 	return st
@@ -215,9 +217,15 @@ func formatStatus(st daemonStatus) string {
 	switch {
 	case st.HubPort != 0:
 		out += fmt.Sprintf("  hub       serving stratum on port %d (TLS) · %d connected\n", st.HubPort, len(st.Workers))
+		if st.HubOnion != "" {
+			out += fmt.Sprintf("            and away from home as %s\n", st.HubOnion)
+		}
 		out += formatWorkers(st.Workers)
 	case st.MinesTo != "":
 		line := fmt.Sprintf("mining to the hub at %s", st.MinesTo)
+		if st.ViaTor {
+			line += " (reached over Tor)"
+		}
 		if st.HubError != "" {
 			line += " · its statistics are unavailable: " + st.HubError
 		}

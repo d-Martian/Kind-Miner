@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/net/proxy"
+
 	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/stats"
 )
@@ -125,14 +127,59 @@ func pinnedTLS(fingerprint [32]byte) *tls.Config {
 	}
 }
 
-// Fetch asks a paired hub for the household's statistics.
-func Fetch(ctx context.Context, p Pairing) (Household, error) {
-	client := &http.Client{
-		Timeout:   15 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: pinnedTLS(p.Fingerprint), Proxy: nil},
+// Fetch asks a paired hub for the household's statistics: at its LAN
+// address, then — for a hub with an onion, when socks names a Tor — through
+// Tor. viaTor says which answered.
+//
+// A LAN address that answers with the wrong certificate does not stop the
+// onion being tried: away from home, 192.168.1.10 is somebody else's machine,
+// and being refused there is the pin working. When both fail it is the
+// onion's error that counts, since away from home the LAN one is expected.
+func Fetch(ctx context.Context, p Pairing, socks string) (h Household, viaTor bool, err error) {
+	// Short, because away from home the LAN address may never answer at all,
+	// and a hub on the same LAN answers in milliseconds.
+	lanCtx, cancel := context.WithTimeout(ctx, lanTimeout)
+	h, err = fetch(lanCtx, p, p.APIAddr(), nil)
+	cancel()
+	if err == nil || p.Onion == "" || socks == "" {
+		return h, false, err
 	}
+	dial, derr := socksDial(socks, p.Onion)
+	if derr != nil {
+		return Household{}, false, err
+	}
+	h, err = fetch(ctx, p, p.OnionAPIAddr(), dial)
+	return h, err == nil, err
+}
+
+// lanTimeout bounds the attempt at the hub's LAN address.
+const lanTimeout = 5 * time.Second
+
+type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+
+// socksDial reaches host through Tor on a circuit of its own: Tor isolates
+// streams by SOCKS credentials, and the username is keyed on the
+// destination, the same way internal/nodes keeps each node on its own circuit.
+func socksDial(socks, host string) (dialFunc, error) {
+	d, err := proxy.SOCKS5("tcp", socks, &proxy.Auth{User: "kind-miner/" + host, Password: "kind-miner"}, proxy.Direct)
+	if err != nil {
+		return nil, err
+	}
+	cd, ok := d.(proxy.ContextDialer)
+	if !ok {
+		return nil, errors.New("SOCKS5 dialer cannot take a deadline")
+	}
+	return cd.DialContext, nil
+}
+
+func fetch(ctx context.Context, p Pairing, addr string, dial dialFunc) (Household, error) {
+	tr := &http.Transport{TLSClientConfig: pinnedTLS(p.Fingerprint), Proxy: nil}
+	if dial != nil {
+		tr.DialContext = dial
+	}
+	client := &http.Client{Transport: tr} // the caller's context bounds it
 	defer client.CloseIdleConnections()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+p.APIAddr()+householdPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+addr+householdPath, nil)
 	if err != nil {
 		return Household{}, err
 	}
