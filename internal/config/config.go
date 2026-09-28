@@ -175,6 +175,13 @@ type HubOptions struct {
 	// Ports; 0 uses hub.DefaultStratumPort and hub.DefaultAPIPort.
 	StratumPort int `yaml:"stratum_port"`
 	APIPort     int `yaml:"api_port"`
+	// Onion also publishes both ports as a Tor onion service, from a Tor
+	// instance of the hub's own, so paired laptops keep mining to the hub
+	// away from home. Off by default: it runs a second Tor on the hub and
+	// puts it on the Tor network, and that is the owner's call. (Anyone who
+	// finds the address can only mine to the owner's wallet; the statistics
+	// still need the token.)
+	Onion bool `yaml:"onion"`
 }
 
 // ChartOptions are the dashboard graph's display preferences.

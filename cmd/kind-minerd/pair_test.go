@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,6 +64,63 @@ func TestPair(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %s:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestPairWithAnOnion(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("STATE_DIRECTORY", state)
+	config.SetPath(filepath.Join(t.TempDir(), "config.yaml"))
+	t.Cleanup(func() { config.SetPath("") })
+	cfg := config.Defaults()
+	cfg.Wallet = sampleAddress
+	cfg.Hub.Serve, cfg.Hub.Onion = true, true
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hub.Ensure(core.HubDir()); err != nil {
+		t.Fatal(err)
+	}
+	code := func(out string) hub.Pairing {
+		t.Helper()
+		for _, f := range strings.Fields(out) {
+			if strings.HasPrefix(f, "km1-") || strings.HasPrefix(f, "km2-") {
+				p, err := hub.ParseCode(f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return p
+			}
+		}
+		t.Fatalf("no code in:\n%s", out)
+		return hub.Pairing{}
+	}
+
+	// Before Tor has made the service: a LAN code, and the output says so.
+	var out bytes.Buffer
+	if err := runPair(&out, "", "10.0.0.2"); err != nil {
+		t.Fatal(err)
+	}
+	if p := code(out.String()); p.Onion != "" || !strings.Contains(out.String(), "LAN only") {
+		t.Errorf("before the onion exists:\n%s", out.String())
+	}
+
+	onion := "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"
+	if err := os.MkdirAll(hub.OnionDir(core.HubDir()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hub.OnionDir(core.HubDir()), "hostname"), []byte(onion+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := runPair(&out, "garage", "10.0.0.2"); err != nil {
+		t.Fatal(err)
+	}
+	if p := code(out.String()); p.Onion != onion {
+		t.Errorf("code carries onion %q", p.Onion)
+	}
+	if !strings.Contains(out.String(), `"socks5": "127.0.0.1:9050"`) {
+		t.Errorf("the bare-xmrig config lacks the Tor fallback:\n%s", out.String())
 	}
 }
 

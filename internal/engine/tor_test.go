@@ -3,6 +3,7 @@ package engine
 import (
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -29,4 +30,36 @@ func TestTorManaged(t *testing.T) {
 		t.Fatalf("SOCKS port %s not accepting: %v", tor.SOCKSAddr(), err)
 	}
 	conn.Close()
+}
+
+func TestTorrc(t *testing.T) {
+	client := NewTor("", "/s/tor", 9050).torrc()
+	if !strings.Contains(client, "SocksPort 127.0.0.1:9050\n") || strings.Contains(client, "HiddenService") {
+		t.Errorf("client torrc:\n%s", client)
+	}
+
+	// The hub's own instance: serves the onion, offers no SOCKS port, so
+	// nothing of the miner's ever goes out through it.
+	hub := NewTor("", "/s/hub/tor", 0)
+	hub.ServeOnion("/s/hub/onion", 18087, 18088)
+	conf := hub.torrc()
+	for _, want := range []string{
+		"SocksPort 0\n",
+		"DataDirectory /s/hub/tor\n",
+		"HiddenServiceDir /s/hub/onion\n",
+		"HiddenServicePort 18087 127.0.0.1:18087\n",
+		"HiddenServicePort 18088 127.0.0.1:18088\n",
+	} {
+		if !strings.Contains(conf, want) {
+			t.Errorf("hub torrc lacks %q:\n%s", want, conf)
+		}
+	}
+}
+
+func TestTorStartRefusedAfterClose(t *testing.T) {
+	tor := NewTor("/nonexistent/tor", t.TempDir(), 0)
+	tor.Close()
+	if err := tor.Start(time.Second); err == nil || !strings.Contains(err.Error(), "shut down") {
+		t.Errorf("Start after Close: %v", err)
+	}
 }
