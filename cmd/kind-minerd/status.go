@@ -46,6 +46,10 @@ type daemonStatus struct {
 	MinesTo  string       `json:"mines_to,omitempty"`
 	HubError string       `json:"hub_error,omitempty"`
 	Workers  []hub.Worker `json:"workers,omitempty"`
+	// Engines is the packaged pair running, on a .deb install, and
+	// EnginesWarning why it is not the pair the package installed, if not.
+	Engines        string `json:"engines,omitempty"`
+	EnginesWarning string `json:"engines_warning,omitempty"`
 }
 
 // serviceStatus is where the system service's status file lives: its
@@ -136,6 +140,19 @@ func writeStatus(path string, st daemonStatus) error {
 	return os.Rename(tmp, path)
 }
 
+// keepStatus writes the status file every statusInterval until the returned
+// func is called, which removes the file and returns only once it is gone. A
+// daemon starting again — for a wallet change, or a rollback — must not have
+// its new status deleted by the last run's writer finishing late.
+func keepStatus(snap func(time.Time) daemonStatus) (stop func()) {
+	quit, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		writeStatusEvery(snap, statusPath(), statusInterval, quit)
+	}()
+	return func() { close(quit); <-done }
+}
+
 func writeStatusEvery(snap func(time.Time) daemonStatus, path string, every time.Duration, stop <-chan struct{}) {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -217,6 +234,12 @@ func formatStatus(st daemonStatus) string {
 	}
 	out += fmt.Sprintf("  shares    %d found · %d payouts seen\n", st.SharesFound, st.Payouts)
 	out += fmt.Sprintf("  uptime    %s\n", time.Duration(st.UptimeSec)*time.Second)
+	if st.Engines != "" {
+		out += fmt.Sprintf("  engines   %s\n", st.Engines)
+	}
+	if st.EnginesWarning != "" {
+		out += fmt.Sprintf("  warning   %s\n", st.EnginesWarning)
+	}
 	switch {
 	case st.HubPort != 0:
 		out += fmt.Sprintf("  hub       serving stratum on port %d (TLS) · %d connected\n", st.HubPort, len(st.Workers))

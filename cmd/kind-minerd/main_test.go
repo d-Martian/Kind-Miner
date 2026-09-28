@@ -49,6 +49,11 @@ func TestDiagnoseNamesTheFirstProblem(t *testing.T) {
 			facts{running: true, status: mining, local: nodes.LocalNode{State: nodes.LocalNoZMQ, Detail: "the Monero node running here has no ZMQ"}},
 			"The Monero node running here has no ZMQ.", true,
 		},
+		{
+			"engines rolled back",
+			facts{running: true, status: daemonStatus{State: "mining", EnginesWarning: "xmrig 6.27.0 · p2pool 4.19 failed its health check (p2pool did not sync), so this machine went back to xmrig 6.26.0 · p2pool 4.18"}},
+			"The engines were rolled back: xmrig 6.27.0 · p2pool 4.19 failed its health check", true,
+		},
 		{"all well", facts{running: true, status: mining}, "Everything looks fine: mining at 3420 H/s.", false},
 	}
 	for _, c := range cases {
