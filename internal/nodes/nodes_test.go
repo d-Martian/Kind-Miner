@@ -2,7 +2,12 @@ package nodes
 
 import (
 	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestParseAddr(t *testing.T) {
@@ -104,5 +109,30 @@ func TestParseAddrErrIsBadAddr(t *testing.T) {
 				t.Errorf("parseAddr(%q) error = %v, want it to wrap ErrBadAddr", addr, err)
 			}
 		})
+	}
+}
+
+func TestCheckRPCWaitsAsLongAsItIsTold(t *testing.T) {
+	// A node that answers, slowly — what an onion looks like over a Tor
+	// that has only just bootstrapped.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		w.Write([]byte(`{"result":{"status":"OK","synchronized":true}}`))
+	}))
+	defer srv.Close()
+	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	rpcPort, _ := strconv.Atoi(port)
+	n := Node{Host: host, RPCPort: rpcPort}
+
+	if err := checkRPC(n, directDial, 5*time.Second); err != nil {
+		t.Errorf("a slow node that answers inside the timeout failed: %v", err)
+	}
+	if err := checkRPC(n, directDial, 50*time.Millisecond); err == nil {
+		t.Error("a node slower than the timeout passed")
+	}
+	// The onion allowance must cover a first circuit on a fresh Tor, which
+	// took longer than the 15 s the RPC check used to have.
+	if torProbeTimeout <= 15*time.Second {
+		t.Errorf("torProbeTimeout = %s", torProbeTimeout)
 	}
 }
