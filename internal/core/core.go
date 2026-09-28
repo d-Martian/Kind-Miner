@@ -112,8 +112,10 @@ type Supervisor struct {
 	nodo     *nodo.Node
 	nodoStop chan struct{}
 
-	// hubAPI serves the household statistics when this machine is the hub.
+	// hubAPI serves the household statistics when this machine is the hub,
+	// and hubTor publishes it as an onion service when hub.onion is on.
 	hubAPI *hub.Server
+	hubTor *engine.Tor
 	// hhStop ends the polling of the hub a paired machine mines to; hh is its
 	// last answer (hhOK once there is one) and hhErr the last failure.
 	hhStop chan struct{}
@@ -284,6 +286,9 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		log.Println("p2pool ready.")
 		if hubServing(s.cfg) {
 			s.startHubAPI(hubID)
+			if s.cfg.Hub.Onion {
+				s.startHubOnion()
+			}
 		}
 		s.startLocalWatch(profile)
 		if profile {
@@ -307,6 +312,11 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, pairing.StratumAddr(), threads, 8080)
 		name := workerName(s.cfg)
 		s.xmrig.UseHub(name, pairing.FingerprintHex())
+		if pairing.Onion != "" {
+			// Tor only for the fallback; at home everything stays on the LAN.
+			s.ensureTor(emit)
+			s.xmrig.UseHubFallback(pairing.OnionStratumAddr(), torSOCKSFor(pairing))
+		}
 		log.Printf("Mining to the household hub at %s as %q", pairing.StratumAddr(), name)
 		s.hhStop = make(chan struct{})
 		go s.watchHousehold(pairing, s.hhStop)
@@ -502,9 +512,12 @@ func (s *Supervisor) Shutdown() {
 		close(s.hhStop)
 		s.hhStop = nil
 	}
-	hubAPI := s.hubAPI
-	s.hubAPI = nil
+	hubAPI, hubTor := s.hubAPI, s.hubTor
+	s.hubAPI, s.hubTor = nil, nil
 	s.mu.Unlock()
+	if hubTor != nil {
+		hubTor.Close()
+	}
 	// Before p2pool: a paired desktop asking for numbers while p2pool writes
 	// its cache out would be told the household had gone quiet.
 	if hubAPI != nil {
@@ -633,6 +646,11 @@ func (s *Supervisor) ensureTor(emit func(Step)) {
 // monerod and therefore needs Tor. The default remote node (the Nodo) is
 // .onion; a custom clearnet remote_node, or the local mode, do not.
 func (s *Supervisor) torNeeded() bool {
+	if s.cfg.Mode == config.ModeHub {
+		// Only for the hub's onion, the way back to it from away.
+		p, err := hub.ParseCode(s.cfg.HubCode)
+		return err == nil && p.Onion != ""
+	}
 	if s.cfg.Mode != config.ModeP2PoolRemote || s.localNode != nil {
 		return false
 	}

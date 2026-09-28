@@ -188,10 +188,17 @@ worker_name: ""
 # the household statistics on api_port, both on every interface. Off by
 # default. Needs manage_p2pool; one hub pays one wallet — this config's.
 # Needs a restart; then run `kind-minerd pair` for the code.
+#
+# onion also publishes both ports as a Tor onion service, from a Tor of the
+# hub's own (its own torrc and keys under the state directory, so a Nodo
+# rewriting /etc/tor/torrc cannot remove it). Pair again afterwards: the new
+# code (km2-…) lets laptops keep mining to the hub away from home, over Tor,
+# and go back to the LAN by themselves when they return.
 hub:
   serve: false
   stratum_port: 18087
   api_port: 18088
+  onion: false
 
 # --- Dashboard chart ---
 

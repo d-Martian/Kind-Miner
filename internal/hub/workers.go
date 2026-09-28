@@ -91,19 +91,32 @@ type devicePool struct {
 	User           string `json:"user"`
 	TLS            bool   `json:"tls"`
 	TLSFingerprint string `json:"tls-fingerprint"`
+	SOCKS5         string `json:"socks5,omitempty"`
 	Keepalive      bool   `json:"keepalive"`
 }
 
+// TorSOCKS is where a device's Tor listens: the port kind-miner's own Tor
+// and a system Tor both use.
+const TorSOCKS = "127.0.0.1:9050"
+
 // DeviceConfig is the "pools" block for a device that runs bare xmrig — a
 // server in the garage with no desktop to run kind-miner on. Its user field
-// is the name the device shows up under in kind-minerd status.
+// is the name the device shows up under in kind-minerd status. With an onion,
+// a second entry reaches the hub through the device's Tor when the LAN
+// address does not answer; xmrig goes back to the first as soon as it does.
 func DeviceConfig(p Pairing, name string) []byte {
-	data, _ := json.MarshalIndent(map[string][]devicePool{"pools": {{
+	pool := devicePool{
 		URL:            p.StratumAddr(),
 		User:           WorkerName(name),
 		TLS:            true,
 		TLSFingerprint: p.FingerprintHex(),
 		Keepalive:      true,
-	}}}, "", "  ")
+	}
+	pools := []devicePool{pool}
+	if p.Onion != "" {
+		pool.URL, pool.SOCKS5 = p.OnionStratumAddr(), TorSOCKS
+		pools = append(pools, pool)
+	}
+	data, _ := json.MarshalIndent(map[string][]devicePool{"pools": pools}, "", "  ")
 	return data
 }

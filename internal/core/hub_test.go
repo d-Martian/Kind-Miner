@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kind-miner/kind-miner/internal/config"
@@ -37,5 +38,24 @@ func TestWorkerName(t *testing.T) {
 	}
 	if got := workerName(&config.Config{}); got != want {
 		t.Errorf("blank name: %q, want the hostname's %q", got, want)
+	}
+}
+
+func TestTorNeededForAHubOnlyWithAnOnion(t *testing.T) {
+	lan := hub.Pairing{Host: "192.168.8.192", StratumPort: 18087, APIPort: 18088, Token: strings.Repeat("ab", 16)}
+	withOnion := lan
+	withOnion.Onion = "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"
+	for _, tt := range []struct {
+		name string
+		code string
+		want bool
+	}{
+		{"a LAN-only hub needs no Tor", lan.Code(), false},
+		{"a hub with an onion needs it for the way back from away", withOnion.Code(), true},
+	} {
+		s := New(&config.Config{Mode: config.ModeHub, HubCode: tt.code})
+		if got := s.torNeeded(); got != tt.want {
+			t.Errorf("%s: %v", tt.name, got)
+		}
 	}
 }

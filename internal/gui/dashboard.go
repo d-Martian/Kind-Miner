@@ -437,7 +437,10 @@ func (d *dashboard) refreshConnection(cfg *config.Config) {
 // refreshHub fills the connection card on a machine paired with a hub: the
 // household's figures, since this machine has no p2pool of its own.
 func (d *dashboard) refreshHub() {
-	addr, _ := d.u.sup.Node()
+	addr, viaTor := d.u.sup.Node()
+	if viaTor {
+		addr = "over Tor, away from home"
+	}
 	d.linkDetail.Set("Hub", addr)
 	h, ok, err := d.u.sup.Household()
 	switch {

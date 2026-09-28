@@ -45,6 +45,50 @@ func (s *Supervisor) startHubAPI(id hub.Identity) {
 		"Pair a device with: kind-minerd pair", stratumPort, apiPort)
 }
 
+// startHubOnion publishes the hub's two ports as an onion service, from a
+// Tor of the hub's own: its own torrc and data directory in the state
+// directory, no SOCKS port, nothing shared with a system Tor. A Nodo's setup
+// replaces /etc/tor/torrc with its own, which would silently delete a hidden
+// service written there, and the service's dynamic user could not write it
+// anyway.
+//
+// It runs in the background and never fails Start: the onion is for devices
+// away from home, and the house mines over the LAN without it.
+func (s *Supervisor) startHubOnion() {
+	bin, err := engine.FindTor(s.cfg.TorBinPath)
+	if err != nil {
+		if bin, err = autoinstall.EnsureTor(autoinstall.BinDir()); err != nil {
+			log.Printf("hub: no onion service — could not obtain tor: %v", err)
+			return
+		}
+	}
+	stratumPort, apiPort := s.cfg.HubPorts()
+	t := engine.NewTor(bin, filepath.Join(HubDir(), "tor"), 0)
+	t.ServeOnion(hub.OnionDir(HubDir()), stratumPort, apiPort)
+	s.mu.Lock()
+	s.hubTor = t
+	s.mu.Unlock()
+	go func() {
+		if err := t.Start(3 * time.Minute); err != nil {
+			log.Printf("hub: onion service not available: %v", err)
+			return
+		}
+		if onion, err := hub.ReadOnion(HubDir()); err == nil && onion != "" {
+			log.Printf("hub: also reachable as %s (ports %d and %d). "+
+				"Pair again with kind-minerd pair to give devices the onion.", onion, stratumPort, apiPort)
+		}
+	}()
+}
+
+// HubOnion is the hub's onion address, or "" when it serves none (yet).
+func (s *Supervisor) HubOnion() string {
+	if !hubServing(s.cfg) || !s.cfg.Hub.Onion {
+		return ""
+	}
+	onion, _ := hub.ReadOnion(HubDir())
+	return onion
+}
+
 // household is what the hub's API answers with.
 func (s *Supervisor) household() hub.Household {
 	h := hub.Household{UpdatedAt: time.Now(), Chain: s.cfg.P2PoolChain, Payouts: s.payouts.Recent(10)}
@@ -93,12 +137,19 @@ func (s *Supervisor) watchHousehold(p hub.Pairing, stop <-chan struct{}) {
 	t := time.NewTicker(householdInterval)
 	defer t.Stop()
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		h, err := hub.Fetch(ctx, p)
+		// Long enough for a Tor circuit to an onion service to be built.
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		h, viaTor, err := hub.Fetch(ctx, p, torSOCKSFor(p))
 		cancel()
 		s.mu.Lock()
 		if err == nil {
 			s.hh, s.hhOK = h, true
+			// Which way the hub answered is the best view of which way the
+			// miner reaches it: the two routes fail and recover together.
+			s.nodeAddr, s.viaTor = p.StratumAddr(), viaTor
+			if viaTor {
+				s.nodeAddr = p.OnionStratumAddr()
+			}
 		}
 		s.hhErr = err
 		s.mu.Unlock()
@@ -114,6 +165,15 @@ func (s *Supervisor) watchHousehold(p hub.Pairing, stop <-chan struct{}) {
 		case <-t.C:
 		}
 	}
+}
+
+// torSOCKSFor is the Tor a paired device reaches the hub's onion through:
+// the one ensureTor made available, when the hub has an onion at all.
+func torSOCKSFor(p hub.Pairing) string {
+	if p.Onion == "" {
+		return ""
+	}
+	return fmt.Sprintf("127.0.0.1:%d", torSOCKSPort)
 }
 
 // Household returns the latest statistics from the hub this machine mines to.
