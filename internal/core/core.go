@@ -114,8 +114,11 @@ type Supervisor struct {
 
 	// hubAPI serves the household statistics when this machine is the hub,
 	// and hubTor publishes it as an onion service when hub.onion is on.
-	hubAPI *hub.Server
-	hubTor *engine.Tor
+	hubAPI    *hub.Server
+	hubBeacon *hub.Announcer
+	hubTor    *engine.Tor
+	// hubWallet is the owner's wallet change; see SetHubWallet.
+	hubWallet func(address string) error
 	// hhStop ends the polling of the hub a paired machine mines to; hh is its
 	// last answer (hhOK once there is one) and hhErr the last failure.
 	hhStop chan struct{}
@@ -512,9 +515,12 @@ func (s *Supervisor) Shutdown() {
 		close(s.hhStop)
 		s.hhStop = nil
 	}
-	hubAPI, hubTor := s.hubAPI, s.hubTor
-	s.hubAPI, s.hubTor = nil, nil
+	hubAPI, hubBeacon, hubTor := s.hubAPI, s.hubBeacon, s.hubTor
+	s.hubAPI, s.hubBeacon, s.hubTor = nil, nil, nil
 	s.mu.Unlock()
+	if hubBeacon != nil {
+		hubBeacon.Close()
+	}
 	if hubTor != nil {
 		hubTor.Close()
 	}

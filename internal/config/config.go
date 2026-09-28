@@ -92,6 +92,10 @@ type Config struct {
 	// (blank uses the hostname).
 	HubCode    string `yaml:"hub_code"`
 	WorkerName string `yaml:"worker_name"`
+	// HubOwnerToken is set on the desktop that set the hub up from Settings,
+	// and lets it change the wallet the hub pays. The hub gives it to that
+	// desktop alone; it is not in the pairing code.
+	HubOwnerToken string `yaml:"hub_owner_token,omitempty"`
 
 	// Hub makes this machine the household hub; see HubOptions.
 	Hub HubOptions `yaml:"hub"`

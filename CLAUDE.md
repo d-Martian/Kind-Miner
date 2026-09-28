@@ -45,7 +45,8 @@ subprocesses.**
 
 ```
 cmd/kind-miner  → decides UI mode (GUI / tray / headless), owns signals
-cmd/kind-minerd → the headless daemon (init/run/status/doctor/pair); pure Go, never imports internal/gui
+cmd/kind-minerd → the headless daemon (init/run/status/doctor/pair); pure Go, never imports internal/gui;
+                  with no config, `run` waits to be set up from a desktop (setup.go)
   internal/core → Supervisor: owns the whole mining stack for one config
     internal/autoinstall → downloads + SHA256-verifies xmrig, p2pool, tor
     internal/engine      → XMRig, P2Pool, Monerod, Tor subprocesses
@@ -53,7 +54,7 @@ cmd/kind-minerd → the headless daemon (init/run/status/doctor/pair); pure Go, 
       internal/monitor   → CPU / battery / temp / idle / session-lock / power samplers
       internal/kindness  → the presets (ceiling + fall/rise rates)
       internal/stats     → rolling history ring, feeds the chart
-    internal/hub         → household hub: cert + token, pairing code, pinned-TLS stats API
+    internal/hub         → household hub: cert + tokens, pairing code, pinned-TLS API, LAN search
   internal/gui  → Fyne window, dashboard, settings, tray (reads via Supervisor)
 ```
 
@@ -185,6 +186,12 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
 - **p2pool listens on one stratum port.** Given two (3333 and the hub's
   18087) 4.18 panics, so a hub moves its own miner onto the hub port over
   loopback; TLS is detected per connection. `Supervisor.stratumPort` owns this.
+- **Two config homes for the service.** `/etc/kind-miner/config.yaml` (root's,
+  over SSH, loaded as a credential — the unit loads the *directory*, since a
+  missing credential file stops the unit) wins over
+  `/var/lib/kind-miner/config.yaml` (written by a desktop's setup). Only the
+  second may be changed through the hub API; `configFor` and `pushable` in
+  `cmd/kind-minerd` own this.
 - `p2poolapi.go` parses p2pool's JSON stat files; field names are tied to the
   pinned p2pool version and need re-checking when that pin moves.
 

@@ -9,13 +9,15 @@
 // quietly bring back cgo, OpenGL and X11 on a box that has none of them.
 //
 //	kind-minerd init --address 4…   write a config for this wallet
-//	kind-minerd run                 mine until stopped (what the service runs)
+//	kind-minerd run                 mine until stopped (what the service runs);
+//	                                with no config, wait to be set up from the desktop
 //	kind-minerd status [--json]     what the running daemon is doing
 //	kind-minerd doctor              one sentence on what is wrong, if anything
 //	kind-minerd pair [--name N]     the code that pairs a device with this hub
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -62,7 +64,7 @@ func main() {
 	name := fs.String("name", "", "device name for a plain-xmrig config (pair)")
 	host := fs.String("host", "", "address devices reach this hub at (pair; default: this machine's LAN address)")
 	_ = fs.Parse(args)
-	if p := configFor(*configPath, os.Getenv("CREDENTIALS_DIRECTORY"), os.Getuid(), exists); p != "" {
+	if p := configFor(*configPath, os.Getenv("CREDENTIALS_DIRECTORY"), os.Getenv("STATE_DIRECTORY"), os.Getuid(), exists); p != "" {
 		config.SetPath(p)
 	}
 
@@ -90,29 +92,58 @@ func main() {
 	}
 }
 
-// serviceConfig is where the system service's config lives. The unit hands it
-// to the daemon with LoadCredential=, so it can stay root-owned and 0600: the
-// service's dynamic user reads its private copy, never this file.
-const serviceConfig = "/etc/kind-miner/config.yaml"
+// The system service's config is in one of two places. /etc/kind-miner is
+// root's: written over SSH by init, and handed to the service with
+// LoadCredential=, so it can stay root-owned and 0600 — the service's dynamic
+// user reads its private copy, never the file. A Nodo set up from the desktop
+// app has none; the service wrote its own, in its state directory, the one
+// place it can write.
+const (
+	serviceConfig      = "/etc/kind-miner/config.yaml"
+	serviceStateConfig = "/var/lib/kind-miner/config.yaml"
+)
 
-// configFor picks the config path. An explicit --config wins; the service
-// reads the credential systemd passed it; root — setting up or checking the
-// service from a shell — uses the service's config; anyone else keeps the
-// per-user default (returned as "").
-func configFor(flagPath, credentialsDir string, uid int, exists func(string) bool) string {
+// credentialConfig is /etc/kind-miner/config.yaml as the service receives it.
+// The unit loads the whole directory, which may be empty, because a
+// credential naming a missing file stops the service from starting at all;
+// systemd names each file the credential's name, an underscore, and the
+// file's.
+const credentialConfig = "kind-miner_config.yaml"
+
+// configFor picks the config path. An explicit --config wins. The service
+// reads root's config when there is one, else its own; root — setting up or
+// checking the service from a shell — and a user asking about a service that
+// is set up, the service's; anyone else keeps the per-user default (returned
+// as "").
+func configFor(flagPath, credentialsDir, stateDir string, uid int, exists func(string) bool) string {
 	switch {
 	case flagPath != "":
 		return flagPath
-	case credentialsDir != "":
-		return filepath.Join(credentialsDir, "config.yaml")
-	case uid == 0:
-		return serviceConfig
+	case credentialsDir != "" && exists(filepath.Join(credentialsDir, credentialConfig)):
+		return filepath.Join(credentialsDir, credentialConfig)
+	case stateDir != "":
+		return filepath.Join(stateDir, "config.yaml")
 	case exists(serviceConfig):
-		// A user running status or doctor on a box where the service is set
-		// up is asking about the service.
+		return serviceConfig
+	case exists(serviceStateConfig):
+		// Readable by root only: the state directory is the dynamic user's.
+		return serviceStateConfig
+	case uid == 0:
 		return serviceConfig
 	}
 	return ""
+}
+
+// newConfig is a config for address with nothing else asked: the defaults
+// the desktop's one-field setup uses, and on a Nodo the Nodo's own node.
+func newConfig(address string, isNodo bool) *config.Config {
+	cfg := config.Defaults()
+	cfg.Wallet = address
+	if isNodo {
+		// The Nodo profile follows the Nodo's own monerod; see internal/nodo.
+		cfg.Mode = config.ModeP2PoolLocal
+	}
+	return cfg
 }
 
 func exists(path string) bool {
@@ -130,42 +161,59 @@ func runInit(address string, force bool) error {
 	if _, err := os.Stat(config.Path()); err == nil && !force {
 		return fmt.Errorf("%s already exists; use --force to replace it", config.Path())
 	}
-	cfg := config.Defaults()
-	cfg.Wallet = address
-	if _, isNodo, _ := nodo.Detect(); isNodo {
-		// The Nodo profile follows the Nodo's own monerod; see internal/nodo.
-		cfg.Mode = config.ModeP2PoolLocal
-	}
-	if err := cfg.Save(); err != nil {
+	_, isNodo, _ := nodo.Detect()
+	if err := newConfig(address, isNodo).Save(); err != nil {
 		return err
 	}
 	fmt.Printf("Wrote %s. Start mining with: kind-minerd run\n", config.Path())
 	return nil
 }
 
-// runDaemon mines until SIGINT or SIGTERM. Errors come back rather than
-// exiting mid-way, so Shutdown always runs for whatever Start got going.
+// runDaemon mines until SIGINT or SIGTERM, first waiting to be set up if
+// there is no config. Errors come back rather than exiting mid-way, so
+// Shutdown always runs for whatever Start got going.
 func runDaemon() error {
-	cfg, err := config.Load()
-	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("no config at %s; run: kind-minerd init --address 4…", config.Path())
-	}
-	if err != nil {
-		return err
-	}
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("%w (edit %s)", err, config.Path())
-	}
-
 	status, release := instance.Claim(instance.AppID, nil)
 	if status == instance.Running {
 		return errors.New("kind-miner is already running in this session")
 	}
 	defer release()
 
+	log.Printf("kind-minerd %s starting", version)
+	cfg, err := config.Load()
+	if errors.Is(err, os.ErrNotExist) {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		cfg, err = awaitSetup(ctx)
+		stop()
+		if cfg == nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	for {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("%w (edit %s)", err, config.Path())
+		}
+		if err := mine(cfg); !errors.Is(err, errReload) {
+			return err
+		}
+		if cfg, err = config.Load(); err != nil {
+			return err
+		}
+		log.Println("The hub's owner changed its wallet from their desktop; starting again to mine to it")
+	}
+}
+
+// mine runs one supervisor until a signal, or until the owner changes the
+// wallet (errReload).
+func mine(cfg *config.Config) error {
 	sup := core.New(cfg)
 	defer sup.Shutdown()
-	log.Printf("kind-minerd %s starting", version)
+	reload := make(chan struct{}, 1)
+	if pushable(config.Path(), os.Getenv("CREDENTIALS_DIRECTORY")) {
+		sup.SetHubWallet(func(address string) error { return pushWallet(cfg, address, reload) })
+	}
 	if err := sup.Start(func(st core.Step) { log.Printf("%s…", st) }); err != nil {
 		return err
 	}
@@ -173,13 +221,18 @@ func runDaemon() error {
 
 	stop := make(chan struct{})
 	defer close(stop)
-	go writeStatusEvery(sup, statusPath(), statusInterval, stop)
+	go writeStatusEvery(func(now time.Time) daemonStatus { return snapshot(sup, now) }, statusPath(), statusInterval, stop)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-	log.Println("kind-minerd stopping")
-	return nil
+	defer signal.Stop(sig)
+	select {
+	case <-sig:
+		log.Println("kind-minerd stopping")
+		return nil
+	case <-reload:
+		return errReload
+	}
 }
 
 // statusInterval is how often the status file is refreshed; status treats a
