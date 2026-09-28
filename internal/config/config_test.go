@@ -6,8 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/kindness"
 )
+
+var testHubCode = hub.Pairing{Host: "192.168.8.192", StratumPort: 18087, APIPort: 18088,
+	Token: strings.Repeat("ab", 16)}.Code()
 
 func TestValidate(t *testing.T) {
 	tests := []struct {
@@ -96,6 +100,40 @@ func TestValidate(t *testing.T) {
 			// miner may never accumulate a payout.
 			name:    "misspelled chain is rejected",
 			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: "minni"},
+			wantErr: true,
+		}, {
+			// The hub pays its owner; a paired machine needs no wallet of its own.
+			name: "hub mode needs no wallet",
+			cfg:  Config{Mode: ModeHub, HubCode: testHubCode},
+		},
+		{
+			name:    "hub mode needs a pairing code",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeHub},
+			wantErr: true,
+		},
+		{
+			name:    "hub mode rejects a damaged code",
+			cfg:     Config{Mode: ModeHub, HubCode: testHubCode[:30]},
+			wantErr: true,
+		},
+		{
+			name:    "a machine mining to a hub cannot serve one",
+			cfg:     Config{Mode: ModeHub, HubCode: testHubCode, ManageP2Pool: true, Hub: HubOptions{Serve: true}},
+			wantErr: true,
+		},
+		{
+			name: "serving the hub",
+			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, ManageP2Pool: true, Hub: HubOptions{Serve: true}},
+		},
+		{
+			// There would be no p2pool of ours to put on the LAN.
+			name:    "serving the hub needs a managed p2pool",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, Hub: HubOptions{Serve: true}},
+			wantErr: true,
+		},
+		{
+			name:    "a hub port out of range",
+			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, ManageP2Pool: true, Hub: HubOptions{Serve: true, APIPort: 70000}},
 			wantErr: true,
 		},
 	}
@@ -332,5 +370,16 @@ func TestLoadLeavesP2PoolModesAlone(t *testing.T) {
 		if cfg := loadYAML(t, "wallet: 4ABC\nmode: "+string(mode)+"\n"); cfg.Mode != mode {
 			t.Errorf("mode %q loaded as %q", mode, cfg.Mode)
 		}
+	}
+}
+
+func TestHubPortsDefault(t *testing.T) {
+	c := Config{}
+	if s, a := c.HubPorts(); s != hub.DefaultStratumPort || a != hub.DefaultAPIPort {
+		t.Errorf("HubPorts() = %d, %d", s, a)
+	}
+	c.Hub = HubOptions{StratumPort: 3334, APIPort: 3335}
+	if s, a := c.HubPorts(); s != 3334 || a != 3335 {
+		t.Errorf("HubPorts() = %d, %d", s, a)
 	}
 }

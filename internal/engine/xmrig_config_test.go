@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -56,6 +57,31 @@ func noScopes(t *testing.T) {
 	old := useScopes
 	useScopes = false
 	t.Cleanup(func() { useScopes = old })
+}
+
+func TestXMRigMinesToAHubOverPinnedTLS(t *testing.T) {
+	x := NewXMRig("", "192.168.8.192:18087", 2, 18080)
+	x.UseHub("laptop", "ab12")
+	data, err := x.configJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c xmrigConfig
+	json.Unmarshal(data, &c)
+	want := xmrigPool{URL: "192.168.8.192:18087", User: "laptop", TLS: true, TLSFingerprint: "ab12", Keepalive: true}
+	if len(c.Pools) != 1 || c.Pools[0] != want {
+		t.Errorf("pools = %+v, want %+v", c.Pools, want)
+	}
+	args := strings.Join(x.buildArgs(), " ")
+	if !strings.Contains(args, "--user laptop --tls --tls-fingerprint ab12") {
+		t.Errorf("flag form lacks the hub login and pin: %s", args)
+	}
+
+	// The loopback miner sends no user, no TLS: p2pool is on the same machine.
+	data, _ = NewXMRig("", "127.0.0.1:3333", 2, 18080).configJSON()
+	if strings.Contains(string(data), "tls") || strings.Contains(string(data), "user") {
+		t.Errorf("loopback config carries hub fields: %s", data)
+	}
 }
 
 func TestSetLayoutRewritesTheWatchedConfig(t *testing.T) {

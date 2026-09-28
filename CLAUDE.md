@@ -45,7 +45,7 @@ subprocesses.**
 
 ```
 cmd/kind-miner  → decides UI mode (GUI / tray / headless), owns signals
-cmd/kind-minerd → the headless daemon (init/run/status/doctor); pure Go, never imports internal/gui
+cmd/kind-minerd → the headless daemon (init/run/status/doctor/pair); pure Go, never imports internal/gui
   internal/core → Supervisor: owns the whole mining stack for one config
     internal/autoinstall → downloads + SHA256-verifies xmrig, p2pool, tor
     internal/engine      → XMRig, P2Pool, Monerod, Tor subprocesses
@@ -53,6 +53,7 @@ cmd/kind-minerd → the headless daemon (init/run/status/doctor); pure Go, never
       internal/monitor   → CPU / battery / temp / idle / session-lock / power samplers
       internal/kindness  → the presets (ceiling + fall/rise rates)
       internal/stats     → rolling history ring, feeds the chart
+    internal/hub         → household hub: cert + token, pairing code, pinned-TLS stats API
   internal/gui  → Fyne window, dashboard, settings, tray (reads via Supervisor)
 ```
 
@@ -181,6 +182,9 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   block; the settings window groups the same keys and must say when a change
   needs a restart (wallet, mode, node, sidechain) versus taking effect live
   (kindness, chart, pause conditions — via `Scheduler.UpdateRuntime`).
+- **p2pool listens on one stratum port.** Given two (3333 and the hub's
+  18087) 4.18 panics, so a hub moves its own miner onto the hub port over
+  loopback; TLS is detected per connection. `Supervisor.stratumPort` owns this.
 - `p2poolapi.go` parses p2pool's JSON stat files; field names are tied to the
   pinned p2pool version and need re-checking when that pin moves.
 

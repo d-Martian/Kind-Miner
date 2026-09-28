@@ -152,6 +152,7 @@ kind-minerd init --address 4…   # write a config for your wallet
 kind-minerd run                 # mine until stopped (what a service runs)
 kind-minerd status              # what it is doing   (--json for scripts)
 kind-minerd doctor              # one sentence on what is wrong, if anything
+kind-minerd pair                # the code that pairs a device with this hub
 ```
 
 Only one kind-miner runs per session: the daemon and the desktop app will not
@@ -176,6 +177,35 @@ always wins any core it wants. The service runs as a throwaway system user with
 idle I/O, can write only `/var/lib/kind-miner`, reads its config as a private
 copy (the file in `/etc` stays root-only), and is first to go if memory runs
 out.
+
+### One hub for the house
+
+A Nodo already follows the chain; it can run p2pool once for every machine in
+the house, and the desktops then run only the miner. Turn it on in the hub's
+config and restart:
+
+```yaml
+hub:
+  serve: true
+```
+
+```sh
+sudo systemctl restart kind-minerd
+sudo kind-minerd pair --name garage-server
+```
+
+`pair` prints a code starting `km1-`. On a desktop, open **Settings →
+Connection**, choose mode `hub` and paste it: that machine now runs xmrig
+alone, and its dashboard and tray show the household's shares, payouts and
+devices. For a box running plain xmrig, `--name` prints the `pools` block for
+its `config.json`; its `user` is the name it shows under in `kind-minerd
+status`.
+
+Stratum is served over TLS on port 18087 and the household statistics on
+18088, with a self-signed certificate made once on the hub. Devices trust it by
+the fingerprint in the code, not by any authority: a machine on your network
+answering at the hub's address is refused, by xmrig and by the desktop alike.
+One hub pays one wallet: everyone who pairs is mining for the hub's owner.
 
 ## Sleep
 
@@ -234,7 +264,7 @@ Config lives at `~/.config/kind-miner/config.yaml` (Linux/macOS) or `%APPDATA%\k
 # Your Monero wallet address. Required.
 wallet: "4..."
 
-# Connection mode: p2pool-remote | p2pool-local
+# Connection mode: p2pool-remote | p2pool-local | hub
 mode: p2pool-remote
 
 # p2pool-remote: which monerod node p2pool connects to.
@@ -274,6 +304,16 @@ temp_limit_celsius: 95
 # config file only. Needs a restart.
 mine_on_nodo: false
 
+# hub mode: the code `kind-minerd pair` printed, and this machine's name there.
+hub_code: ""
+worker_name: ""
+
+# Be the household hub (headless boxes): serve p2pool on the LAN over TLS.
+hub:
+  serve: false
+  stratum_port: 18087
+  api_port: 18088
+
 # Dashboard chart — display only.
 chart:
   shade_headroom: true
@@ -285,11 +325,11 @@ chart:
 log_level: info
 ```
 
-Everything here except `mine_on_nodo` (a headless-box setting) is editable
+Everything here except `mine_on_nodo` and `hub` (headless-box settings) is editable
 from the settings window, which groups it the same
 way: **Payout**, **Connection**, **Binaries**, **Kindness**, **Graph**,
 **Advanced**. Kindness and graph settings take effect while you watch; wallet,
-mode, node and sidechain need a restart, and the window says so when you save.
+mode, node, hub code and sidechain need a restart, and the window says so when you save.
 
 kind-miner only rewrites the keys it owns, so anything you add by hand is kept.
 
@@ -318,6 +358,14 @@ XMRig → p2pool (local) → monerod (local) → Monero network
 You run your own `monerod` locally. Maximum trustlessness — you validate every block yourself. Requires ~180 GB of disk space and 1–3 days for initial sync.
 
 Set `manage_monerod: true` to have kind-miner start and stop `monerod` for you.
+
+### `hub`
+
+```
+XMRig ──TLS, LAN──→ p2pool on the household hub → the hub's monerod
+```
+
+Only XMRig runs here; the hub (see [One hub for the house](#one-hub-for-the-house)) does the rest, and pays its owner's wallet. No Tor, because nothing leaves the LAN from this machine.
 
 ### No `pool` mode
 

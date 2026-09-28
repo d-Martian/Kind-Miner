@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kind-miner/kind-miner/internal/core"
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
@@ -35,6 +36,15 @@ type daemonStatus struct {
 	UptimeSec   int64    `json:"uptime_seconds"`
 	SharesFound uint64   `json:"shares_found"`
 	Payouts     int      `json:"payouts_seen"`
+	// HubPort is the LAN stratum port when this machine is the household
+	// hub; MinesTo is the hub's address when it is a device paired with one,
+	// and HubError why the hub's statistics could not be read, if they
+	// could not. Workers is the household, by the name each device logged
+	// in with — the hub's own miner included.
+	HubPort  int          `json:"hub_port,omitempty"`
+	MinesTo  string       `json:"mines_to,omitempty"`
+	HubError string       `json:"hub_error,omitempty"`
+	Workers  []hub.Worker `json:"workers,omitempty"`
 }
 
 // serviceStatus is where the system service's status file lives: its
@@ -88,6 +98,23 @@ func snapshot(sup *core.Supervisor, now time.Time) daemonStatus {
 		if ps, ok := p.Stats(); ok {
 			st.SharesFound = ps.SharesFound
 		}
+	}
+	switch cfg := sup.Config(); {
+	case sup.Hubbed():
+		st.MinesTo = st.Node
+		h, ok, err := sup.Household()
+		if ok {
+			st.Workers = h.Workers
+			if h.StatsOK {
+				st.SharesFound = h.Stats.SharesFound
+			}
+		}
+		if err != nil {
+			st.HubError = err.Error()
+		}
+	case cfg.Hub.Serve:
+		st.HubPort, _ = cfg.HubPorts()
+		st.Workers = sup.Workers()
 	}
 	return st
 }
@@ -185,5 +212,39 @@ func formatStatus(st daemonStatus) string {
 	}
 	out += fmt.Sprintf("  shares    %d found · %d payouts seen\n", st.SharesFound, st.Payouts)
 	out += fmt.Sprintf("  uptime    %s\n", time.Duration(st.UptimeSec)*time.Second)
+	switch {
+	case st.HubPort != 0:
+		out += fmt.Sprintf("  hub       serving stratum on port %d (TLS) · %d connected\n", st.HubPort, len(st.Workers))
+		out += formatWorkers(st.Workers)
+	case st.MinesTo != "":
+		line := fmt.Sprintf("mining to the hub at %s", st.MinesTo)
+		if st.HubError != "" {
+			line += " · its statistics are unavailable: " + st.HubError
+		}
+		out += "  hub       " + line + "\n" + formatWorkers(st.Workers)
+	}
+	return out
+}
+
+// formatWorkers lists the devices mining to the hub, by name. A hashrate
+// p2pool has not estimated yet — it takes a minute of shares — is a dash, not
+// a zero that reads as a device doing nothing.
+func formatWorkers(workers []hub.Worker) string {
+	var out string
+	for _, w := range workers {
+		name := w.Name
+		if name == "" {
+			name = "(logging in)"
+		}
+		rate := "—"
+		if w.Hashrate > 0 {
+			rate = fmt.Sprintf("%.0f H/s", float64(w.Hashrate))
+		}
+		up := w.Connected.Round(time.Minute)
+		if w.Connected < time.Minute {
+			up = w.Connected.Round(time.Second)
+		}
+		out += fmt.Sprintf("            %-20s %10s  %-21s up %s\n", name, rate, w.Addr, up)
+	}
 	return out
 }

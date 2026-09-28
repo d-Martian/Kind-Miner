@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/kindness"
 )
 
@@ -21,6 +22,10 @@ type Mode string
 const (
 	ModeP2PoolRemote Mode = "p2pool-remote"
 	ModeP2PoolLocal  Mode = "p2pool-local"
+	// ModeHub mines to a household hub — another machine's p2pool, usually a
+	// Nodo's — with xmrig alone. No p2pool, no node, no Tor on this machine:
+	// the hub does all of that once for the house.
+	ModeHub Mode = "hub"
 )
 
 // modePool is the removed direct-to-pool mode, kept only so configs written
@@ -81,6 +86,15 @@ type Config struct {
 	// p2pool-local
 	ManageMonerod bool   `yaml:"manage_monerod"`
 	MonerodPath   string `yaml:"monerod_path"`
+
+	// hub mode: HubCode is the pairing code from kind-minerd pair on the
+	// hub, and WorkerName what this machine is called in the hub's list
+	// (blank uses the hostname).
+	HubCode    string `yaml:"hub_code"`
+	WorkerName string `yaml:"worker_name"`
+
+	// Hub makes this machine the household hub; see HubOptions.
+	Hub HubOptions `yaml:"hub"`
 
 	// p2pool subprocess (modes A and B)
 	ManageP2Pool  bool   `yaml:"manage_p2pool"`
@@ -153,6 +167,16 @@ type Config struct {
 	LogLevel string `yaml:"log_level"`
 }
 
+// HubOptions turn on serving p2pool to the rest of the house: stratum over TLS
+// on the LAN, and the statistics API paired devices read. Off by default — it
+// opens two ports on every interface, and that is the owner's call.
+type HubOptions struct {
+	Serve bool `yaml:"serve"`
+	// Ports; 0 uses hub.DefaultStratumPort and hub.DefaultAPIPort.
+	StratumPort int `yaml:"stratum_port"`
+	APIPort     int `yaml:"api_port"`
+}
+
 // ChartOptions are the dashboard graph's display preferences.
 type ChartOptions struct {
 	// ShadeHeadroom shades the band above the kindness ceiling — the part of
@@ -166,6 +190,18 @@ type ChartOptions struct {
 	FillMiner bool `yaml:"fill_miner"`
 	// WindowSeconds is how much history the chart shows.
 	WindowSeconds int `yaml:"window_seconds"`
+}
+
+// HubPorts returns the hub's stratum and API ports, defaults filled in.
+func (c *Config) HubPorts() (stratum, api int) {
+	stratum, api = c.Hub.StratumPort, c.Hub.APIPort
+	if stratum == 0 {
+		stratum = hub.DefaultStratumPort
+	}
+	if api == 0 {
+		api = hub.DefaultAPIPort
+	}
+	return stratum, api
 }
 
 // ChartWindows are the spans the graph settings offer, in seconds.
@@ -294,13 +330,32 @@ func (c *Config) Save() error {
 }
 
 func (c *Config) Validate() error {
-	if c.Wallet == "" {
-		return fmt.Errorf("wallet address is required")
-	}
 	switch c.Mode {
 	case ModeP2PoolRemote, ModeP2PoolLocal:
+		if c.Wallet == "" {
+			return fmt.Errorf("wallet address is required")
+		}
+	case ModeHub:
+		// The hub pays its owner's wallet; this machine's is not used.
+		if strings.TrimSpace(c.HubCode) == "" {
+			return fmt.Errorf("hub mode needs hub_code: run kind-minerd pair on the hub and paste what it prints")
+		}
+		if _, err := hub.ParseCode(c.HubCode); err != nil {
+			return fmt.Errorf("hub_code: %w", err)
+		}
+		if c.Hub.Serve {
+			return fmt.Errorf("a machine mining to a hub cannot also be one (turn off hub.serve, or use a p2pool mode)")
+		}
 	default:
-		return fmt.Errorf("mode must be p2pool-remote or p2pool-local")
+		return fmt.Errorf("mode must be p2pool-remote, p2pool-local or hub")
+	}
+	if c.Hub.Serve && !c.ManageP2Pool {
+		return fmt.Errorf("hub.serve needs manage_p2pool: the hub serves the p2pool kind-miner runs")
+	}
+	for _, port := range []int{c.Hub.StratumPort, c.Hub.APIPort} {
+		if port < 0 || port > 65535 {
+			return fmt.Errorf("hub ports must be between 1 and 65535, got %d", port)
+		}
 	}
 	// Empty is what a config written before kindness existed looks like after
 	// migration has been skipped (e.g. a struct built by hand in a test), so it
