@@ -76,11 +76,9 @@ func awaitSetup(ctx context.Context) (*config.Config, error) {
 	}
 	log.Printf("No config at %s yet. Waiting to be set up: %s", config.Path(), awaitingReason)
 
-	stop := make(chan struct{})
-	defer close(stop)
-	go writeStatusEvery(func(now time.Time) daemonStatus {
+	defer keepStatus(func(now time.Time) daemonStatus {
 		return daemonStatus{Version: version, UpdatedAt: now, State: stateAwaitingSetup, Reason: awaitingReason}
-	}, statusPath(), statusInterval, stop)
+	})()
 
 	select {
 	case <-ctx.Done():
@@ -108,7 +106,9 @@ var errReload = errors.New("config changed")
 
 // pushWallet applies the owner's wallet change: saved first, so a daemon
 // restarted for any reason comes back on it, then a restart, since p2pool
-// takes its wallet only on the command line.
+// takes its wallet only on the command line. The file is re-read rather than
+// the running config saved: the supervisor fills in engine paths at start,
+// and those are this run's choice, not the owner's config.
 func pushWallet(cfg *config.Config, address string, reload chan<- struct{}) error {
 	if err := config.CheckAddress(address); err != nil {
 		return err
@@ -116,7 +116,10 @@ func pushWallet(cfg *config.Config, address string, reload chan<- struct{}) erro
 	if address == cfg.Wallet {
 		return nil
 	}
-	next := *cfg
+	next, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("reading the config: %w", err)
+	}
 	next.Wallet = address
 	if err := next.Save(); err != nil {
 		return fmt.Errorf("saving the config: %w", err)

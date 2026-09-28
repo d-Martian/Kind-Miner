@@ -55,6 +55,7 @@ cmd/kind-minerd → the headless daemon (init/run/status/doctor/pair); pure Go, 
       internal/kindness  → the presets (ceiling + fall/rise rates)
       internal/stats     → rolling history ring, feeds the chart
     internal/hub         → household hub: cert + tokens, pairing code, pinned-TLS API, LAN search
+    internal/rollout     → packaged engines: probation, health verdict, which pair to run
   internal/gui  → Fyne window, dashboard, settings, tray (reads via Supervisor)
 ```
 
@@ -192,6 +193,14 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   `/var/lib/kind-miner/config.yaml` (written by a desktop's setup). Only the
   second may be changed through the hub API; `configFor` and `pushable` in
   `cmd/kind-minerd` own this.
+- **The .deb** (`scripts/build-deb.sh`, `packaging/deb/`) ships the engines in
+  `/opt/kind-miner/engines`; its maintainer scripts keep the replaced pair in
+  `engines.previous`, and `cmd/kind-minerd/engines.go` + `internal/rollout`
+  decide which to run. A rollback only goes to a pair recorded as healthy.
+  The repository publishes from `apt-repo.yml` on *release published*, never
+  on tag, because releases are drafts until reviewed; its key's public half is
+  `packaging/deb/kind-miner.asc`, the private half the `APT_SIGNING_KEY`
+  secret (`scripts/make-apt-key.sh`, run once).
 - `p2poolapi.go` parses p2pool's JSON stat files; field names are tied to the
   pinned p2pool version and need re-checking when that pin moves.
 

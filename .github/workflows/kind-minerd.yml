@@ -38,7 +38,8 @@ jobs:
           cp packaging/systemd/* "$dir/"
           CGO_ENABLED=0 go build -o "$dir/kind-minerd" ./cmd/kind-minerd
           sed -i "s|/opt/kind-miner/kind-minerd|$dir/kind-minerd|" "$dir/kind-minerd.service"
-          cd "$dir" && systemd-analyze verify --man=no ./kind-miner.slice ./kind-minerd.service
+          cd "$dir" && systemd-analyze verify --man=no ./kind-miner.slice ./kind-minerd.service \
+            ./kind-minerd-upgrade.service ./kind-minerd-upgrade.timer
       - name: Test without cgo
         run: CGO_ENABLED=0 go test ./cmd/kind-minerd ./internal/core ./internal/config ./internal/instance
 
