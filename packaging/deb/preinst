@@ -1,0 +1,11 @@
+#!/bin/sh
+# Before an upgrade replaces the engines, keep a copy of the pair in use, so
+# kind-minerd can go back to it if the new pair fails its health check. It
+# becomes engines.previous in postinst, once there is a new pair to compare
+# it with.
+set -e
+if [ "$1" = upgrade ] && [ -f /opt/kind-miner/engines/engines.json ]; then
+	rm -rf /opt/kind-miner/engines.upgrading
+	cp -a /opt/kind-miner/engines /opt/kind-miner/engines.upgrading
+fi
+exit 0

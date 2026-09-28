@@ -117,6 +117,72 @@ jobs:
             ${{ env.CHECKSUM }}
 
   # ---------------------------------------------------------------------------
+  # The kind-minerd .deb, for a Nodo or any Debian box with no screen. Each
+  # architecture on its own kind of runner, because the xmrig inside is built
+  # from source natively (see xmrig-build.yml): upstream's binary keeps a 1%
+  # donation that connects outside Tor, and has no arm64 build at all. The
+  # .debs go on the draft release; apt-repo.yml publishes them to the
+  # repository Nodos upgrade from, and only once the release is published.
+  # ---------------------------------------------------------------------------
+  deb:
+    name: kind-minerd ${{ matrix.arch }} .deb
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            platform: linux-amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            platform: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Ensure podman
+        run: command -v podman || { sudo apt-get update && sudo apt-get install -y --no-install-recommends podman; }
+
+      - name: Build kind-minerd
+        env:
+          CGO_ENABLED: 0
+        # Reproducible build flags — keep in sync with the build job above,
+        # the Makefile and scripts/reproduce.sh.
+        run: |
+          go build -trimpath -buildvcs=false \
+            -ldflags "-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
+            -o "$RUNNER_TEMP/kind-minerd" ./cmd/kind-minerd
+
+      - name: Build xmrig from source
+        run: scripts/build-xmrig.sh "$RUNNER_TEMP/xmrig"
+
+      - name: Fetch the pinned p2pool
+        run: bash scripts/download-p2pool.sh
+
+      - name: Build the .deb
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          deb="$(scripts/build-deb.sh "$GITHUB_REF_NAME" ${{ matrix.arch }} \
+            "$RUNNER_TEMP/kind-minerd" "$RUNNER_TEMP/xmrig/xmrig" \
+            "dist/${{ matrix.platform }}/bin/p2pool" dist/deb)"
+          sha256sum "$deb" | sed 's|  .*/|  |' > "$deb.sha256"
+          echo "DEB=$deb" >> "$GITHUB_ENV"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            ${{ env.DEB }}
+            ${{ env.DEB }}.sha256
+
+  # ---------------------------------------------------------------------------
   # Linux desktop packages. Separate jobs (not the matrix above) because each
   # needs its own toolchain — appimagetool for one, flatpak-builder for the
   # other — and produces a single linux/amd64 artifact.

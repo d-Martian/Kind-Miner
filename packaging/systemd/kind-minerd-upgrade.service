@@ -1,0 +1,25 @@
+# Upgrades kind-minerd from its own apt repository, and nothing else: only
+# that source is refreshed, and only the kind-minerd package is installed.
+# Started weekly by kind-minerd-upgrade.timer; installed by the .deb.
+#
+# The repository is reached through Tor (tor+https, apt-transport-tor), so
+# the host serving it sees a Tor exit, not the house. What it can serve is
+# limited twice: apt checks the repository's signature against the key the
+# package installed, and /etc/apt/preferences.d/kind-miner pins every other
+# package from that origin to -1, so a compromised repository cannot replace
+# anything but kind-minerd itself.
+
+[Unit]
+Description=Upgrade kind-minerd from its own repository
+Documentation=https://github.com/d-Martian/Kind-Miner
+Wants=network-online.target
+After=network-online.target tor.service
+
+[Service]
+Type=oneshot
+Environment=DEBIAN_FRONTEND=noninteractive
+ExecStart=/usr/bin/apt-get -q update -o Dir::Etc::SourceList=/etc/apt/sources.list.d/kind-miner.list -o Dir::Etc::SourceParts=- -o APT::Get::List-Cleanup=0
+ExecStart=/usr/bin/apt-get -q -y install --only-upgrade -o Dpkg::Options::=--force-confold kind-minerd
+Slice=kind-miner.slice
+IOSchedulingClass=idle
+Nice=19

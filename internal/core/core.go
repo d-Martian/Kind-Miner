@@ -119,12 +119,22 @@ type Supervisor struct {
 	hubTor    *engine.Tor
 	// hubWallet is the owner's wallet change; see SetHubWallet.
 	hubWallet func(address string) error
+	// engines are the binaries to run instead of downloading; see UseEngines.
+	engines struct{ xmrig, p2pool string }
 	// hhStop ends the polling of the hub a paired machine mines to; hh is its
 	// last answer (hhOK once there is one) and hhErr the last failure.
 	hhStop chan struct{}
 	hh     hub.Household
 	hhOK   bool
 	hhErr  error
+}
+
+// UseEngines runs these xmrig and p2pool rather than the pinned downloads:
+// the pair a .deb shipped, or the previous pair after a rollback. They take
+// precedence over the config's paths, which name the user's own builds and
+// have no place on a packaged install. Call before Start.
+func (s *Supervisor) UseEngines(xmrig, p2pool string) {
+	s.engines.xmrig, s.engines.p2pool = xmrig, p2pool
 }
 
 // New creates a Supervisor for cfg. It does not start anything.
@@ -150,15 +160,22 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	s.checkWiFiPowerSave()
 	onNodo, profile := s.detectNodo()
 
-	// Auto-download any missing binaries before we need them.
+	// Auto-download any missing binaries before we need them — unless the
+	// package shipped them, which is the only way a Nodo gets an xmrig: there
+	// is no linux-arm64 build upstream to download.
 	binDir := autoinstall.BinDir()
 	emit(StepInstallXMRig)
-	xmrigPath, err := autoinstall.EnsureXMRig(binDir)
-	if err != nil {
-		return err
-	}
-	if s.cfg.XMRigBinPath == "" {
-		s.cfg.XMRigBinPath = xmrigPath
+	var err error
+	if s.engines.xmrig != "" {
+		s.cfg.XMRigBinPath = s.engines.xmrig
+	} else {
+		xmrigPath, err := autoinstall.EnsureXMRig(binDir)
+		if err != nil {
+			return err
+		}
+		if s.cfg.XMRigBinPath == "" {
+			s.cfg.XMRigBinPath = xmrigPath
+		}
 	}
 
 	// A machine paired with a hub runs xmrig alone; everything else is the hub's.
@@ -180,12 +197,16 @@ func (s *Supervisor) Start(progress func(Step)) error {
 
 	if s.cfg.ManageP2Pool && s.cfg.Mode != config.ModeHub {
 		emit(StepInstallP2Pool)
-		p2poolPath, err := autoinstall.EnsureP2Pool(binDir)
-		if err != nil {
-			return err
-		}
-		if s.cfg.P2PoolBinPath == "" {
-			s.cfg.P2PoolBinPath = p2poolPath
+		if s.engines.p2pool != "" {
+			s.cfg.P2PoolBinPath = s.engines.p2pool
+		} else {
+			p2poolPath, err := autoinstall.EnsureP2Pool(binDir)
+			if err != nil {
+				return err
+			}
+			if s.cfg.P2PoolBinPath == "" {
+				s.cfg.P2PoolBinPath = p2poolPath
+			}
 		}
 	}
 

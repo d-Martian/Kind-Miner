@@ -159,7 +159,39 @@ kind-minerd pair                # the code that pairs a device with this hub
 Only one kind-miner runs per session: the daemon and the desktop app will not
 mine side by side.
 
-### As a service
+### From the .deb
+
+On a Nodo or any Debian box, install the package once from the release, over
+Tor (`torsocks` comes with the `tor` package):
+
+```sh
+torsocks curl -LO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-minerd_X.Y.Z_arm64.deb
+sudo apt install ./kind-minerd_X.Y.Z_arm64.deb
+```
+
+It starts at once and waits to be set up from the desktop app (see below).
+From then on it keeps itself current:
+
+- **Its own repository, over Tor.** The package adds
+  `tor+https://d-martian.github.io/Kind-Miner/apt`, signed with a key it
+  carries, and pins that repository so it can supply `kind-minerd` and
+  nothing else — whoever controlled it could not replace a system package.
+- **Weekly.** A timer upgrades it on Thursday between 03:00 and 06:00, away
+  from Nodo's own Monday 04:00 update. It refreshes only its own repository.
+- **The engines come in the package** — xmrig built from source with
+  kind-miner's patches, and the pinned p2pool — so nothing is downloaded at
+  run time, and a Nodo gets an xmrig at all (upstream has no arm64 build).
+- **A way back.** An upgrade keeps the engines it replaced. New engines have
+  15 minutes to show they work — p2pool synced, not on an island, xmrig
+  hashing whenever it is allowed to — and if they do not, kind-minerd goes
+  back to the previous pair, if that one has worked here before, and says so
+  in `kind-minerd status` and `doctor` until a release brings a new pair.
+
+`apt purge kind-minerd` removes everything: the program, both pairs of
+engines, the timer, the config, and the state — p2pool's data, the hub's
+certificate and tokens, the onion keys.
+
+### As a service, by hand
 
 `packaging/systemd/` has a unit for the daemon and a slice to run it in:
 

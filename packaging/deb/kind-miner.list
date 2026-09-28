@@ -1,0 +1,3 @@
+# kind-minerd's own repository, fetched through Tor. Only kind-minerd may come
+# from it: see /etc/apt/preferences.d/kind-miner.
+deb [signed-by=/usr/share/keyrings/kind-miner.asc] tor+https://d-martian.github.io/Kind-Miner/apt ./

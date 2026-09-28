@@ -63,7 +63,12 @@ LockPersonality=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# AF_NETLINK because p2pool's libzmq lists the network interfaces
+# (getifaddrs) before it connects to the node's ZMQ; without it that fails
+# with "Address family not supported by protocol", p2pool never hears of a
+# new block, and the sidechain never syncs. Found by the engine health check
+# on the first packaged install.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallArchitectures=native
 CapabilityBoundingSet=
 # Not MemoryDenyWriteExecute: RandomX compiles its program to machine code at

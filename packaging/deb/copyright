@@ -1,0 +1,17 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: kind-miner
+Source: https://github.com/d-Martian/Kind-Miner
+
+Files: opt/kind-miner/kind-minerd
+License: unspecified
+Comment: The repository has no license file yet.
+
+Files: opt/kind-miner/engines/xmrig
+Copyright: XMRig <support@xmrig.com>
+License: GPL-3.0-or-later
+Comment: Built from source with kind-miner's two patches; see engines/xmrig.
+
+Files: opt/kind-miner/engines/p2pool
+Copyright: SChernykh
+License: GPL-3.0-only
+Comment: The upstream release, SHA256-pinned in internal/autoinstall/deps.json.
