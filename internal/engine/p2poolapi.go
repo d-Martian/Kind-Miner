@@ -45,6 +45,12 @@ type P2PoolStats struct {
 	Peers      uint64
 	PeersKnown bool
 
+	// Workers is p2pool's list of connected miners, one
+	// "addr,connected_seconds,difficulty,hashrate,user" string each
+	// (local/stratum); hub.ParseWorkers reads them. Not passed on to paired
+	// devices, which are sent the parsed list.
+	Workers []string `json:"-"`
+
 	UpdatedAt time.Time
 }
 
@@ -94,9 +100,10 @@ type localP2PFile struct {
 }
 
 type localStratumFile struct {
-	Hashrate15m        uint64  `json:"hashrate_15m"`
-	SharesFound        uint64  `json:"shares_found"`
-	RewardSharePercent float64 `json:"block_reward_share_percent"`
+	Hashrate15m        uint64   `json:"hashrate_15m"`
+	SharesFound        uint64   `json:"shares_found"`
+	RewardSharePercent float64  `json:"block_reward_share_percent"`
+	Workers            []string `json:"workers"`
 }
 
 // Stats returns the most recent statistics read from p2pool's data API. ok is
@@ -163,6 +170,7 @@ func (p *P2Pool) readStats() {
 		// the subset.
 		Peers:      p2p.Connections,
 		PeersKnown: p2pErr == nil,
+		Workers:    local.Workers,
 		UpdatedAt:  time.Now(),
 	}
 
