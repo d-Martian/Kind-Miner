@@ -1,0 +1,15 @@
+# Weekly, and never on Monday: Nodo runs its own update at 04:00 on Mondays,
+# and two upgrades restarting services on one small box at once is how a
+# Nodo ends up rebooted mid-sync. Thursday early morning, spread over three
+# hours so every Nodo on the network does not fetch in the same minute.
+
+[Unit]
+Description=Weekly kind-minerd upgrade
+
+[Timer]
+OnCalendar=Thu *-*-* 03:00:00
+RandomizedDelaySec=3h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

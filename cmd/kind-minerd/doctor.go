@@ -55,6 +55,10 @@ func diagnose(f facts) (string, bool) {
 		return "kind-minerd is not running: start it with systemctl start kind-minerd, or kind-minerd run.", true
 	case f.status.State == scheduler.StatePaused.String() && f.status.Reason != "":
 		return fmt.Sprintf("Mining is stopped: %s.", f.status.Reason), true
+	case f.status.EnginesWarning != "":
+		// Mining goes on — on the previous pair, usually — but a release
+		// failed on this machine, and someone should know.
+		return "The engines were rolled back: " + f.status.EnginesWarning + ".", true
 	case f.torNeeded && !f.torAvailable && !f.manageTor:
 		return "The node is an onion address but no Tor is running on 127.0.0.1:9050, and manage_tor is off: start Tor, or set manage_tor: true.", true
 	case f.hugePagesShort:

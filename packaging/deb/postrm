@@ -1,0 +1,18 @@
+#!/bin/sh
+# remove takes the program and the engines kept for rollback; purge takes
+# everything else too: the config, the state — p2pool's data, the ledger,
+# the hub's certificate and tokens, the onion keys.
+set -e
+case "$1" in
+remove|purge)
+	rm -rf /opt/kind-miner/engines.previous /opt/kind-miner/engines.upgrading
+	rmdir /opt/kind-miner 2>/dev/null || true
+	;;
+esac
+if [ "$1" = purge ]; then
+	rm -rf /etc/kind-miner /var/lib/kind-miner /var/lib/private/kind-miner
+fi
+if [ -d /run/systemd/system ]; then
+	systemctl daemon-reload || true
+fi
+exit 0

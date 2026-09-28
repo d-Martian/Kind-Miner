@@ -32,6 +32,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/instance"
 	"github.com/kind-miner/kind-miner/internal/nodo"
+	"github.com/kind-miner/kind-miner/internal/rollout"
 )
 
 var version = "dev"
@@ -201,27 +202,50 @@ func runDaemon() error {
 		if cfg, err = config.Load(); err != nil {
 			return err
 		}
-		log.Println("The hub's owner changed its wallet from their desktop; starting again to mine to it")
 	}
 }
 
-// mine runs one supervisor until a signal, or until the owner changes the
-// wallet (errReload).
+// mine runs one supervisor until a signal, or until it needs starting again
+// (errReload): the owner changed the wallet, or new engines failed their
+// health check and the previous ones take over.
 func mine(cfg *config.Config) error {
+	eng := chooseEngines(packagedRoot(), engineStateDir())
+	if eng.choice.RolledBack != "" {
+		log.Printf("warning: %s", eng.choice.RolledBack)
+	}
 	sup := core.New(cfg)
 	defer sup.Shutdown()
+	if use := eng.choice.Use; use != nil {
+		sup.UseEngines(use.XMRig, use.P2Pool)
+	}
 	reload := make(chan struct{}, 1)
 	if pushable(config.Path(), os.Getenv("CREDENTIALS_DIRECTORY")) {
 		sup.SetHubWallet(func(address string) error { return pushWallet(cfg, address, reload) })
 	}
 	if err := sup.Start(func(st core.Step) { log.Printf("%s…", st) }); err != nil {
+		// New engines that cannot even start have failed already.
+		if eng.choice.Probation && eng.reject("it did not start: "+err.Error()) {
+			return errReload
+		}
 		return err
 	}
 	log.Println("kind-minerd mining. Stop with SIGINT or SIGTERM.")
 
 	stop := make(chan struct{})
 	defer close(stop)
-	go writeStatusEvery(func(now time.Time) daemonStatus { return snapshot(sup, now) }, statusPath(), statusInterval, stop)
+	failed := make(chan struct{})
+	if eng.choice.Probation {
+		log.Printf("%s is new here: checking it works for the next %s", eng.current.Version, rollout.Probation)
+		go eng.watchProbation(sup, failed, stop)
+	}
+	defer keepStatus(func(now time.Time) daemonStatus {
+		st := snapshot(sup, now)
+		if use := eng.choice.Use; use != nil {
+			st.Engines = use.Version
+		}
+		st.EnginesWarning = eng.warning()
+		return st
+	})()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -231,6 +255,9 @@ func mine(cfg *config.Config) error {
 		log.Println("kind-minerd stopping")
 		return nil
 	case <-reload:
+		log.Println("The hub's owner changed its wallet from their desktop; starting again to mine to it")
+		return errReload
+	case <-failed:
 		return errReload
 	}
 }

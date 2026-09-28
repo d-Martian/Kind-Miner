@@ -1,0 +1,30 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+	# Always there, even empty: the unit loads the directory as a
+	# credential, and a missing one would stop the service from starting.
+	install -d -m 700 /etc/kind-miner
+
+	# The pair this upgrade replaced becomes the way back — unless it is the
+	# same pair, in which case the way back stays what it was.
+	if [ -d /opt/kind-miner/engines.upgrading ]; then
+		if cmp -s /opt/kind-miner/engines.upgrading/engines.json /opt/kind-miner/engines/engines.json; then
+			rm -rf /opt/kind-miner/engines.upgrading
+		else
+			rm -rf /opt/kind-miner/engines.previous
+			mv /opt/kind-miner/engines.upgrading /opt/kind-miner/engines.previous
+		fi
+	fi
+
+	if [ -d /run/systemd/system ]; then
+		systemctl daemon-reload
+		if [ -z "$2" ]; then
+			# A fresh install starts at once: with no config it waits to
+			# be set up from the desktop app.
+			systemctl enable --now kind-minerd.service kind-minerd-upgrade.timer
+		else
+			systemctl try-restart kind-minerd.service
+		fi
+	fi
+fi
+exit 0
