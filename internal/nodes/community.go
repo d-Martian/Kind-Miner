@@ -167,12 +167,20 @@ func SelectBest(customAddr string) (Node, error) {
 	return winners[0].node, nil
 }
 
-// Probe timeouts. A fresh Tor circuit to an onion service can take tens of
-// seconds to build; a clearnet node that has not answered in a few seconds is
+// Probe timeouts, for each step of a probe. A fresh Tor circuit to an onion
+// service can take tens of seconds to build — the descriptor fetch, the
+// introduction and the rendezvous each need a circuit of their own — and a
+// Tor that has only just bootstrapped, as a first run's has, builds them
+// slowest. A clearnet node that has not answered in a few seconds is
 // firewalled, and waiting longer only delays trying the next one.
+//
+// The RPC check once had a fixed 15 s of its own. A just-started Tor needed
+// longer than that for its first circuit to the kind-miner Nodo, so a node
+// that was up failed the probe, and selection sat out a 30 s retry on a
+// perfectly good node.
 const (
 	clearnetProbeTimeout = 5 * time.Second
-	torProbeTimeout      = 30 * time.Second
+	torProbeTimeout      = 60 * time.Second
 )
 
 // probeNode checks that a node has synchronized RPC and a ZMQ endpoint that
@@ -190,7 +198,7 @@ func probeNode(n Node, hasTor bool) (time.Duration, error) {
 	start := time.Now()
 
 	// 1. RPC check — must be synchronized.
-	if err := checkRPC(n, dial); err != nil {
+	if err := checkRPC(n, dial, timeout); err != nil {
 		return 0, fmt.Errorf("RPC: %w", err)
 	}
 
@@ -203,9 +211,9 @@ func probeNode(n Node, hasTor bool) (time.Duration, error) {
 	return time.Since(start), nil
 }
 
-func checkRPC(n Node, dial dialFunc) error {
+func checkRPC(n Node, dial dialFunc, timeout time.Duration) error {
 	transport := &http.Transport{DialContext: dial}
-	client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
+	client := &http.Client{Transport: transport, Timeout: timeout}
 
 	url := fmt.Sprintf("http://%s:%d/json_rpc", n.Host, n.RPCPort)
 	body := strings.NewReader(`{"jsonrpc":"2.0","id":"0","method":"get_info"}`)
