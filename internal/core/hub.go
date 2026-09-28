@@ -12,6 +12,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/hub"
+	"github.com/kind-miner/kind-miner/internal/nodo"
 )
 
 // HubDir is where the hub keeps its certificate and API token: beside the
@@ -26,24 +27,53 @@ func hubServing(cfg *config.Config) bool {
 	return cfg.Hub.Serve && cfg.ManageP2Pool && cfg.Mode != config.ModeHub
 }
 
-// startHubAPI serves the household statistics once p2pool is up. A failure is
-// logged, not returned: the API is what paired desktops read their numbers
-// from, but the devices mine to stratum, which p2pool already serves — a busy
-// API port must not stop the house mining.
+// startHubAPI serves the household statistics once p2pool is up, and answers
+// desktops looking for a hub on the LAN. A failure is logged, not returned:
+// the API is what paired desktops read their numbers from, but the devices
+// mine to stratum, which p2pool already serves — a busy API port must not
+// stop the house mining.
 func (s *Supervisor) startHubAPI(id hub.Identity) {
-	_, apiPort := s.cfg.HubPorts()
-	srv, err := hub.Serve(fmt.Sprintf(":%d", apiPort), id, s.household)
+	stratumPort, apiPort := s.cfg.HubPorts()
+	hello := HubHello()
+	srv, err := hub.Serve(fmt.Sprintf(":%d", apiPort), id, hub.Handlers{
+		Household: s.household,
+		Hello:     hello,
+		SetWallet: s.hubWallet,
+	})
 	if err != nil {
 		log.Printf("hub: statistics API not available on port %d: %v", apiPort, err)
 		return
 	}
+	hello.SetUp = true // a hub mining has its config
+	b := hub.Beacon{Hello: hello, APIPort: apiPort, Fingerprint: id.FingerprintHex()}
+	beacon, err := hub.Announce(hub.DefaultAPIPort, func() hub.Beacon { return b })
+	if err != nil {
+		// Only finding the hub needs it; pairing by code still works.
+		log.Printf("hub: desktops cannot find this hub by searching (UDP port %d: %v)", hub.DefaultAPIPort, err)
+	}
 	s.mu.Lock()
-	s.hubAPI = srv
+	s.hubAPI, s.hubBeacon = srv, beacon
 	s.mu.Unlock()
-	stratumPort, _ := s.cfg.HubPorts()
 	log.Printf("Serving the household hub: stratum on port %d (TLS), statistics on %d. "+
 		"Pair a device with: kind-minerd pair", stratumPort, apiPort)
 }
+
+// HubHello is how a hub on this machine introduces itself: by hostname, and
+// as a Nodo when it is one, which is what a desktop's list of hubs shows.
+func HubHello() hub.Hello {
+	h := hub.Hello{Name: "kind-miner hub"}
+	if host, err := os.Hostname(); err == nil && host != "" {
+		h.Name = host
+	}
+	_, h.Nodo, _ = nodo.Detect()
+	return h
+}
+
+// SetHubWallet lets the hub's owner change its wallet from their desktop:
+// set is called with the new address and does whatever applying it takes.
+// Unset, the API refuses — the GUI never sets it, and kind-minerd leaves it
+// unset when its config is root's file. Call before Start.
+func (s *Supervisor) SetHubWallet(set func(address string) error) { s.hubWallet = set }
 
 // startHubOnion publishes the hub's two ports as an onion service, from a
 // Tor of the hub's own: its own torrc and data directory in the state

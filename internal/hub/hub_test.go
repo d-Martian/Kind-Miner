@@ -177,7 +177,7 @@ func serveTest(t *testing.T, dir string, h Household) Pairing {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
-	srv, err := Serve(fmt.Sprintf("127.0.0.1:%d", port), id, func() Household { return h })
+	srv, err := Serve(fmt.Sprintf("127.0.0.1:%d", port), id, Handlers{Household: func() Household { return h }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +208,8 @@ func TestHouseholdAPI(t *testing.T) {
 	t.Run("a wrong token is refused", func(t *testing.T) {
 		bad := p
 		bad.Token = strings.Repeat("00", tokenLen)
-		if _, _, err := Fetch(ctx, bad, ""); err == nil || !strings.Contains(err.Error(), "401") {
-			t.Errorf("err = %v, want 401", err)
+		if _, _, err := Fetch(ctx, bad, ""); err == nil || !strings.Contains(err.Error(), "pair with this hub first") {
+			t.Errorf("err = %v, want the hub's refusal", err)
 		}
 	})
 	t.Run("another hub at the same address is not trusted", func(t *testing.T) {

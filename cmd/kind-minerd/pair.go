@@ -20,7 +20,7 @@ const serviceHubDir = "/var/lib/kind-miner/hub"
 // reads it — the daemon makes it — so a root shell never leaves a key behind
 // that the service's own user cannot read.
 func hubDirFor(configPath string) string {
-	if configPath == serviceConfig {
+	if configPath == serviceConfig || configPath == serviceStateConfig {
 		return serviceHubDir
 	}
 	return core.HubDir()

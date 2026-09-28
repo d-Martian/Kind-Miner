@@ -50,6 +50,14 @@ type Identity struct {
 	// itself — anyone on the LAN can already mine to the hub, which only pays
 	// the owner — but the API lists every device in the house.
 	Token string
+	// Owner authorises changing the hub's config: its wallet. It is made when
+	// a desktop sets the hub up, and only that desktop gets it — the pairing
+	// code carries Token alone, so a housemate who paired a laptop cannot
+	// redirect the household's earnings. Empty for a hub set up over SSH,
+	// whose config is root's file and not the API's to change.
+	Owner string
+
+	dir string
 }
 
 // FingerprintHex is the fingerprint as xmrig wants it.
@@ -59,6 +67,7 @@ const (
 	certFile  = "hub.crt"
 	keyFile   = "hub.key"
 	tokenFile = "token"
+	ownerFile = "owner"
 )
 
 // certLifetime is long on purpose. The certificate is trusted by fingerprint,
@@ -104,7 +113,7 @@ func Ensure(dir string) (Identity, error) {
 // Load reads an existing identity. It returns an error wrapping
 // os.ErrNotExist when the hub has never been set up in dir.
 func Load(dir string) (Identity, error) {
-	id := Identity{CertPath: filepath.Join(dir, certFile), KeyPath: filepath.Join(dir, keyFile)}
+	id := Identity{CertPath: filepath.Join(dir, certFile), KeyPath: filepath.Join(dir, keyFile), dir: dir}
 	certPEM, err := os.ReadFile(id.CertPath)
 	if err != nil {
 		return Identity{}, err
@@ -125,8 +134,46 @@ func Load(dir string) (Identity, error) {
 	if len(id.Token) != tokenLen*2 {
 		return Identity{}, fmt.Errorf("%s is not a hub token", filepath.Join(dir, tokenFile))
 	}
+	switch owner, err := os.ReadFile(filepath.Join(dir, ownerFile)); {
+	case err == nil:
+		id.Owner = strings.TrimSpace(string(owner))
+	case !errors.Is(err, os.ErrNotExist):
+		return Identity{}, err
+	}
 	return id, nil
 }
+
+// errClaimed is returned by claimOwner when the hub already has an owner.
+var errClaimed = errors.New("this hub is already set up")
+
+// claimOwner makes the owner token, once. O_EXCL makes the file the lock: of
+// two desktops setting the hub up at the same moment, exactly one gets a token.
+func (id Identity) claimOwner() (string, error) {
+	token, err := newToken()
+	if err != nil {
+		return "", err
+	}
+	f, err := os.OpenFile(filepath.Join(id.dir, ownerFile), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return "", errClaimed
+	}
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.WriteString(token + "\n"); err != nil {
+		f.Close()
+		id.releaseOwner()
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		id.releaseOwner()
+		return "", err
+	}
+	return token, nil
+}
+
+// releaseOwner undoes a claim whose setup failed, so the owner can try again.
+func (id Identity) releaseOwner() { _ = os.Remove(filepath.Join(id.dir, ownerFile)) }
 
 // newCertificate makes a self-signed ECDSA P-256 certificate. P-256 rather
 // than RSA: both xmrig's OpenSSL and p2pool's TLS accept it, and it keeps the

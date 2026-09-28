@@ -3,9 +3,15 @@
 # Install the binary as /opt/kind-miner/kind-minerd, this file and
 # kind-miner.slice under /etc/systemd/system, then:
 #
-#   sudo kind-minerd init --address 4…     # writes /etc/kind-miner/config.yaml
+#   sudo install -d -m 700 /etc/kind-miner
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now kind-minerd
+#
+# With no config it waits to be set up from the desktop app (Settings →
+# Connection → Find a hub), which writes the service's own config under
+# /var/lib/kind-miner. Or set it up over SSH before starting it:
+#
+#   sudo kind-minerd init --address 4…     # writes /etc/kind-miner/config.yaml
 #   kind-minerd status                     # or: kind-minerd doctor
 
 [Unit]
@@ -28,9 +34,12 @@ DynamicUser=yes
 StateDirectory=kind-miner
 # /run/kind-miner: the status file `kind-minerd status` reads.
 RuntimeDirectory=kind-miner
-# The config stays root-owned and 0600; systemd hands the service a private
-# copy, which kind-minerd reads from $CREDENTIALS_DIRECTORY.
-LoadCredential=config.yaml:/etc/kind-miner/config.yaml
+# A config written over SSH stays root-owned and 0600; systemd hands the
+# service a private copy, which kind-minerd reads from $CREDENTIALS_DIRECTORY
+# as kind-miner_config.yaml. The directory rather than the file, because a
+# credential naming a missing file stops the unit starting — and a Nodo set up
+# from the desktop has none. The directory must exist, even empty.
+LoadCredential=kind-miner:/etc/kind-miner
 
 # Yield on every resource, not just CPU.
 IOSchedulingClass=idle
