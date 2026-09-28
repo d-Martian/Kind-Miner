@@ -43,8 +43,10 @@ type facts struct {
 // everything, and a short huge page pool only slows it.
 func diagnose(f facts) (string, bool) {
 	switch {
+	case f.running && f.status.State == stateAwaitingSetup:
+		return "kind-minerd is waiting to be set up: " + awaitingReason, true
 	case f.configMissing:
-		return "There is no config yet: run kind-minerd init --address 4… with your Monero address.", true
+		return "There is no config yet: start kind-minerd and set it up from the desktop app, or run kind-minerd init --address 4… with your Monero address.", true
 	case f.configErr != nil:
 		return fmt.Sprintf("The config is not usable: %v. Edit %s.", f.configErr, config.Path()), true
 	case f.nodoErr != nil:
@@ -73,6 +75,8 @@ func gatherFacts() facts {
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		f.configMissing = true
+		// A daemon with no config may be running, waiting to be set up.
+		f.status, f.running, _ = readStatus(readPath(), time.Now())
 		return f
 	case err != nil:
 		f.configErr = err

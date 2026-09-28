@@ -149,7 +149,8 @@ dependencies (built with `CGO_ENABLED=0`), for x86-64 and arm64.
 
 ```sh
 kind-minerd init --address 4…   # write a config for your wallet
-kind-minerd run                 # mine until stopped (what a service runs)
+kind-minerd run                 # mine until stopped (what a service runs);
+                                # with no config, wait to be set up from a desktop
 kind-minerd status              # what it is doing   (--json for scripts)
 kind-minerd doctor              # one sentence on what is wrong, if anything
 kind-minerd pair                # the code that pairs a device with this hub
@@ -165,7 +166,8 @@ mine side by side.
 ```sh
 sudo install -Dm755 kind-minerd /opt/kind-miner/kind-minerd
 sudo install -Dm644 packaging/systemd/kind-miner.slice packaging/systemd/kind-minerd.service -t /etc/systemd/system/
-sudo /opt/kind-miner/kind-minerd init --address 4…   # writes /etc/kind-miner/config.yaml
+sudo install -d -m 700 /etc/kind-miner
+sudo /opt/kind-miner/kind-minerd init --address 4…   # optional: writes /etc/kind-miner/config.yaml
 sudo systemctl daemon-reload
 sudo systemctl enable --now kind-minerd
 kind-minerd status
@@ -178,11 +180,26 @@ idle I/O, can write only `/var/lib/kind-miner`, reads its config as a private
 copy (the file in `/etc` stays root-only), and is first to go if memory runs
 out.
 
+Skip `init` and the service waits to be set up from a desktop instead: see the
+next section.
+
 ### One hub for the house
 
 A Nodo already follows the chain; it can run p2pool once for every machine in
-the house, and the desktops then run only the miner. Turn it on in the hub's
-config and restart:
+the house, and the desktops then run only the miner.
+
+**From the desktop.** Start `kind-minerd` on the Nodo with no config. On a
+desktop, open **Settings → Connection → Find a hub**: it finds the Nodo on the
+LAN and offers to set it up to pay the address on the Payout tab. The Nodo
+writes its own config with the hub on and starts mining; the desktop switches
+to mode `hub` with the pairing code filled in. Changing the address on that
+desktop later changes the hub's too. Only the desktop that set the hub up can
+do that — its owner token is not in the pairing code — and a hub, once set up,
+cannot be set up again. Until then, whichever desktop asks first sets it up:
+there is no screen on a Nodo to show a code on, so the first connection is
+trusted, and from then on only that certificate is.
+
+**Over SSH.** Turn the hub on in its config and restart:
 
 ```yaml
 hub:
@@ -195,14 +212,17 @@ sudo kind-minerd pair --name garage-server
 ```
 
 `pair` prints a code starting `km1-`. On a desktop, open **Settings →
-Connection**, choose mode `hub` and paste it: that machine now runs xmrig
+Connection**, choose mode `hub` and paste it — this is also how the rest of
+the house pairs with a hub set up from a desktop, using the code in that
+desktop's settings: that machine now runs xmrig
 alone, and its dashboard and tray show the household's shares, payouts and
 devices. For a box running plain xmrig, `--name` prints the `pools` block for
 its `config.json`; its `user` is the name it shows under in `kind-minerd
 status`.
 
 Stratum is served over TLS on port 18087 and the household statistics on
-18088, with a self-signed certificate made once on the hub. Devices trust it by
+18088 (TCP; UDP 18088 answers the desktop's search), with a self-signed
+certificate made once on the hub. Devices trust it by
 the fingerprint in the code, not by any authority: a machine on your network
 answering at the hub's address is refused, by xmrig and by the desktop alike.
 One hub pays one wallet: everyone who pairs is mining for the hub's owner.
