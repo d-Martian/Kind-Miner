@@ -182,7 +182,7 @@ func serveTest(t *testing.T, dir string, h Household) Pairing {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Close)
-	return id.PairingFor("127.0.0.1", 18087, port)
+	return id.PairingFor("127.0.0.1", "", 18087, port)
 }
 
 func TestHouseholdAPI(t *testing.T) {
@@ -196,9 +196,9 @@ func TestHouseholdAPI(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("a paired device reads the household", func(t *testing.T) {
-		got, err := Fetch(ctx, p)
-		if err != nil {
-			t.Fatal(err)
+		got, viaTor, err := Fetch(ctx, p, "")
+		if err != nil || viaTor {
+			t.Fatalf("err %v, viaTor %v", err, viaTor)
 		}
 		if got.Stats.SharesFound != 7 || got.Stats.BlockTime != 30*time.Second || !got.StatsOK ||
 			len(got.Workers) != 1 || got.Workers[0] != want.Workers[0] {
@@ -208,7 +208,7 @@ func TestHouseholdAPI(t *testing.T) {
 	t.Run("a wrong token is refused", func(t *testing.T) {
 		bad := p
 		bad.Token = strings.Repeat("00", tokenLen)
-		if _, err := Fetch(ctx, bad); err == nil || !strings.Contains(err.Error(), "401") {
+		if _, _, err := Fetch(ctx, bad, ""); err == nil || !strings.Contains(err.Error(), "401") {
 			t.Errorf("err = %v, want 401", err)
 		}
 	})
@@ -221,7 +221,7 @@ func TestHouseholdAPI(t *testing.T) {
 		}
 		impostor := p
 		impostor.Fingerprint = other.Fingerprint
-		if _, err := Fetch(ctx, impostor); !errors.Is(err, ErrWrongHub) {
+		if _, _, err := Fetch(ctx, impostor, ""); !errors.Is(err, ErrWrongHub) {
 			t.Errorf("err = %v, want ErrWrongHub", err)
 		}
 	})

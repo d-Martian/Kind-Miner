@@ -84,6 +84,23 @@ func TestXMRigMinesToAHubOverPinnedTLS(t *testing.T) {
 	}
 }
 
+func TestXMRigFallsBackToTheHubsOnion(t *testing.T) {
+	x := NewXMRig("", "192.168.8.192:18087", 2, 18080)
+	x.UseHub("laptop", "ab12")
+	x.UseHubFallback("abc.onion:18087", "127.0.0.1:9050")
+	data, _ := x.configJSON()
+	var c xmrigConfig
+	json.Unmarshal(data, &c)
+	want := []xmrigPool{
+		// The LAN first: xmrig keeps retrying pool 0 and returns to it.
+		{URL: "192.168.8.192:18087", User: "laptop", TLS: true, TLSFingerprint: "ab12", Keepalive: true},
+		{URL: "abc.onion:18087", User: "laptop", TLS: true, TLSFingerprint: "ab12", SOCKS5: "127.0.0.1:9050", Keepalive: true},
+	}
+	if !reflect.DeepEqual(c.Pools, want) {
+		t.Errorf("pools = %+v\nwant  %+v", c.Pools, want)
+	}
+}
+
 func TestSetLayoutRewritesTheWatchedConfig(t *testing.T) {
 	noScopes(t)
 	if _, err := exec.LookPath("sleep"); err != nil {

@@ -207,6 +207,16 @@ the fingerprint in the code, not by any authority: a machine on your network
 answering at the hub's address is refused, by xmrig and by the desktop alike.
 One hub pays one wallet: everyone who pairs is mining for the hub's owner.
 
+**Away from home.** With `onion: true` under `hub:` the hub also publishes
+both ports as a Tor onion service, from a Tor of its own — its own
+configuration and keys under `/var/lib/kind-miner`, so a Nodo update that
+rewrites `/etc/tor/torrc` cannot take it away. Pair again after turning it
+on: the new code starts `km2-`. A laptop paired with it mines over the LAN at
+home; when the LAN address stops answering it moves to the onion through its
+own Tor, with the same certificate pin, and moves back by itself once it is
+home again. The onion does not help while the hub itself is down — it is on
+the same box.
+
 ## Sleep
 
 kind-miner mines while your machine is awake and stops when it sleeps. It never keeps a machine awake, and we don't suggest turning sleep off to mine more: a kind miner uses the time you leave it, not time it takes.
@@ -313,6 +323,7 @@ hub:
   serve: false
   stratum_port: 18087
   api_port: 18088
+  onion: false   # also serve both as a Tor onion, for devices away from home
 
 # Dashboard chart — display only.
 chart:

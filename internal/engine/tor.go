@@ -3,6 +3,7 @@ package engine
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -22,11 +23,16 @@ type Tor struct {
 	binPath   string
 	dataDir   string
 	socksPort int
+	// onionDir and onionPorts publish an onion service; see ServeOnion.
+	onionDir   string
+	onionPorts []int
 
 	mu     sync.Mutex
 	cmd    *exec.Cmd
 	cancel context.CancelFunc
 	ready  bool
+	// closed is set by Close; Start refuses afterwards.
+	closed bool
 }
 
 // NewTor creates a manager. binPath may be empty to auto-locate (bundled, then
@@ -40,9 +46,43 @@ func (t *Tor) SOCKSAddr() string {
 	return fmt.Sprintf("127.0.0.1:%d", t.socksPort)
 }
 
+// ServeOnion makes this Tor publish an onion service from dir — where Tor
+// keeps its key, so the address survives restarts — forwarding each port to
+// the same port on loopback. Call it before Start. With a SOCKS port of 0
+// the instance only serves: it is a separate Tor for that purpose, never the
+// one a miner's traffic goes out through.
+func (t *Tor) ServeOnion(dir string, ports ...int) {
+	t.mu.Lock()
+	t.onionDir, t.onionPorts = dir, ports
+	t.mu.Unlock()
+}
+
+// torrc is the configuration Start writes. Caller holds mu.
+func (t *Tor) torrc() string {
+	socks := "0"
+	if t.socksPort > 0 {
+		socks = fmt.Sprintf("127.0.0.1:%d", t.socksPort)
+	}
+	conf := fmt.Sprintf(
+		"SocksPort %s\nDataDirectory %s\nClientOnly 1\nAvoidDiskWrites 1\nSafeLogging 1\nLog notice stdout\n",
+		socks, t.dataDir,
+	)
+	if t.onionDir != "" {
+		conf += fmt.Sprintf("HiddenServiceDir %s\n", t.onionDir)
+		for _, port := range t.onionPorts {
+			conf += fmt.Sprintf("HiddenServicePort %d 127.0.0.1:%d\n", port, port)
+		}
+	}
+	return conf
+}
+
 // Start launches Tor and waits until it has bootstrapped (up to timeout).
 func (t *Tor) Start(timeout time.Duration) error {
 	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return errors.New("tor has been shut down")
+	}
 	if t.cmd != nil {
 		t.mu.Unlock()
 		return nil
@@ -66,11 +106,14 @@ func (t *Tor) Start(timeout time.Duration) error {
 	// SOCKS port is all p2pool needs.
 	torrc := filepath.Join(t.dataDir, "torrc")
 	emptyDefaults := filepath.Join(t.dataDir, "defaults-torrc")
-	conf := fmt.Sprintf(
-		"SocksPort 127.0.0.1:%d\nDataDirectory %s\nClientOnly 1\nAvoidDiskWrites 1\nSafeLogging 1\nLog notice stdout\n",
-		t.socksPort, t.dataDir,
-	)
-	if err := os.WriteFile(torrc, []byte(conf), 0o600); err != nil {
+	if t.onionDir != "" {
+		// Tor makes the service directory itself, but not its parent.
+		if err := os.MkdirAll(filepath.Dir(t.onionDir), 0o700); err != nil {
+			t.mu.Unlock()
+			return fmt.Errorf("creating onion service dir: %w", err)
+		}
+	}
+	if err := os.WriteFile(torrc, []byte(t.torrc()), 0o600); err != nil {
 		t.mu.Unlock()
 		return fmt.Errorf("writing torrc: %w", err)
 	}
@@ -127,6 +170,16 @@ func (t *Tor) Stop() {
 	t.cmd = nil
 	t.cancel = nil
 	t.ready = false
+}
+
+// Close stops Tor for good. A Start still to come — one running in the
+// background, as the hub's onion does so mining never waits on Tor — then
+// refuses rather than leaving a Tor behind the app.
+func (t *Tor) Close() {
+	t.mu.Lock()
+	t.closed = true
+	t.mu.Unlock()
+	t.Stop()
 }
 
 // Ready reports whether Tor has finished bootstrapping.
