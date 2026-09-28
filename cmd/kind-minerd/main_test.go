@@ -23,6 +23,11 @@ func TestDiagnoseNamesTheFirstProblem(t *testing.T) {
 		problem bool
 	}{
 		{"no config", facts{configMissing: true}, "kind-minerd init --address", true},
+		{
+			"waiting for the desktop",
+			facts{configMissing: true, running: true, status: daemonStatus{State: stateAwaitingSetup}},
+			"Settings → Connection → Find a hub", true,
+		},
 		{"a bad config", facts{configErr: errors.New("wallet address is required")}, "wallet address is required", true},
 		{"not running", facts{}, "not running", true},
 		{"stopped for a reason", facts{running: true, status: daemonStatus{State: "paused", Reason: "p2pool has no peers"}}, "Mining is stopped: p2pool has no peers.", true},
@@ -112,24 +117,54 @@ func TestInit(t *testing.T) {
 }
 
 func TestConfigFor(t *testing.T) {
+	const creds, state = "/run/credentials/kind-minerd.service", "/var/lib/kind-miner"
 	none := func(string) bool { return false }
-	some := func(p string) bool { return p == serviceConfig }
+	only := func(paths ...string) func(string) bool {
+		return func(p string) bool {
+			for _, q := range paths {
+				if p == q {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	credential := creds + "/" + credentialConfig
 	cases := []struct {
-		name, flag, creds string
-		uid               int
-		exists            func(string) bool
-		want              string
+		name, flag, creds, state string
+		uid                      int
+		exists                   func(string) bool
+		want                     string
 	}{
-		{"--config wins", "/x.yaml", "/run/credentials/kind-minerd.service", 0, some, "/x.yaml"},
-		{"the service reads its credential", "", "/run/credentials/kind-minerd.service", 61234, none,
-			"/run/credentials/kind-minerd.service/config.yaml"},
-		{"root sets up the service's config", "", "", 0, none, serviceConfig},
-		{"a user asking about a configured service", "", "", 1000, some, serviceConfig},
-		{"a user with no service keeps their own", "", "", 1000, none, ""},
+		{"--config wins", "/x.yaml", creds, state, 0, only(credential), "/x.yaml"},
+		{"the service reads root's config when there is one", "", creds, state, 61234, only(credential), credential},
+		{"the service set up from the desktop reads its own", "", creds, state, 61234, none, state + "/config.yaml"},
+		{"root sets up the service's config", "", "", "", 0, none, serviceConfig},
+		{"root checks a service set up over SSH", "", "", "", 0, only(serviceConfig, serviceStateConfig), serviceConfig},
+		{"root checks a service set up from the desktop", "", "", "", 0, only(serviceStateConfig), serviceStateConfig},
+		{"a user asking about a configured service", "", "", "", 1000, only(serviceConfig), serviceConfig},
+		{"a user with no service keeps their own", "", "", "", 1000, none, ""},
 	}
 	for _, c := range cases {
-		if got := configFor(c.flag, c.creds, c.uid, c.exists); got != c.want {
+		if got := configFor(c.flag, c.creds, c.state, c.uid, c.exists); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestPushable(t *testing.T) {
+	const creds = "/run/credentials/kind-minerd.service"
+	cases := []struct {
+		name, path, creds string
+		want              bool
+	}{
+		{"root's config, handed over as a credential", creds + "/" + credentialConfig, creds, false},
+		{"the service's own, set up from the desktop", "/var/lib/kind-miner/config.yaml", creds, true},
+		{"a user's own daemon", "/home/a/.config/kind-miner/config.yaml", "", true},
+	}
+	for _, c := range cases {
+		if got := pushable(c.path, c.creds); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
 	}
 }

@@ -33,6 +33,10 @@ type settingsForm struct {
 	nodeAddr *widget.Entry
 	hubCode  *widget.Entry
 	worker   *widget.Entry
+	hubNote  *widget.Label
+	// ownerToken is this desktop's say over the hub it set up, for the
+	// pairing code ownerCode; see ownerTokenFor.
+	ownerToken, ownerCode string
 
 	xmrigPath  *widget.Entry
 	p2poolPath *widget.Entry
@@ -146,11 +150,13 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 	f.nodeAddr.SetText(cfg.RemoteNode)
 
 	f.hubCode = widget.NewEntry()
-	f.hubCode.SetPlaceHolder("km1-… from kind-minerd pair on the hub")
+	f.hubCode.SetPlaceHolder("km1-… filled in by Find a hub, or from kind-minerd pair")
 	f.hubCode.SetText(cfg.HubCode)
 	f.worker = widget.NewEntry()
 	f.worker.SetPlaceHolder("blank uses this computer's name")
 	f.worker.SetText(cfg.WorkerName)
+	f.hubNote = note(hubModeNote)
+	f.ownerToken, f.ownerCode = cfg.HubOwnerToken, cfg.HubCode
 
 	f.xmrigPath = widget.NewEntry()
 	f.xmrigPath.SetText(cfg.XMRigBinPath)
@@ -283,7 +289,8 @@ func (f *settingsForm) connectionTab(u *uiApp) fyne.CanvasObject {
 		f.chain,
 		suggestion,
 		sectionLabel("Mine to a hub"),
-		note(hubModeNote),
+		f.hubNote,
+		widget.NewButton(findHubButton, func() { f.findHub(u.settingsWin) }),
 		f.hubCode,
 		sectionLabel("This computer's name on the hub"),
 		f.worker,
@@ -390,6 +397,16 @@ func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
 		return "Pick a kindness preset"
 	}
 
+	// The hub first: if it refuses the new wallet, nothing is saved here
+	// either, and the reason is on screen.
+	wallet := strings.TrimSpace(f.wallet.Text)
+	owner := f.ownerTokenFor(f.hubCode.Text)
+	if hubbed && owner != "" && wallet != "" && wallet != f.walletAtOpen {
+		if err := pushWallet(f.hubCode.Text, owner, wallet); err != nil {
+			return "The hub's wallet was not changed: " + err.Error()
+		}
+	}
+
 	// Register with the OS before saving, so a stored preference never claims a
 	// login entry the system refused to create.
 	if f.startup.Checked != cfg.RunAtStartup {
@@ -398,7 +415,8 @@ func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
 		}
 	}
 
-	cfg.Wallet = strings.TrimSpace(f.wallet.Text)
+	cfg.Wallet = wallet
+	cfg.HubOwnerToken = owner
 	cfg.Mode = config.Mode(f.mode.Selected)
 	cfg.P2PoolChain = f.chain.Selected
 	cfg.RemoteNode = strings.TrimSpace(f.nodeAddr.Text)
@@ -449,7 +467,10 @@ func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
 // subprocesses are relaunched. It is checked after apply, so it compares
 // against the values now in cfg.
 func (f *settingsForm) needsRestart(cfg *config.Config) bool {
-	return cfg.Wallet != f.walletAtOpen ||
+	// On a desktop mining to a hub the wallet is the hub's, and a change
+	// reached it on Save; nothing here restarts for it.
+	walletChanged := cfg.Wallet != f.walletAtOpen && cfg.Mode != config.ModeHub
+	return walletChanged ||
 		string(cfg.Mode) != f.modeAtOpen ||
 		cfg.P2PoolChain != f.chainAtOpen ||
 		cfg.RemoteNode != f.nodeAtOpen ||

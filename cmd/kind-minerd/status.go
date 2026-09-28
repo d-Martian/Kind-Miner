@@ -136,11 +136,11 @@ func writeStatus(path string, st daemonStatus) error {
 	return os.Rename(tmp, path)
 }
 
-func writeStatusEvery(sup *core.Supervisor, path string, every time.Duration, stop <-chan struct{}) {
+func writeStatusEvery(snap func(time.Time) daemonStatus, path string, every time.Duration, stop <-chan struct{}) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
-		if err := writeStatus(path, snapshot(sup, time.Now())); err != nil {
+		if err := writeStatus(path, snap(time.Now())); err != nil {
 			log.Printf("status: %v", err)
 		}
 		select {
@@ -197,6 +197,9 @@ func formatStatus(st daemonStatus) string {
 		line += " — " + st.Reason
 	}
 	out := fmt.Sprintf("kind-minerd %s: %s\n", st.Version, line)
+	if st.State == stateAwaitingSetup {
+		return out
+	}
 	rate := func(p *float64) string {
 		if p == nil {
 			return "—"

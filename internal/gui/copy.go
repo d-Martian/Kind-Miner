@@ -84,7 +84,33 @@ const (
 // hubModeNote explains the hub mode in the connection settings. It says whose
 // wallet is paid, because that is the thing a household member pairing their
 // laptop most needs to know before they do it.
-const hubModeNote = "Choose mode \"hub\" to mine to another machine in the house — usually a Nodo running kind-minerd with its hub turned on. Run kind-minerd pair on it and paste the code here. This computer then runs only the miner, and the hub pays its owner's wallet, not the address above."
+const hubModeNote = "Choose mode \"hub\" to mine to another machine in the house — usually a Nodo running kind-minerd. Find a hub sets up a new one to pay the address on the Payout tab; for one already set up, paste the code its owner has here, or that kind-minerd pair prints on it. This computer then runs only the miner, and the hub pays its owner's wallet."
+
+// Find a hub: the search, and setting a new hub up.
+const (
+	findHubButton    = "Find a hub on this network…"
+	findHubTitle     = "Find a hub"
+	findHubSearching = "Looking for hubs on this network…"
+	findHubNone      = "No hub answered. Is kind-minerd running on it, on the same network as this computer? Give its address instead:"
+	findHubSome      = "Hubs on this network:"
+	findHubManual    = "or its address, e.g. 192.168.1.20"
+	findHubLook      = "Look there"
+	findHubSetUp     = "Set up…"
+	// findHubIsSetUp is shown against a hub that already has an owner: only
+	// its code can pair with it now, and the owner's desktop has it.
+	findHubIsSetUp = "already set up — paste its pairing code from the desktop that set it up"
+	findHubNotSet  = "not set up yet"
+	// findHubNeedsAddress: setting a hub up is what asks for the address,
+	// once, and the Payout tab is where this desktop already keeps it.
+	findHubNeedsAddress = "Enter your Monero address on the Payout tab first: the hub will pay it for every device in the house."
+	// findHubConfirm names the address and the certificate. This is the one
+	// moment the desktop takes the hub's certificate on trust; from here on
+	// it accepts that certificate only.
+	findHubConfirm   = "Set %s up to mine for %s?\n\nEvery device that mines to it pays this address. This computer will trust it by its certificate, %s, and no other."
+	findHubSettingUp = "Setting %s up…"
+	findHubDone      = "%s is set up. Save to mine to it; it starts mining itself within a few minutes."
+	findHubFailed    = "Could not set %s up: %s"
+)
 
 // Connection card labels for a machine paired with a hub.
 const (

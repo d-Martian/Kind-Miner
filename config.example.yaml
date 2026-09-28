@@ -176,13 +176,16 @@ mine_on_nodo: false
 
 # --- Household hub ---
 
-# hub mode: the code `kind-minerd pair` prints on the hub. It carries the
+# hub mode: the code `kind-minerd pair` prints on the hub, or that Settings →
+# Connection → Find a hub filled in when this desktop set the hub up. It carries the
 # hub's address, its certificate fingerprint (xmrig refuses any other
 # certificate, so a machine on the LAN cannot pose as the hub) and the token
 # for its statistics. worker_name is this machine's name in the hub's device
 # list; blank uses the hostname. Both need a restart.
 hub_code: ""
 worker_name: ""
+# hub_owner_token appears only on the desktop that set the hub up, and lets it
+# change the wallet the hub pays. Keep it to yourself.
 
 # Serve p2pool to the rest of the house: stratum over TLS on stratum_port and
 # the household statistics on api_port, both on every interface. Off by
