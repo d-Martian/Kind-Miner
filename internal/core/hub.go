@@ -85,12 +85,10 @@ func (s *Supervisor) SetHubWallet(set func(address string) error) { s.hubWallet 
 // It runs in the background and never fails Start: the onion is for devices
 // away from home, and the house mines over the LAN without it.
 func (s *Supervisor) startHubOnion() {
-	bin, err := engine.FindTor(s.cfg.TorBinPath)
+	bin, err := s.torBinary()
 	if err != nil {
-		if bin, err = autoinstall.EnsureTor(autoinstall.BinDir()); err != nil {
-			log.Printf("hub: no onion service — could not obtain tor: %v", err)
-			return
-		}
+		log.Printf("hub: no onion service — could not obtain tor: %v", err)
+		return
 	}
 	stratumPort, apiPort := s.cfg.HubPorts()
 	t := engine.NewTor(bin, filepath.Join(HubDir(), "tor"), 0)
