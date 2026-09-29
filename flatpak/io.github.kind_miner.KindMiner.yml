@@ -24,9 +24,9 @@ finish-args:
   # the same config as host builds (AppImage, go run). Do not remove it without
   # also changing config.Dir().
   - --filesystem=xdg-config/kind-miner:create
-  # Downloaded binaries (xmrig/p2pool/tor) and p2pool state need no grant:
-  # autoinstall.BinDir() follows XDG_DATA_HOME, which Flatpak points at the
-  # app-private ~/.var/app/<app-id>/data.
+  # The engines (xmrig/p2pool/tor) ship in /app/lib/kind-miner/engines, and
+  # p2pool's state needs no grant: autoinstall.BinDir() follows XDG_DATA_HOME,
+  # which Flatpak points at the app-private ~/.var/app/<app-id>/data.
   # System tray — covers both KDE and GNOME/freedesktop implementations
   - --talk-name=org.kde.StatusNotifierWatcher
   - --talk-name=org.freedesktop.StatusNotifierWatcher
@@ -64,6 +64,10 @@ modules:
           /app/share/icons/hicolor/512x512/apps/io.github.kind_miner.KindMiner.png
       - install -Dm644 assets/icons/app-256.png
           /app/share/icons/hicolor/256x256/apps/io.github.kind_miner.KindMiner.png
+      # The engines, staged by tools/stage-engines: xmrig built from source,
+      # the pinned p2pool and Tor. kind-miner finds them beside its binary
+      # (../lib/kind-miner/engines) and then downloads nothing.
+      - mkdir -p /app/lib/kind-miner && cp -a engines-bundle /app/lib/kind-miner/engines
       # AppStream metadata (required for Flathub; silences the build's
       # "No appstream data" warning and feeds software-center listings)
       - install -Dm644 io.github.kind_miner.KindMiner.metainfo.xml
@@ -88,3 +92,8 @@ modules:
           - p2pool
           - p2pool.cache
           - p2pool.log
+      # The staged engines, which live under build/ and so are skipped above.
+      # scripts/build-flatpak.sh refuses to build without them.
+      - type: dir
+        path: ../build/engines
+        dest: engines-bundle

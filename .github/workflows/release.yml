@@ -117,6 +117,36 @@ jobs:
             ${{ env.CHECKSUM }}
 
   # ---------------------------------------------------------------------------
+  # xmrig from source, once per architecture, for every package that ships it:
+  # the .deb, the AppImage and the Flatpak. Built natively on each kind of
+  # runner (see xmrig-build.yml), and never the upstream binary, which keeps a
+  # 1% donation that connects outside Tor and has no arm64 build at all.
+  # ---------------------------------------------------------------------------
+  xmrig:
+    name: xmrig ${{ matrix.arch }} from source
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure podman
+        run: command -v podman || { sudo apt-get update && sudo apt-get install -y --no-install-recommends podman; }
+
+      - name: Build xmrig
+        run: scripts/build-xmrig.sh "$RUNNER_TEMP/xmrig"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xmrig-linux-${{ matrix.arch }}
+          path: ${{ runner.temp }}/xmrig/xmrig
+
+  # ---------------------------------------------------------------------------
   # The kind-minerd .deb, for a Nodo or any Debian box with no screen. Each
   # architecture on its own kind of runner, because the xmrig inside is built
   # from source natively (see xmrig-build.yml): upstream's binary keeps a 1%
@@ -126,6 +156,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deb:
     name: kind-minerd ${{ matrix.arch }} .deb
+    needs: xmrig
     strategy:
       fail-fast: false
       matrix:
@@ -146,9 +177,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Ensure podman
-        run: command -v podman || { sudo apt-get update && sudo apt-get install -y --no-install-recommends podman; }
-
       - name: Build kind-minerd
         env:
           CGO_ENABLED: 0
@@ -159,8 +187,10 @@ jobs:
             -ldflags "-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
             -o "$RUNNER_TEMP/kind-minerd" ./cmd/kind-minerd
 
-      - name: Build xmrig from source
-        run: scripts/build-xmrig.sh "$RUNNER_TEMP/xmrig"
+      - uses: actions/download-artifact@v4
+        with:
+          name: xmrig-linux-${{ matrix.arch }}
+          path: ${{ runner.temp }}/xmrig
 
       - name: Fetch the pinned p2pool
         run: bash scripts/download-p2pool.sh
@@ -168,6 +198,7 @@ jobs:
       - name: Build the .deb
         run: |
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          chmod +x "$RUNNER_TEMP/xmrig/xmrig"  # artifacts drop the mode
           deb="$(scripts/build-deb.sh "$GITHUB_REF_NAME" ${{ matrix.arch }} \
             "$RUNNER_TEMP/kind-minerd" "$RUNNER_TEMP/xmrig/xmrig" \
             "dist/${{ matrix.platform }}/bin/p2pool" dist/deb)"
@@ -189,6 +220,7 @@ jobs:
   # ---------------------------------------------------------------------------
   appimage:
     name: linux/amd64 AppImage
+    needs: xmrig
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -213,6 +245,18 @@ jobs:
           chmod +x appimagetool
           sudo mv appimagetool /usr/local/bin/appimagetool
 
+      # The engines every desktop package ships, so it never downloads
+      # them: this release's xmrig, and the pinned p2pool and Tor.
+      - uses: actions/download-artifact@v4
+        with:
+          name: xmrig-linux-amd64
+          path: ${{ runner.temp }}/xmrig
+
+      - name: Stage the engines
+        run: |
+          chmod +x "$RUNNER_TEMP/xmrig/xmrig"
+          go run ./tools/stage-engines -xmrig "$RUNNER_TEMP/xmrig/xmrig" -out build/engines
+
       - name: Build AppImage
         # APPIMAGE_EXTRACT_AND_RUN lets appimagetool run without FUSE, which the
         # GitHub runner doesn't provide.
@@ -231,6 +275,7 @@ jobs:
 
   flatpak:
     name: linux/amd64 Flatpak
+    needs: xmrig
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -258,6 +303,18 @@ jobs:
             "org.freedesktop.Platform//${RTV}" \
             "org.freedesktop.Sdk//${RTV}" \
             "org.freedesktop.Sdk.Extension.golang//${RTV}"
+
+      # The engines every desktop package ships, so it never downloads
+      # them: this release's xmrig, and the pinned p2pool and Tor.
+      - uses: actions/download-artifact@v4
+        with:
+          name: xmrig-linux-amd64
+          path: ${{ runner.temp }}/xmrig
+
+      - name: Stage the engines
+        run: |
+          chmod +x "$RUNNER_TEMP/xmrig/xmrig"
+          go run ./tools/stage-engines -xmrig "$RUNNER_TEMP/xmrig/xmrig" -out build/engines
 
       - name: Build + bundle Flatpak
         run: |
