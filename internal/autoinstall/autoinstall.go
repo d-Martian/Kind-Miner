@@ -1,5 +1,8 @@
-// Package autoinstall downloads XMRig and p2pool on first run so users never
-// have to manually install anything.
+// Package autoinstall holds the engine pins, and downloads and verifies the
+// pinned builds for a kind-miner with no engines beside it (go run, a bare
+// binary). Packaged builds carry theirs and never call it at run time; see
+// internal/core/engines.go and tools/stage-engines, which bundles from these
+// same pins.
 package autoinstall
 
 import (
@@ -70,11 +73,12 @@ func EnsureP2Pool(binDir string) (string, error) {
 
 // ---- pinned dependency manifest (deps.json) ----
 
-// XMRig and p2pool are downloaded at runtime (the Flatpak/AppImage ship no
-// bundled copy), so — like the Tor Expert Bundle — their archives are pinned to
-// a specific version and verified against a known SHA256. deps.json is the
-// single source of truth for those pins, shared with the release packaging
-// scripts and maintained by the monero-miner-dependency-updater skill.
+// A build with no engines beside it downloads XMRig and p2pool at run time,
+// and packaged builds bundle them from these same pins (tools/stage-engines),
+// so — like the Tor Expert Bundle — their archives are pinned to a specific
+// version and verified against a known SHA256. deps.json is the single source
+// of truth for those pins, shared with the release packaging scripts and
+// maintained by the monero-miner-dependency-updater skill.
 
 //go:embed deps.json
 var depsJSON []byte
@@ -94,6 +98,12 @@ type depSpec struct {
 type depManifest struct {
 	XMRig  depSpec `json:"xmrig"`
 	P2Pool depSpec `json:"p2pool"`
+}
+
+// PinnedVersions are the versions of the engines this build pins, for the
+// manifest a bundle carries.
+func PinnedVersions() (xmrig, p2pool, tor string) {
+	return deps.XMRig.Version, deps.P2Pool.Version, torVersion
 }
 
 // deps is parsed once at init so a malformed deps.json fails fast and loudly at

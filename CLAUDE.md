@@ -48,7 +48,7 @@ cmd/kind-miner  → decides UI mode (GUI / tray / headless), owns signals
 cmd/kind-minerd → the headless daemon (init/run/status/doctor/pair); pure Go, never imports internal/gui;
                   with no config, `run` waits to be set up from a desktop (setup.go)
   internal/core → Supervisor: owns the whole mining stack for one config
-    internal/autoinstall → downloads + SHA256-verifies xmrig, p2pool, tor
+    internal/autoinstall → the engine pins; downloads + SHA256-verifies them for unpackaged builds
     internal/engine      → XMRig, P2Pool, Monerod, Tor subprocesses
     internal/scheduler   → the 2s control loop that decides how much CPU mining gets
       internal/monitor   → CPU / battery / temp / idle / session-lock / power samplers
@@ -193,6 +193,15 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   `/var/lib/kind-miner/config.yaml` (written by a desktop's setup). Only the
   second may be changed through the hub API; `configFor` and `pushable` in
   `cmd/kind-minerd` own this.
+- **Packaged builds never download engines.** The AppImage and Flatpak carry
+  them in `<prefix>/lib/kind-miner/engines`, the .deb in
+  `/opt/kind-miner/engines`, each with an `engines.json`; `core/engines.go`
+  finds them beside the executable and then refuses to download. Both desktop
+  scripts refuse to build without a staged bundle
+  (`go run ./tools/stage-engines`, which takes p2pool and Tor from the same
+  pins autoinstall verifies). Resolved engine paths stay out of the config:
+  an AppImage's mount point changes every launch. The Flathub manifest does
+  not bundle yet — it cannot use the podman xmrig build.
 - **The .deb** (`scripts/build-deb.sh`, `packaging/deb/`) ships the engines in
   `/opt/kind-miner/engines`; its maintainer scripts keep the replaced pair in
   `engines.previous`, and `cmd/kind-minerd/engines.go` + `internal/rollout`

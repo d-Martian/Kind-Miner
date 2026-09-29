@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -121,6 +122,8 @@ type Supervisor struct {
 	hubWallet func(address string) error
 	// engines are the binaries to run instead of downloading; see UseEngines.
 	engines struct{ xmrig, p2pool string }
+	// bin is what this run resolved; see resolveEngines.
+	bin binaries
 	// hhStop ends the polling of the hub a paired machine mines to; hh is its
 	// last answer (hhOK once there is one) and hhErr the last failure.
 	hhStop chan struct{}
@@ -160,26 +163,15 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	s.checkWiFiPowerSave()
 	onNodo, profile := s.detectNodo()
 
-	// Auto-download any missing binaries before we need them — unless the
-	// package shipped them, which is the only way a Nodo gets an xmrig: there
-	// is no linux-arm64 build upstream to download.
-	binDir := autoinstall.BinDir()
-	emit(StepInstallXMRig)
-	var err error
-	if s.engines.xmrig != "" {
-		s.cfg.XMRigBinPath = s.engines.xmrig
-	} else {
-		xmrigPath, err := autoinstall.EnsureXMRig(binDir)
-		if err != nil {
-			return err
-		}
-		if s.cfg.XMRigBinPath == "" {
-			s.cfg.XMRigBinPath = xmrigPath
-		}
+	needP2Pool := s.cfg.ManageP2Pool && s.cfg.Mode != config.ModeHub
+	exe, _ := os.Executable()
+	if err := s.resolveEngines(exe, needP2Pool, emit); err != nil {
+		return err
 	}
 
 	// A machine paired with a hub runs xmrig alone; everything else is the hub's.
 	var pairing hub.Pairing
+	var err error
 	if s.cfg.Mode == config.ModeHub {
 		if pairing, err = hub.ParseCode(s.cfg.HubCode); err != nil {
 			return fmt.Errorf("hub_code: %w", err)
@@ -192,21 +184,6 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	if hubServing(s.cfg) {
 		if hubID, err = hub.Ensure(HubDir()); err != nil {
 			return fmt.Errorf("setting up the household hub: %w", err)
-		}
-	}
-
-	if s.cfg.ManageP2Pool && s.cfg.Mode != config.ModeHub {
-		emit(StepInstallP2Pool)
-		if s.engines.p2pool != "" {
-			s.cfg.P2PoolBinPath = s.engines.p2pool
-		} else {
-			p2poolPath, err := autoinstall.EnsureP2Pool(binDir)
-			if err != nil {
-				return err
-			}
-			if s.cfg.P2PoolBinPath == "" {
-				s.cfg.P2PoolBinPath = p2poolPath
-			}
 		}
 	}
 
@@ -276,7 +253,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			statsDir = nodoStatsDir(statsDir)
 		}
 		opts := engine.P2PoolOptions{
-			BinPath:   s.cfg.P2PoolBinPath,
+			BinPath:   s.bin.p2pool,
 			Wallet:    s.cfg.Wallet,
 			NodeHost:  follow.Host,
 			RPCPort:   follow.RPCPort,
@@ -333,7 +310,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	// kind-miner manages, or with manage_p2pool off, the one the user runs on
 	// the default port.
 	if s.cfg.Mode == config.ModeHub {
-		s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, pairing.StratumAddr(), threads, 8080)
+		s.xmrig = engine.NewXMRig(s.bin.xmrig, pairing.StratumAddr(), threads, 8080)
 		name := workerName(s.cfg)
 		s.xmrig.UseHub(name, pairing.FingerprintHex())
 		if pairing.Onion != "" {
@@ -345,7 +322,7 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		s.hhStop = make(chan struct{})
 		go s.watchHousehold(pairing, s.hhStop)
 	} else {
-		s.xmrig = engine.NewXMRig(s.cfg.XMRigBinPath, fmt.Sprintf("127.0.0.1:%d", s.stratumPort()), threads, 8080)
+		s.xmrig = engine.NewXMRig(s.bin.xmrig, fmt.Sprintf("127.0.0.1:%d", s.stratumPort()), threads, 8080)
 		if hubServing(s.cfg) {
 			// Named like every other device, so the hub's list includes itself.
 			s.xmrig.SetUser(workerName(s.cfg))
@@ -642,14 +619,9 @@ func (s *Supervisor) ensureTor(emit func(Step)) {
 	}
 	if s.cfg.ManageTor {
 		emit(StepStartTor)
-		// Locate a tor binary; download a verified copy if there isn't one.
-		torBin, err := engine.FindTor(s.cfg.TorBinPath)
+		torBin, err := s.torBinary()
 		if err != nil {
-			if p, derr := autoinstall.EnsureTor(autoinstall.BinDir()); derr == nil {
-				torBin = p
-			} else {
-				log.Printf("could not obtain tor: %v", derr)
-			}
+			log.Printf("could not obtain tor: %v", err)
 		}
 		if torBin != "" {
 			dataDir := filepath.Join(autoinstall.BinDir(), "tor-data")
