@@ -2,6 +2,12 @@
 # Build a kind-miner AppImage for the current architecture.
 # Requires: appimagetool (https://github.com/AppImage/AppImageKit/releases)
 # Usage: bash scripts/build-appimage.sh [version]
+#
+# The engines — xmrig built from source, the pinned p2pool and Tor — come from
+# a directory staged by tools/stage-engines (default build/engines; override
+# with KM_ENGINES). They go in usr/lib/kind-miner/engines, where kind-miner
+# finds them and then downloads nothing. An AppImage without them is refused:
+# it would fall back to first-run downloads, which a release must never do.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,6 +24,13 @@ if ! command -v appimagetool &>/dev/null; then
     echo "Download it from: https://github.com/AppImage/appimagetool/releases/tag/continuous"
     echo "  wget -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
     echo "  chmod +x appimagetool && sudo mv appimagetool /usr/local/bin/"
+    exit 1
+fi
+
+ENGINES="${KM_ENGINES:-build/engines}"
+if [[ ! -f "${ENGINES}/engines.json" ]]; then
+    echo "error: no staged engines in ${ENGINES}. Stage them first:" >&2
+    echo "  scripts/build-xmrig.sh && go run ./tools/stage-engines -xmrig dist/xmrig/linux-amd64/xmrig -out build/engines" >&2
     exit 1
 fi
 
@@ -38,6 +51,8 @@ rm -rf "${APPDIR}"
 mkdir -p "${APPDIR}/usr/bin"
 
 cp "build/kind-miner-linux-${ARCH}" "${APPDIR}/usr/bin/kind-miner"
+mkdir -p "${APPDIR}/usr/lib/kind-miner"
+cp -a "${ENGINES}" "${APPDIR}/usr/lib/kind-miner/engines"
 # Top-level AppImage icon. app-512.png is correctly sized for the 512x512
 # hicolor slot the AppRun installs into on first run (app.png is 1024x1024).
 cp assets/icons/app-512.png "${APPDIR}/kind-miner.png"

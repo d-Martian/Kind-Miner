@@ -94,9 +94,12 @@ func (c *Check) Observe(now time.Time, o Observation) (Verdict, string) {
 // Engines is a pair on disk, as the .deb lays it out: xmrig, p2pool and
 // engines.json side by side in one directory.
 type Engines struct {
-	Dir     string
-	XMRig   string `json:"xmrig"`
-	P2Pool  string `json:"p2pool"`
+	Dir    string
+	XMRig  string `json:"xmrig"`
+	P2Pool string `json:"p2pool"`
+	// Tor is tor/tor, when the pair ships a Tor — the desktop bundles do;
+	// the .deb does not, since a Nodo already runs one.
+	Tor     string
 	Version string // "xmrig 6.26.0 · p2pool 4.18"
 	// ID names this exact pair: the versions and the binaries' hashes. Two
 	// builds of one version with different patches are different pairs.
@@ -109,6 +112,8 @@ type manifest struct {
 	P2Pool       string `json:"p2pool"`
 	XMRigSHA256  string `json:"xmrig_sha256"`
 	P2PoolSHA256 string `json:"p2pool_sha256"`
+	// Tor is the Tor Expert Bundle's version, when there is one in tor/.
+	Tor string `json:"tor,omitempty"`
 }
 
 // Load reads the pair in dir. A missing directory is (nil, nil): not every
@@ -131,9 +136,17 @@ func Load(dir string) (*Engines, error) {
 		P2Pool:  filepath.Join(dir, "p2pool"),
 		Version: fmt.Sprintf("xmrig %s · p2pool %s", m.XMRig, m.P2Pool),
 	}
-	sum := sha256.Sum256([]byte(m.XMRig + "\x00" + m.P2Pool + "\x00" + m.XMRigSHA256 + "\x00" + m.P2PoolSHA256))
+	id := m.XMRig + "\x00" + m.P2Pool + "\x00" + m.XMRigSHA256 + "\x00" + m.P2PoolSHA256
+	if m.Tor != "" {
+		id += "\x00tor " + m.Tor
+		e.Tor = filepath.Join(dir, "tor", "tor")
+	}
+	sum := sha256.Sum256([]byte(id))
 	e.ID = hex.EncodeToString(sum[:8])
-	for _, bin := range []string{e.XMRig, e.P2Pool} {
+	for _, bin := range []string{e.XMRig, e.P2Pool, e.Tor} {
+		if bin == "" {
+			continue
+		}
 		if _, err := os.Stat(bin); err != nil {
 			return nil, fmt.Errorf("engines in %s: %w", dir, err)
 		}

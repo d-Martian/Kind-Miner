@@ -15,6 +15,10 @@
 #   flatpak install flathub org.freedesktop.Platform//25.08 \
 #       org.freedesktop.Sdk//25.08 org.freedesktop.Sdk.Extension.golang//25.08
 #
+# The engines — xmrig built from source, the pinned p2pool and Tor — are
+# staged by tools/stage-engines into build/engines (or KM_ENGINES, copied
+# there), and the manifest installs them in /app/lib/kind-miner/engines.
+#
 # Usage: bash scripts/build-flatpak.sh [version]
 set -euo pipefail
 
@@ -37,6 +41,16 @@ if ! command -v flatpak-builder &>/dev/null; then
     echo "  Fedora:  sudo dnf install flatpak-builder" >&2
     echo "  Debian:  sudo apt install flatpak-builder" >&2
     exit 1
+fi
+
+ENGINES="${KM_ENGINES:-build/engines}"
+if [[ ! -f "${ENGINES}/engines.json" ]]; then
+    echo "error: no staged engines in ${ENGINES}. Stage them first:" >&2
+    echo "  scripts/build-xmrig.sh && go run ./tools/stage-engines -xmrig dist/xmrig/linux-amd64/xmrig -out build/engines" >&2
+    exit 1
+fi
+if [[ "$(realpath "${ENGINES}")" != "$(realpath -m build/engines)" ]]; then
+    rm -rf build/engines && mkdir -p build && cp -a "${ENGINES}" build/engines
 fi
 
 echo "Building kind-miner Flatpak ${VERSION} for ${ARCH}…"
