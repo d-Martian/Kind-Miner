@@ -19,8 +19,11 @@ jobs:
           # linux/amd64 is the linux-gui job below: built in the pinned
           # container, so a second machine can rebuild it bit for bit.
 
-          # macOS Intel
-          - runner: macos-13
+          # macOS Intel, cross-compiled on Apple Silicon: GitHub retired the
+          # macos-13 Intel image, and a job asking for it queues forever. Go
+          # passes -arch x86_64 to Apple's clang for cgo, so the arm64 runner
+          # builds the Intel binary natively enough.
+          - runner: macos-14
             goos: darwin
             goarch: amd64
 
