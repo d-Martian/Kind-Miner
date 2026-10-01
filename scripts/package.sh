@@ -53,14 +53,15 @@ cmd_tar() {
 
 cmd_zip() {
 	local out=$1 chdir=$2 member=$3
-	# zip has no --sort/--mtime: pin every member's mtime first, then feed a
-	# sorted file list. -X drops extra attributes, -D drops directory entries.
+	# Info-ZIP's zip has no --sort/--mtime, stores times in the builder's local
+	# time zone, and is not in the Windows runner's Git Bash at all, so the
+	# recipe is a small Go program: sorted members, SOURCE_DATE_EPOCH in UTC,
+	# fixed permissions. See tools/detzip.
+	local root
+	root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 	out=$(cd "$(dirname "$out")" && printf '%s/%s' "$(pwd)" "$(basename "$out")")
-	(
-		cd "$chdir"
-		find "$member" -type f -exec touch -d "@$SOURCE_DATE_EPOCH" {} +
-		find "$member" -type f | LC_ALL=C sort | zip -X -D -q "$out" -@
-	)
+	chdir=$(cd "$chdir" && pwd)
+	(cd "$root" && SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" go run ./tools/detzip "$out" "$chdir" "$member")
 }
 
 # sha256sum is GNU coreutils; macOS ships shasum instead.
