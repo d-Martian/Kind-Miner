@@ -10,16 +10,32 @@ checksums (see `dMartian.pub`) prove *we* built a given file; reproducibility le
 
 ## Reproduce a release
 
-```sh
-git clone https://github.com/kind-miner/kind-miner
-cd kind-miner
-git checkout v0.1.0            # the exact tag you are verifying
+On an x86_64 Linux machine with podman, one command rebuilds everything a
+container can reproduce and compares it with what the release published:
 
-make reproduce                 # or: scripts/reproduce.sh v0.1.0
-sha256sum kind-miner           # compare against the published SHA256SUMS
+```sh
+git clone https://github.com/d-Martian/Kind-Miner && cd Kind-Miner
+scripts/rebuild-release.sh v1.2.3          # add --sign to co-sign, --upload to publish it
 ```
 
-A matching SHA256 means your binary is byte-for-byte identical to the release.
+It checks out the tag and runs the release's own recipes — the linux-amd64 GUI
+archive (`scripts/release-gui-linux.sh`), the amd64 `.deb`
+(`scripts/release-deb.sh`, with xmrig from `scripts/build-xmrig.sh`), and the
+engine source tarballs (`scripts/source-tarballs.sh`) — then prints, file by
+file, whether it got the same bytes. The lines it reproduced go in
+`SHA256SUMS.rebuilt-<host>`; `--sign` signs that with the rebuilder's own
+minisign key (its public half is in `rebuilders/<host>.pub`), which is a second
+machine, not GitHub's, vouching for those bytes.
+
+## A second rebuilder
+
+Release artifacts are built on GitHub's runners. A rebuilder is a machine
+that is not GitHub's — the maintainer's Fedora box, to start — that runs
+`scripts/rebuild-release.sh` on every release and, when everything it rebuilt
+matched, uploads `SHA256SUMS.rebuilt-<host>` and its `.minisig` to the release.
+Anyone can check the co-signature with `minisign -V -p rebuilders/<host>.pub`.
+It covers what an x86_64 machine can rebuild; the macOS and Windows builds,
+the AppImage, the Flatpak and the arm64 `.deb` are outside it (see Scope).
 
 ## Verify determinism locally
 
@@ -45,17 +61,23 @@ make verify-repro
 | Build id | `-ldflags -buildid=` — drops Go's nondeterministic build id. |
 | Local `go env` | `GOENV=off` — ignores `~/.config/go/env`, so a personal `CGO_LDFLAGS` shim can't bake a host path into the build. |
 | cgo flags | `CGO_*` cleared — the C/OpenGL libraries are found via standard system paths. |
+| Module source | `GOFLAGS=-mod=mod` — the module cache, checked by `go.sum`, never a stray (gitignored) `vendor/` tree, which would change the binary. |
+| C toolchain, headers, packaging tools | the pinned build container (below), for the linux GUI and the `.deb`. |
 | Dependencies | `go.sum` pins every module by hash. |
 | Timestamps | `SOURCE_DATE_EPOCH` (the commit time) for any packaging step. |
 
 ## Scope and caveats (honest status)
 
-- **The binary is reproducible on a given OS + arch with the pinned stock Go and
-  the standard GUI dev libraries installed.** Because the GUI uses **cgo**
-  (Fyne/GLFW/OpenGL), byte-identical results across *different* hosts also require
-  the same C toolchain and system headers. A fully hermetic, digest-pinned build
-  container that guarantees this across machines is tracked for the CI/packaging
-  phase — it is not in place yet.
+- **The linux GUI and the `.deb` are reproducible across hosts**, because they
+  are built in `packaging/buildenv/Containerfile`: Debian 12 by index digest,
+  every package from snapshot.debian.org at one fixed moment, and Go 1.25.0 by
+  its published SHA256. `scripts/in-build-container.sh` runs builds in it with
+  the source read-only and the network off (Go modules are fetched first,
+  checked by `go.sum`). The GUI uses **cgo** (Fyne/GLFW/OpenGL), so outside
+  that container its bytes still depend on the host's C toolchain and headers.
+- **macOS and Windows builds** are native and not reproducible across hosts;
+  **the AppImage and the Flatpak** are packaged with tools whose output is not
+  yet pinned. A rebuilder skips all of these.
 - **Cross-compiling the GUI is not reproducible from a single host today.** Each
   OS/arch is built natively (see `.github/workflows/release.yml`). Headless
   (`CGO_ENABLED=0`) server builds cross-compile reproducibly.
@@ -109,7 +131,8 @@ or stops building without cgo.
 ## Build-flag parity
 
 The same compiler flags are used in three places and must stay in sync:
-`Makefile` (`GO_BUILD_FLAGS`), `scripts/reproduce.sh`, and the CI build step in
+`Makefile` (`GO_BUILD_FLAGS`), `scripts/reproduce.sh` (which the container
+recipes call), and the macOS/Windows CI build step in
 `.github/workflows/release.yml`.
 
 Archive flags have a single source of truth: `scripts/package.sh`. The Makefile
@@ -122,8 +145,8 @@ All CI runs on GitHub Actions:
 
 | Workflow | Trigger | What it guards |
 |---|---|---|
-| `.github/workflows/repro-verify.yml` | push, PR, manual | Rebuilds the binary from two different paths and fails if the SHA256 differ |
-| `.github/workflows/release.yml` | `v*` tag | Native per-OS builds + deterministic archives, uploaded to a draft release |
+| `.github/workflows/repro-verify.yml` | push, PR, manual | Builds the linux release archive twice in the pinned container, from two different paths, and fails if the SHA256 differ |
+| `.github/workflows/release.yml` | `v*` tag | The linux GUI and the `.deb` in the pinned container, native macOS/Windows builds, deterministic archives, uploaded to a draft release |
 | `.github/workflows/kind-minerd.yml` | push, PR, manual | kind-minerd has no Fyne dependency, builds with `CGO_ENABLED=0`, and rebuilds bit-for-bit for amd64 and arm64 |
 | `.github/workflows/xmrig-build.yml` | changes to the xmrig recipe or pins, manual | Builds the patched xmrig twice on native x86_64 and aarch64 runners, fails if the SHA256 differ, and checks the donation patch took |
 | `.github/workflows/dependency-watch.yml` | weekly cron, manual | Opens a tracking issue when XMRig/P2Pool publish a new release |

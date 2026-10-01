@@ -18,9 +18,9 @@ go test ./...                               # full suite; no display needed
 go test ./internal/scheduler -run TestDecide # one test
 go test ./internal/gui -run TestScreensRender -v
 
-make reproduce        # canonical reproducible build (pinned stock toolchain)
+make reproduce        # the linux release archive, in the pinned build container (podman)
 make verify-repro     # build twice locally, compare SHA256 — fast determinism check
-make vendor           # after any dependency change; vendor/ is committed
+make vendor           # only for the Flatpak build; vendor/ is gitignored, and reproduce.sh ignores it (-mod=mod)
 make build-minerd     # the headless daemon: pure Go, CGO_ENABLED=0, no Fyne
 ```
 
@@ -158,7 +158,13 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
 
 - **Build flags in three places** must stay in sync: `Makefile`
   (`GO_BUILD_FLAGS`), `scripts/reproduce.sh`, and
-  `.github/workflows/release.yml`. Archive flags have one home:
+  `.github/workflows/release.yml` (macOS/Windows). The linux GUI and the
+  .deb are built by `scripts/release-gui-linux.sh` / `release-deb.sh` in the
+  digest-pinned container `packaging/buildenv/Containerfile` (Debian 12 by
+  digest, packages from one snapshot.debian.org moment, Go by SHA256) — the
+  same scripts `scripts/rebuild-release.sh` runs on a second machine. Change
+  those recipes, never inline a build in the workflow, or a rebuilder stops
+  matching. Archive flags have one home:
   `scripts/package.sh`. See REPRODUCIBLE.md.
 - **Dependency pins in three places**: `internal/autoinstall/deps.json` (source
   of truth, embedded and verified at runtime), `scripts/download-xmrig.sh`,

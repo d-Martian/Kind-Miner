@@ -16,10 +16,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux — ubuntu runner has the GTK/AppIndicator headers we need for CGo
-          - runner: ubuntu-latest
-            goos: linux
-            goarch: amd64
+          # linux/amd64 is the linux-gui job below: built in the pinned
+          # container, so a second machine can rebuild it bit for bit.
 
           # macOS Intel
           - runner: macos-13
@@ -47,16 +45,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      # The GUI uses cgo: Fyne/GLFW needs the GL/X11/Wayland dev headers, and
-      # the system tray needs the AppIndicator headers.
-      - name: Install Linux build deps
-        if: matrix.goos == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev \
-            libayatana-appindicator3-dev
 
       - name: Build
         shell: bash
@@ -115,6 +103,36 @@ jobs:
           files: |
             ${{ env.ASSET }}
             ${{ env.CHECKSUM }}
+
+  # ---------------------------------------------------------------------------
+  # linux/amd64 GUI archive, built entirely in the digest-pinned build
+  # container (packaging/buildenv/Containerfile) by scripts/release-gui-linux.sh —
+  # the same script scripts/rebuild-release.sh runs on a second machine, so
+  # its bytes can be checked by someone who is not GitHub.
+  # ---------------------------------------------------------------------------
+  linux-gui:
+    name: linux/amd64 (pinned container)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure podman
+        run: command -v podman || { sudo apt-get update && sudo apt-get install -y --no-install-recommends podman; }
+
+      - name: Build and package
+        run: |
+          asset="$(scripts/release-gui-linux.sh "${GITHUB_REF_NAME}" dist/gui)"
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET }}.sha256
 
   # ---------------------------------------------------------------------------
   # The source of the GPLv3 engines the packages bundle, published beside them
@@ -197,19 +215,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Build kind-minerd
-        env:
-          CGO_ENABLED: 0
-        # Reproducible build flags — keep in sync with the build job above,
-        # the Makefile and scripts/reproduce.sh.
-        run: |
-          go build -trimpath -buildvcs=false \
-            -ldflags "-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
-            -o "$RUNNER_TEMP/kind-minerd" ./cmd/kind-minerd
+      - name: Ensure podman
+        run: command -v podman || { sudo apt-get update && sudo apt-get install -y --no-install-recommends podman; }
 
       - uses: actions/download-artifact@v4
         with:
@@ -219,14 +226,12 @@ jobs:
       - name: Fetch the pinned p2pool
         run: bash scripts/download-p2pool.sh
 
+      # kind-minerd compiled and packed in the pinned build container, by the
+      # script a rebuilder runs too.
       - name: Build the .deb
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
-          chmod +x "$RUNNER_TEMP/xmrig/xmrig"  # artifacts drop the mode
-          deb="$(scripts/build-deb.sh "$GITHUB_REF_NAME" ${{ matrix.arch }} \
-            "$RUNNER_TEMP/kind-minerd" "$RUNNER_TEMP/xmrig/xmrig" \
+          deb="$(scripts/release-deb.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/xmrig/xmrig" \
             "dist/${{ matrix.platform }}/bin/p2pool" dist/deb)"
-          sha256sum "$deb" | sed 's|  .*/|  |' > "$deb.sha256"
           echo "DEB=$deb" >> "$GITHUB_ENV"
 
       - name: Upload to GitHub Release
