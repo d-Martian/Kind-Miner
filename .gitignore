@@ -63,3 +63,6 @@ bin/tor-data/
 # Python bytecode caches (skill helper scripts)
 __pycache__/
 *.pyc
+
+# A rebuilder's output (scripts/rebuild-release.sh)
+/SHA256SUMS.rebuilt-*

@@ -35,8 +35,10 @@ build:
 
 # Canonical reproducible build: pinned stock toolchain + hermetic environment.
 # Produces a binary anyone can rebuild bit-for-bit from source.
+# The linux release archive, in the pinned build container (needs podman):
+# what a rebuilder compares with the release. See REPRODUCIBLE.md.
 reproduce:
-	bash scripts/reproduce.sh $(VERSION) $(BINARY)
+	bash scripts/release-gui-linux.sh $(VERSION) $(DIST)/repro
 
 # Prove determinism on this host: build twice with the local toolchain (offline)
 # and compare SHA256. A necessary condition for cross-host reproducibility.
