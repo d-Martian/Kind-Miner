@@ -1,0 +1,16 @@
+{
+  "serial": 1,
+  "issued": "2026-10-01T00:00:00Z",
+  "expires": "2026-11-30T00:00:00Z",
+  "min_versions": {
+    "xmrig": "6.26.0",
+    "p2pool": "4.18"
+  },
+  "nodes": [
+    {
+      "host": "44yfclfdry66bbpyolux6xmfkcapage7khfk5sax7xmmylwwmjaqukad.onion",
+      "rpc_port": 18089,
+      "zmq_port": 18083
+    }
+  ]
+}

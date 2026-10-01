@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,6 +43,26 @@ func (n Node) onion() bool {
 // p2pool — we don't list nodes we can't verify.
 var communityNodes = []Node{
 	{Host: "44yfclfdry66bbpyolux6xmfkcapage7khfk5sax7xmmylwwmjaqukad.onion", RPCPort: 18089, ZMQPort: 18083, TorOnly: true},
+}
+
+var defaultsMu sync.Mutex
+
+// SetDefaults replaces the built-in default node list — with the signed
+// advisory's, which is how a default node is added or retired without an app
+// release. An empty list keeps the built-in one.
+func SetDefaults(list []Node) {
+	if len(list) == 0 {
+		return
+	}
+	defaultsMu.Lock()
+	communityNodes = append([]Node(nil), list...)
+	defaultsMu.Unlock()
+}
+
+func defaults() []Node {
+	defaultsMu.Lock()
+	defer defaultsMu.Unlock()
+	return append([]Node(nil), communityNodes...)
 }
 
 // torSOCKS5 is the standard local Tor SOCKS5 proxy address.
@@ -110,8 +131,9 @@ func SelectBest(customAddr string) (Node, error) {
 		err     error
 	}
 
-	ch := make(chan result, len(communityNodes))
-	for _, n := range communityNodes {
+	candidates := defaults()
+	ch := make(chan result, len(candidates))
+	for _, n := range candidates {
 		n := n
 		if n.TorOnly && !hasTor {
 			ch <- result{err: fmt.Errorf("skip: Tor not available")}
@@ -125,7 +147,7 @@ func SelectBest(customAddr string) (Node, error) {
 
 	var winners []result
 	var failures []result
-	for range communityNodes {
+	for range candidates {
 		r := <-ch
 		if r.err == nil {
 			winners = append(winners, r)

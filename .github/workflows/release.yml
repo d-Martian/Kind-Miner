@@ -175,7 +175,7 @@ jobs:
   # architecture on its own kind of runner, because the xmrig inside is built
   # from source natively (see xmrig-build.yml): upstream's binary keeps a 1%
   # donation that connects outside Tor, and has no arm64 build at all. The
-  # .debs go on the draft release; apt-repo.yml publishes them to the
+  # .debs go on the draft release; pages.yml publishes them to the
   # repository Nodos upgrade from, and only once the release is published.
   # ---------------------------------------------------------------------------
   deb:
