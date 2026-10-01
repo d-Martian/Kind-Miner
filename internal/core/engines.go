@@ -31,6 +31,10 @@ type binaries struct {
 	bundle *rollout.Engines
 	// packaged: engines came with the build, so nothing is downloaded.
 	packaged bool
+	// versions are the running engines' versions where known, by name: the
+	// bundle's manifest says, and a download is the pinned version. A
+	// user's own build has none — the advisory then never stops it.
+	versions map[string]string
 }
 
 // bundleDirs are where a packaged build keeps its engines, relative to the
@@ -77,32 +81,46 @@ func (s *Supervisor) resolveEngines(exe string, needP2Pool bool, emit func(Step)
 	b := binaries{bundle: findBundle(exe)}
 	b.packaged = b.bundle != nil || s.engines.xmrig != ""
 
-	pick := func(chosen, own, bundled string, ensure func(string) (string, error), name string) (string, error) {
+	b.versions = map[string]string{}
+	pinnedX, pinnedP, _ := autoinstall.PinnedVersions()
+	var chosen *rollout.Engines
+	if s.engines.xmrig != "" {
+		// The daemon's pair is a packaged one; its manifest is beside it.
+		chosen, _ = rollout.Load(filepath.Dir(s.engines.xmrig))
+	}
+	pick := func(chosenPath, own, bundled string, ensure func(string) (string, error), name, chosenV, bundledV, pinnedV string) (string, error) {
 		switch {
-		case chosen != "":
-			return chosen, nil
+		case chosenPath != "":
+			b.versions[name] = chosenV
+			return chosenPath, nil
 		case own != "":
 			return own, nil
 		case bundled != "":
+			b.versions[name] = bundledV
 			return bundled, nil
 		case b.packaged:
 			return "", fmt.Errorf("this build of kind-miner should have come with %s, and it is missing: reinstall it", name)
 		}
+		b.versions[name] = pinnedV
 		return ensure(autoinstall.BinDir())
 	}
-	var bundledX, bundledP string
+	var bundledX, bundledP, bundledXV, bundledPV, chosenXV, chosenPV string
 	if b.bundle != nil {
 		bundledX, bundledP = b.bundle.XMRig, b.bundle.P2Pool
+		bundledXV, bundledPV = b.bundle.XMRigVersion, b.bundle.P2PoolVersion
+	}
+	if chosen != nil {
+		chosenXV, chosenPV = chosen.XMRigVersion, chosen.P2PoolVersion
 	}
 
 	emit(StepInstallXMRig)
 	var err error
-	if b.xmrig, err = pick(s.engines.xmrig, ownPath(s.cfg.XMRigBinPath), bundledX, autoinstall.EnsureXMRig, "xmrig"); err != nil {
+	if b.xmrig, err = pick(s.engines.xmrig, ownPath(s.cfg.XMRigBinPath), bundledX, autoinstall.EnsureXMRig, "xmrig", chosenXV, bundledXV, pinnedX); err != nil {
 		return err
 	}
 	if needP2Pool {
 		emit(StepInstallP2Pool)
-		if b.p2pool, err = pick(s.engines.p2pool, ownPath(s.cfg.P2PoolBinPath), bundledP, autoinstall.EnsureP2Pool, "p2pool"); err != nil {
+		if b.p2pool, err = pick(s.engines.p2pool, ownPath(s.cfg.P2PoolBinPath), bundledP, autoinstall.EnsureP2Pool, "p2pool", chosenPV, bundledPV, pinnedP); err != nil {
 			return err
 		}
 	}

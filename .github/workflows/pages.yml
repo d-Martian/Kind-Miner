@@ -1,0 +1,116 @@
+name: Pages
+
+# Publishes https://d-martian.github.io/Kind-Miner, which serves two things,
+# both fetched over Tor and both signed:
+#
+#   /apt       the apt repository Nodos upgrade from (signed by APT_SIGNING_KEY
+#              in CI; see scripts/make-apt-key.sh)
+#   /advisory  the advisory manifest every install checks daily (signed
+#              offline; see scripts/sign-advisory.sh)
+#
+# A Pages deploy replaces the whole site, so this one workflow builds both
+# every time rather than two workflows taking turns erasing each other.
+#
+# It runs when a release is published — not tagged: release.yml leaves
+# releases as drafts for review, and the repository reaches every Nodo within
+# a week — and when a signed advisory is pushed to main.
+
+on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - 'advisory/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag for the apt repository (defaults to the latest release)
+        required: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # The repository holds the published release's .debs and nothing else:
+      # apt only ever wants the newest, and rollback on a Nodo is to engines
+      # kept on its own disk, not to an older package.
+      - name: Fetch the release's .debs
+        id: debs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mkdir debs
+          if gh release download ${TAG:+"$TAG"} --pattern 'kind-minerd_*.deb' --pattern 'kind-minerd_*.deb.sha256' --dir debs; then
+            (cd debs && sha256sum -c ./*.sha256)
+            echo "apt=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$TAG" ]; then
+            echo "release $TAG has no .debs"; exit 1
+          else
+            echo "No published release with .debs yet; the apt repository is left out."
+          fi
+
+      - name: Import the signing key
+        if: steps.debs.outputs.apt == 'true'
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          test -n "$APT_SIGNING_KEY" || { echo "APT_SIGNING_KEY is not set: run scripts/make-apt-key.sh"; exit 1; }
+          printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --import
+          # The key that signs must be the key the .debs told apt to trust;
+          # anything else is a repository no Nodo would accept.
+          want="$(gpg --batch --with-colons --import-options show-only --import packaging/deb/kind-miner.asc | awk -F: '$1 == "fpr" { print $10; exit }')"
+          have="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          test -n "$want" && test "$want" = "$have" || { echo "signing key $have is not packaging/deb/kind-miner.asc ($want)"; exit 1; }
+
+      - name: Build the repository
+        if: steps.debs.outputs.apt == 'true'
+        run: |
+          sudo apt-get install -y --no-install-recommends apt-utils
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          scripts/build-apt-repo.sh debs site/apt
+          cp packaging/deb/kind-miner.asc site/apt/
+
+      # Published only signed, and only once it verifies against the key the
+      # app embeds — the same check every client makes, made first here.
+      - name: Add the advisory
+        id: advisory
+        run: |
+          if [ ! -f advisory/manifest.json.minisig ]; then
+            echo "advisory/manifest.json is not signed yet (scripts/sign-advisory.sh); it is left out."
+            exit 0
+          fi
+          go run ./tools/advisory verify advisory/manifest.json
+          mkdir -p site/advisory
+          cp advisory/manifest.json advisory/manifest.json.minisig site/advisory/
+          echo "advisory=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.debs.outputs.apt == 'true' || steps.advisory.outputs.advisory == 'true'
+        with:
+          path: site
+
+      - id: deploy
+        if: steps.debs.outputs.apt == 'true' || steps.advisory.outputs.advisory == 'true'
+        uses: actions/deploy-pages@v4
