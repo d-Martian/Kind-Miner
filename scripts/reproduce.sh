@@ -40,7 +40,10 @@ export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.0}"
 
 # Hermetic environment.
 export GOENV=off                     # ignore ~/.config/go/env entirely
-export GOFLAGS=''
+# Modules from the module cache, verified by go.sum — never from a vendor/
+# directory. A vendor/ tree left over from a Flatpak build (it is gitignored)
+# would otherwise be picked up silently and change the binary.
+export GOFLAGS='-mod=mod'
 case "${KM_TARGET:-kind-miner}" in
   kind-miner)
     PKG=./cmd/kind-miner
