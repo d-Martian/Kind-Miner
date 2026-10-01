@@ -161,7 +161,8 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   `scripts/package.sh`. See REPRODUCIBLE.md.
 - **Dependency pins in three places**: `internal/autoinstall/deps.json` (source
   of truth, embedded and verified at runtime), `scripts/download-xmrig.sh`,
-  `scripts/download-p2pool.sh`. Runtime never follows `/releases/latest` —
+  `scripts/download-p2pool.sh` — plus p2pool's source tarball in
+  `engines/p2pool/sources.lock`. Runtime never follows `/releases/latest` —
   moving a version requires editing `deps.json`. XMRig has no linux-arm64
   prebuilt, so its absence is intentional.
 - **xmrig is also built from source** (`scripts/build-xmrig.sh`, recipe in
@@ -202,6 +203,11 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   pins autoinstall verifies). Resolved engine paths stay out of the config:
   an AppImage's mount point changes every launch. The Flathub manifest does
   not bundle yet — it cannot use the podman xmrig build.
+- **Bundling makes us a GPLv3 distributor** of xmrig and p2pool, so every
+  release publishes their source (`scripts/source-tarballs.sh`, the `sources`
+  job): the xmrig tarball rebuilds offline from itself, and p2pool's own
+  source release is pinned in `engines/p2pool/sources.lock`, whose version
+  must move with `deps.json`.
 - **The .deb** (`scripts/build-deb.sh`, `packaging/deb/`) ships the engines in
   `/opt/kind-miner/engines`; its maintainer scripts keep the replaced pair in
   `engines.previous`, and `cmd/kind-minerd/engines.go` + `internal/rollout`
