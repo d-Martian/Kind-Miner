@@ -12,7 +12,10 @@ Current dependency pins live in three kept-in-sync places:
 - `scripts/download-p2pool.sh` — platform asset URLs and SHA256 sums for release
   packaging.
 
-`apply_dependency_update.py` updates all three from `latest.json`. Note XMRig
+`apply_dependency_update.py` updates all three from `latest.json`. Two
+source pins it does not touch: `engines/xmrig/sources.lock` (the xmrig we
+build) and `engines/p2pool/sources.lock` (p2pool's source tarball, which each
+release republishes); both refuse to disagree with `deps.json`. Note XMRig
 publishes no Linux ARM64 prebuilt, so `linux-arm64` is intentionally absent from
 the XMRig pins (it would otherwise permanently trip the missing-asset gate).
 

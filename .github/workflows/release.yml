@@ -117,6 +117,30 @@ jobs:
             ${{ env.CHECKSUM }}
 
   # ---------------------------------------------------------------------------
+  # The source of the GPLv3 engines the packages bundle, published beside them
+  # with every release: shipping xmrig and p2pool's object code means offering
+  # their Corresponding Source to everyone who gets it. See
+  # scripts/source-tarballs.sh.
+  # ---------------------------------------------------------------------------
+  sources:
+    name: GPL source for the bundled engines
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make the source tarballs
+        run: scripts/source-tarballs.sh "${GITHUB_REF_NAME}" dist/source
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/source/*.tar.gz
+            dist/source/*.tar.xz
+            dist/source/SHA256SUMS-source
+
+  # ---------------------------------------------------------------------------
   # xmrig from source, once per architecture, for every package that ships it:
   # the .deb, the AppImage and the Flatpak. Built natively on each kind of
   # runner (see xmrig-build.yml), and never the upstream binary, which keeps a

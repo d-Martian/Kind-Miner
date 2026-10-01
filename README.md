@@ -159,6 +159,17 @@ kind-minerd pair                # the code that pairs a device with this hub
 Only one kind-miner runs per session: the daemon and the desktop app will not
 mine side by side.
 
+### Source for the bundled engines
+
+The packages bundle xmrig and p2pool, which are GPLv3. Every release publishes
+their complete source beside the binaries:
+
+- `kind-miner-<version>-xmrig-<version>-source.tar.gz` — the pinned xmrig,
+  libuv, hwloc and OpenSSL archives, kind-miner's two patches, and the recipe.
+  Unpacked, `KM_XMRIG_SOURCES=upstream scripts/build-xmrig.sh out` rebuilds
+  the shipped binary offline, bit for bit.
+- `p2pool_source-v<version>.tar.xz` — p2pool's own source release, unchanged.
+
 ### From the .deb
 
 On a Nodo or any Debian box, install the package once from the release, over

@@ -10,8 +10,13 @@ Files: opt/kind-miner/engines/xmrig
 Copyright: XMRig <support@xmrig.com>
 License: GPL-3.0-or-later
 Comment: Built from source with kind-miner's two patches; see engines/xmrig.
+ The complete source — the pinned archives, the patches and the recipe — is
+ published with every kind-miner release as
+ kind-miner-<version>-xmrig-<version>-source.tar.gz.
 
 Files: opt/kind-miner/engines/p2pool
 Copyright: SChernykh
 License: GPL-3.0-only
 Comment: The upstream release, SHA256-pinned in internal/autoinstall/deps.json.
+ Its complete source, p2pool_source-v<version>.tar.xz, is republished with
+ every kind-miner release.
