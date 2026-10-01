@@ -34,6 +34,13 @@ KEY="${KM_APT_KEY:-${PKG}/deb/kind-miner.asc}" # the override is for tests
 [[ -f "$KEY" ]] || { echo "no repository key at $KEY: run scripts/make-apt-key.sh first" >&2; exit 1; }
 case "$ARCH" in amd64|arm64) ;; *) echo "ARCH must be amd64 or arm64" >&2; exit 2 ;; esac
 [[ "$VERSION" =~ ^[0-9][0-9A-Za-z.+~-]*$ ]] || { echo "not a Debian version: $VERSION" >&2; exit 2; }
+# A pre-release tag (v0.2.0-rc1) becomes 0.2.0~rc1 inside the package. To
+# dpkg, "-rc1" is a Debian revision and sorts *after* 0.2.0, so a Nodo on the
+# release candidate would never upgrade to the release; "~" sorts before
+# anything, which is the Debian convention for exactly this. The file name
+# keeps the tag's spelling: GitHub may rename a "~" in an asset name, and a
+# rebuilder matches files by name.
+DEB_VERSION="${VERSION/-/\~}"
 
 # The versions the engines claim, from the pins they were built against.
 dep_version() {
@@ -74,7 +81,7 @@ for f in preinst postinst prerm postrm; do
 done
 install -m644 "${PKG}/deb/conffiles" "${D}/DEBIAN/conffiles"
 SIZE="$(du -sk --apparent-size --exclude=DEBIAN "$D" | cut -f1)"
-sed -e "s/@VERSION@/${VERSION}/" -e "s/@ARCH@/${ARCH}/" -e "s/@SIZE@/${SIZE}/" \
+sed -e "s/@VERSION@/${DEB_VERSION}/" -e "s/@ARCH@/${ARCH}/" -e "s/@SIZE@/${SIZE}/" \
 	"${PKG}/deb/control.in" > "${D}/DEBIAN/control"
 (cd "$D" && find . -path ./DEBIAN -prune -o -type f -print | LC_ALL=C sort | sed 's|^\./||' |
 	xargs md5sum > DEBIAN/md5sums)
