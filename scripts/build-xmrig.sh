@@ -13,6 +13,10 @@
 # Usage:  scripts/build-xmrig.sh [output-dir]
 #           output-dir  defaults to dist/xmrig/linux-<arch>
 #
+# KM_XMRIG_SOURCES=<dir> takes the pinned archives from <dir>/<name>.tar.gz
+# instead of downloading them — how the source tarball published with each
+# release (scripts/source-tarballs.sh) rebuilds offline.
+#
 # Only the final sha256sum line goes to stdout, like scripts/reproduce.sh, so
 # two builds are easy to compare.
 set -euo pipefail
@@ -46,13 +50,17 @@ trap 'rm -rf "$SRC"' EXIT
 while read -r name sum url; do
   [[ -z "$name" || "$name" == \#* || "$name" == source_date_epoch ]] && continue
   file="$CACHE/${sum}.tar.gz"
-  if [[ ! -f "$file" ]]; then
+  if [[ -n "${KM_XMRIG_SOURCES:-}" ]]; then
+    # Rebuilding from a published source tarball: its archives, offline.
+    # They are checked against the pins all the same.
+    file="${KM_XMRIG_SOURCES}/${name}.tar.gz"
+  elif [[ ! -f "$file" ]]; then
     echo "fetching ${name}" >&2
     curl -fsSL "$url" -o "$file.part" && mv "$file.part" "$file"
   fi
   if ! echo "${sum}  ${file}" | sha256sum -c --quiet - >&2; then
     echo "SHA256 mismatch for ${name} (${url}); refusing to build" >&2
-    rm -f "$file"
+    [[ -z "${KM_XMRIG_SOURCES:-}" ]] && rm -f "$file"
     exit 1
   fi
   cp "$file" "${SRC}/${name}.tar.gz"
