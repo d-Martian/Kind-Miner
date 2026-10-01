@@ -1,0 +1,11 @@
+# The source of the p2pool kind-miner ships. The binary in the packages is
+# p2pool's own release build (pinned in internal/autoinstall/deps.json); this
+# is the complete source for that release, submodules included, as p2pool
+# publishes it. Its SHA256 is from p2pool's signed sha256sums.txt.asc for the
+# same tag. scripts/source-tarballs.sh republishes it with every kind-miner
+# release, which is what shipping the binary under GPLv3 asks.
+#
+# The version must match deps.json; the script refuses to run if they
+# disagree. Move both together.
+#   name  sha256  url
+p2pool_source  ee6ea75e870be4480293908e7cc87bfc9b21afeb2738e9e73a9b8b7c066e21a9  https://github.com/SChernykh/p2pool/releases/download/v4.18/p2pool_source-v4.18.tar.xz
