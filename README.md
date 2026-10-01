@@ -159,6 +159,20 @@ kind-minerd pair                # the code that pairs a device with this hub
 Only one kind-miner runs per session: the daemon and the desktop app will not
 mine side by side.
 
+### The advisory
+
+Once a day every install fetches a small signed file over Tor, from
+`https://d-martian.github.io/Kind-Miner/advisory/`: the oldest engine
+versions still safe to run, any upcoming fork heights, and the default node
+list. It carries facts, never code, so the most its signing key could do is
+stop mining, and it does that only on positive knowledge: an engine known to
+be older than the floor, or a fork height passed without the version it
+needs. You see "Update needed" with the reason. An engine you built yourself
+has no known version and is never stopped. Failing to fetch it never stops
+anything; after three days `kind-minerd status` says it has not been checked.
+Each advisory is good for at most 60 days, and its serial only goes up, so an
+old one cannot be replayed.
+
 ### Source for the bundled engines
 
 The packages bundle xmrig and p2pool, which are GPLv3. Every release publishes

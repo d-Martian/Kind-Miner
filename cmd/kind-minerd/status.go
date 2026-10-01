@@ -50,6 +50,12 @@ type daemonStatus struct {
 	// EnginesWarning why it is not the pair the package installed, if not.
 	Engines        string `json:"engines,omitempty"`
 	EnginesWarning string `json:"engines_warning,omitempty"`
+	// AdvisorySerial is the signed advisory in force, if any, and
+	// AdvisoryNotes what it says that changes nothing — a fork ahead, a
+	// notice, or that it has not been checked for days. A stop shows as the
+	// state's reason, like any other hold.
+	AdvisorySerial int64    `json:"advisory_serial,omitempty"`
+	AdvisoryNotes  []string `json:"advisory_notes,omitempty"`
 }
 
 // serviceStatus is where the system service's status file lives: its
@@ -103,6 +109,9 @@ func snapshot(sup *core.Supervisor, now time.Time) daemonStatus {
 		if ps, ok := p.Stats(); ok {
 			st.SharesFound = ps.SharesFound
 		}
+	}
+	if adv := sup.Advisory(); adv.Enabled {
+		st.AdvisorySerial, st.AdvisoryNotes = adv.Serial, adv.Warnings
 	}
 	switch cfg := sup.Config(); {
 	case sup.Hubbed():
@@ -239,6 +248,19 @@ func formatStatus(st daemonStatus) string {
 	}
 	if st.EnginesWarning != "" {
 		out += fmt.Sprintf("  warning   %s\n", st.EnginesWarning)
+	}
+	if st.AdvisorySerial != 0 || len(st.AdvisoryNotes) > 0 {
+		line := "  advisory  "
+		if st.AdvisorySerial != 0 {
+			line += fmt.Sprintf("serial %d", st.AdvisorySerial)
+		}
+		for i, n := range st.AdvisoryNotes {
+			if i > 0 || st.AdvisorySerial != 0 {
+				line += " · "
+			}
+			line += n
+		}
+		out += line + "\n"
 	}
 	switch {
 	case st.HubPort != 0:

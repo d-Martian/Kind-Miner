@@ -166,6 +166,6 @@ func (s *Supervisor) watchIslands(stop <-chan struct{}) {
 			}
 			lastReason = reason
 		}
-		s.sched.SetHold(reason)
+		s.setHold("island", reason)
 	}
 }

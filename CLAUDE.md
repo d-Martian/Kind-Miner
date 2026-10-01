@@ -56,6 +56,7 @@ cmd/kind-minerd → the headless daemon (init/run/status/doctor/pair); pure Go, 
       internal/stats     → rolling history ring, feeds the chart
     internal/hub         → household hub: cert + tokens, pairing code, pinned-TLS API, LAN search
     internal/rollout     → packaged engines: probation, health verdict, which pair to run
+    internal/advisory    → the signed advisory manifest: minisign check, policy, Tor fetch
   internal/gui  → Fyne window, dashboard, settings, tray (reads via Supervisor)
 ```
 
@@ -212,10 +213,20 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   `/opt/kind-miner/engines`; its maintainer scripts keep the replaced pair in
   `engines.previous`, and `cmd/kind-minerd/engines.go` + `internal/rollout`
   decide which to run. A rollback only goes to a pair recorded as healthy.
-  The repository publishes from `apt-repo.yml` on *release published*, never
+  The repository publishes from `pages.yml` on *release published*, never
   on tag, because releases are drafts until reviewed; its key's public half is
   `packaging/deb/kind-miner.asc`, the private half the `APT_SIGNING_KEY`
   secret (`scripts/make-apt-key.sh`, run once).
+- **The advisory** (`internal/advisory`, `core/advisory.go`) is signed
+  offline with minisign's legacy mode (`-l`, plain Ed25519 — the default
+  needs BLAKE2b, which would be our first x/crypto dependency); the public key
+  is `internal/advisory/minisign.pub`, empty until `scripts/make-advisory-key.sh`
+  runs, and empty means no advisory is trusted. `scripts/sign-advisory.sh`
+  signs `advisory/manifest.json`; `pages.yml` verifies and publishes it with
+  the apt repository, since a Pages deploy replaces the whole site. It holds
+  the miner only through `Supervisor.setHold`, which shares the scheduler's
+  one hold with the island check. A manifest lives at most 60 days, so it
+  must be re-signed within that even when nothing changes.
 - `p2poolapi.go` parses p2pool's JSON stat files; field names are tied to the
   pinned p2pool version and need re-checking when that pin moves.
 
