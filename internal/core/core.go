@@ -124,6 +124,11 @@ type Supervisor struct {
 	engines struct{ xmrig, p2pool string }
 	// bin is what this run resolved; see resolveEngines.
 	bin binaries
+	// holds are the parts of the scheduler's hold, by source; see setHold.
+	holds map[string]string
+	// adv is the advisory's standing, and advisoryStop ends its watch.
+	adv          AdvisoryStatus
+	advisoryStop chan struct{}
 	// hhStop ends the polling of the hub a paired machine mines to; hh is its
 	// last answer (hhOK once there is one) and hhErr the last failure.
 	hhStop chan struct{}
@@ -355,6 +360,8 @@ func (s *Supervisor) Start(progress func(Step)) error {
 		s.islandStop = make(chan struct{})
 		go s.watchIslands(s.islandStop)
 	}
+	s.advisoryStop = make(chan struct{})
+	go s.watchAdvisory(s.advisoryStop)
 
 	s.mu.Lock()
 	s.started = time.Now()
@@ -483,6 +490,10 @@ func (s *Supervisor) Shutdown() {
 		close(s.islandStop)
 		s.islandStop = nil
 	}
+	if s.advisoryStop != nil {
+		close(s.advisoryStop)
+		s.advisoryStop = nil
+	}
 	if s.sched != nil {
 		s.sched.Stop()
 		// After the scheduler, so its last tick is in the record.
@@ -574,6 +585,7 @@ func StratumAddr() string {
 // 30s delay to handle transient Tor circuit failures or a briefly-rebooting
 // Nodo.
 func resolveNode(cfg *config.Config) (nodes.Node, error) {
+	applyAdvisoryNodes()
 	switch cfg.Mode {
 	case config.ModeP2PoolLocal:
 		return nodes.Node{Host: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083}, nil

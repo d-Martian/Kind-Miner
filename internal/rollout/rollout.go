@@ -101,6 +101,8 @@ type Engines struct {
 	// the .deb does not, since a Nodo already runs one.
 	Tor     string
 	Version string // "xmrig 6.26.0 · p2pool 4.18"
+	// The engines' own versions, for the advisory's floors.
+	XMRigVersion, P2PoolVersion string
 	// ID names this exact pair: the versions and the binaries' hashes. Two
 	// builds of one version with different patches are different pairs.
 	ID string
@@ -135,6 +137,9 @@ func Load(dir string) (*Engines, error) {
 		XMRig:   filepath.Join(dir, "xmrig"),
 		P2Pool:  filepath.Join(dir, "p2pool"),
 		Version: fmt.Sprintf("xmrig %s · p2pool %s", m.XMRig, m.P2Pool),
+
+		XMRigVersion:  m.XMRig,
+		P2PoolVersion: m.P2Pool,
 	}
 	id := m.XMRig + "\x00" + m.P2Pool + "\x00" + m.XMRigSHA256 + "\x00" + m.P2PoolSHA256
 	if m.Tor != "" {
