@@ -1,0 +1,54 @@
+# The build environment for everything kind-miner compiles with a C toolchain
+# or packages with Debian's tools: the GUI (cgo: Fyne's GLFW/OpenGL and the
+# tray's AppIndicator headers), and the .deb (dpkg-deb, xz). xmrig has its own
+# container (engines/xmrig/Containerfile): it links statically against musl,
+# and this one is glibc.
+#
+# Every input is pinned, so a rebuilder on another machine gets the same
+# compiler, the same headers and the same packaging tools as the release did:
+#
+#   - Debian 12 by index digest: one digest pins both the amd64 and arm64
+#     images;
+#   - every package from snapshot.debian.org at one moment, so apt resolves
+#     to exactly the versions that existed then — there is no "newer" in a
+#     snapshot to drift to. Over http, because the base image has no CA
+#     certificates yet; apt checks the archive's own signatures either way;
+#   - Go itself, the go.mod toolchain version, by its published SHA256.
+#
+# The image only provides tools. Builds run in scripts/in-build-container.sh
+# with the source mounted read-only and the network off, writing to a
+# mounted directory, so nothing about this image's layers reaches an output.
+#
+# Debian 12's glibc (2.36) is also the oldest any binary built here will
+# need, which is what lets the AppImage run on Debian 12 and Ubuntu 22.04.
+FROM docker.io/library/debian@sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26
+
+ARG SNAPSHOT=20260930T000000Z
+RUN rm -f /etc/apt/sources.list.d/debian.sources && \
+    printf '%s\n' \
+      "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${SNAPSHOT} bookworm main" \
+      "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${SNAPSHOT} bookworm-updates main" \
+      "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${SNAPSHOT} bookworm-security main" \
+      > /etc/apt/sources.list && \
+    apt-get -o Acquire::Retries=5 update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      gcc libc6-dev pkg-config ca-certificates curl git xz-utils \
+      libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev \
+      libayatana-appindicator3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# go.mod's toolchain. Bump with go.mod and scripts/reproduce.sh's GOTOOLCHAIN.
+ARG GO_VERSION=1.25.0
+ARG GO_SHA256_AMD64=2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613
+ARG GO_SHA256_ARM64=05de75d6994a2783699815ee553bd5a9327d8b79991de36e38b66862782f54ae
+RUN arch="$(dpkg --print-architecture)" && \
+    case "$arch" in amd64) sum="$GO_SHA256_AMD64" ;; arm64) sum="$GO_SHA256_ARM64" ;; *) exit 1 ;; esac && \
+    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" -o /tmp/go.tgz && \
+    echo "${sum}  /tmp/go.tgz" | sha256sum -c - && \
+    tar -C /usr/local -xzf /tmp/go.tgz && rm /tmp/go.tgz
+ENV PATH=/usr/local/go/bin:$PATH \
+    GOTOOLCHAIN=local \
+    GOFLAGS=-mod=mod \
+    GOPROXY=off \
+    GOENV=off \
+    LC_ALL=C TZ=UTC
