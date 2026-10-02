@@ -37,7 +37,8 @@ finish-args:
   # the same config as host builds (AppImage, go run). Do not remove it without
   # also changing config.Dir().
   - --filesystem=xdg-config/kind-miner:create
-  # Downloaded binaries (xmrig/p2pool/tor) and p2pool state need no grant:
+  # The engines (xmrig/p2pool/tor) are built from source below (engines.yml)
+  # into /app/lib/kind-miner/engines, and p2pool's state needs no grant:
   # autoinstall.BinDir() follows XDG_DATA_HOME, which Flatpak points at the
   # app-private ~/.var/app/<app-id>/data.
   # System tray — covers both KDE and GNOME/freedesktop implementations
@@ -55,6 +56,8 @@ build-options:
     - CGO_ENABLED=1
 
 modules:
+  - engines.yml
+
   - name: kind-miner
     buildsystem: simple
     build-commands:
@@ -86,5 +89,5 @@ modules:
       # defaults to 1, removing the kind-miner-<version>/ prefix so paths above
       # resolve at the build root. Replace url + sha256 at release time.
       - type: archive
-        url: https://github.com/kind-miner/kind-miner/releases/download/vX.Y.Z/kind-miner-vX.Y.Z-vendored-src.tar.gz
+        url: https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-miner-vX.Y.Z-vendored-src.tar.gz
         sha256: '0000000000000000000000000000000000000000000000000000000000000000'

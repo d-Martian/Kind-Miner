@@ -169,7 +169,8 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
 - **Dependency pins in three places**: `internal/autoinstall/deps.json` (source
   of truth, embedded and verified at runtime), `scripts/download-xmrig.sh`,
   `scripts/download-p2pool.sh` — plus p2pool's source tarball in
-  `engines/p2pool/sources.lock`. Runtime never follows `/releases/latest` —
+  `engines/p2pool/sources.lock`, and the Flathub engine modules in
+  `flatpak/flathub/engines.yml`. Runtime never follows `/releases/latest` —
   moving a version requires editing `deps.json`. XMRig has no linux-arm64
   prebuilt, so its absence is intentional.
 - **xmrig is also built from source** (`scripts/build-xmrig.sh`, recipe in
@@ -208,8 +209,11 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   scripts refuse to build without a staged bundle
   (`go run ./tools/stage-engines`, which takes p2pool and Tor from the same
   pins autoinstall verifies). Resolved engine paths stay out of the config:
-  an AppImage's mount point changes every launch. The Flathub manifest does
-  not bundle yet — it cannot use the podman xmrig build.
+  an AppImage's mount point changes every launch. The Flathub manifest
+  cannot use the podman xmrig build, so `flatpak/flathub/engines.yml` builds
+  the engines from source as modules (xmrig with the same two patches, p2pool
+  and its libuv/libzmq from p2pool's source release, Tor) into the same
+  `/app/lib/kind-miner/engines`; its pins must move with the others.
 - **Bundling makes us a GPLv3 distributor** of xmrig and p2pool, so every
   release publishes their source (`scripts/source-tarballs.sh`, the `sources`
   job): the xmrig tarball rebuilds offline from itself, and p2pool's own
