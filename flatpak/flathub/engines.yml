@@ -1,0 +1,169 @@
+# The engines the Flathub build ships, built from source as Flatpak modules.
+#
+# Flathub builds offline from pinned sources and cannot run the podman
+# container our release xmrig is built in, so here every engine is compiled by
+# flatpak-builder itself: xmrig with kind-miner's two patches, p2pool from its
+# own complete source release, and Tor. They install into
+# /app/lib/kind-miner/engines, beside /app/bin/kind-miner, where
+# internal/core/engines.go finds them and kind-miner then downloads nothing.
+#
+# Every source is pinned by SHA256, and the same pins as everywhere else:
+# xmrig and hwloc from engines/xmrig/sources.lock, p2pool's source from
+# engines/p2pool/sources.lock, Tor at the version the bundled Expert Bundle
+# carries. Move them together.
+#
+# Built here, the engines link dynamically against the runtime (OpenSSL, curl)
+# rather than statically as the release builds do; Flathub's runtime updates
+# then patch them like any other app's libraries.
+
+# engines.json, as tools/stage-engines writes it for the other packages: what
+# internal/rollout reads to know these are packaged engines, and which.
+# The engines are its submodules, built first.
+name: kind-miner-engines
+buildsystem: simple
+build-commands:
+  - |
+    cd /app/lib/kind-miner/engines
+    printf '{\n  "xmrig": "6.26.0",\n  "p2pool": "4.18",\n  "tor": "0.4.9.9",\n  "xmrig_sha256": "%s",\n  "p2pool_sha256": "%s"\n}\n' \
+      "$(sha256sum xmrig | cut -d' ' -f1)" "$(sha256sum p2pool | cut -d' ' -f1)" > engines.json
+modules:
+    # libuv and libzmq from p2pool's own source release, so p2pool links exactly
+    # the versions p2pool's releases do (its libzmq is a snapshot newer than any
+    # tagged release). xmrig shares the same libuv.
+    - name: libuv
+      buildsystem: cmake-ninja
+      subdir: external/src/libuv
+      config-opts:
+        - -DCMAKE_BUILD_TYPE=Release
+        - -DLIBUV_BUILD_TESTS=OFF
+        - -DLIBUV_BUILD_BENCH=OFF
+        - -DLIBUV_BUILD_SHARED=ON
+      cleanup:
+        - /include
+        - /lib/pkgconfig
+        - /lib/cmake
+        - '*.a'
+      sources:
+        - &p2pool-source
+          type: archive
+          url: https://github.com/SChernykh/p2pool/releases/download/v4.18/p2pool_source-v4.18.tar.xz
+          sha256: ee6ea75e870be4480293908e7cc87bfc9b21afeb2738e9e73a9b8b7c066e21a9
+
+    - name: libzmq
+      buildsystem: cmake-ninja
+      subdir: external/src/libzmq
+      builddir: true # libzmq refuses to configure inside its own source tree
+      config-opts:
+        - -DCMAKE_BUILD_TYPE=Release
+        - -DBUILD_TESTS=OFF
+        - -DBUILD_STATIC=OFF
+        - -DWITH_DOCS=OFF
+        - -DWITH_PERF_TOOL=OFF
+        - -DWITH_LIBSODIUM=OFF
+        - -DWITH_LIBBSD=OFF
+        - -DENABLE_DRAFTS=OFF
+      cleanup:
+        - /include
+        - /lib/pkgconfig
+        - /lib/cmake
+        - /share
+        - '*.a'
+      sources:
+        - *p2pool-source
+
+    - name: hwloc
+      buildsystem: autotools
+      config-opts:
+        # xmrig asks hwloc for the CPU's caches and cores, nothing else.
+        - --disable-io
+        - --disable-libxml2
+        - --disable-cairo
+        - --disable-opencl
+        - --disable-cuda
+        - --disable-nvml
+        - --disable-rsmi
+        - --disable-levelzero
+        - --disable-gl
+        - --disable-static
+      cleanup:
+        - /bin
+        - /sbin
+        - /include
+        - /lib/pkgconfig
+        - /share
+        - '*.la'
+      sources:
+        - type: archive
+          url: https://download.open-mpi.org/release/hwloc/v2.12/hwloc-2.12.1.tar.gz
+          sha256: ffa02c3a308275a9339fbe92add054fac8e9a00cb8fe8c53340094012cb7c633
+
+    # xmrig with exactly kind-miner's two patches: no minimum donation (upstream's
+    # 1% floor connects outside Tor) and THP advice for the RandomX cache.
+    - name: xmrig
+      buildsystem: simple
+      build-commands:
+        - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/app
+            -DWITH_OPENCL=OFF -DWITH_CUDA=OFF -DWITH_HWLOC=ON
+        - cmake --build build
+        - install -Dm755 build/xmrig /app/lib/kind-miner/engines/xmrig
+      sources:
+        - type: archive
+          url: https://github.com/xmrig/xmrig/archive/refs/tags/v6.26.0.tar.gz
+          sha256: 5005144e78571f26586410c2b2ede2b0c72afe22f97f1708ea24cfb253c3939b
+        - type: patch
+          path: ../../engines/xmrig/patches/0001-allow-zero-donation.patch
+        - type: patch
+          path: ../../engines/xmrig/patches/0002-thp-for-randomx-cache.patch
+
+    # p2pool without gRPC: that is only Tari merge mining, which kind-miner never
+    # does, and it is most of p2pool's build time and dependencies.
+    - name: p2pool
+      buildsystem: simple
+      build-commands:
+        - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/app
+            -DWITH_GRPC=OFF -DWITH_MERGE_MINING_DONATION=OFF
+        - cmake --build build
+        - install -Dm755 build/p2pool /app/lib/kind-miner/engines/p2pool
+      sources:
+        - *p2pool-source
+
+    - name: libevent
+      buildsystem: autotools
+      config-opts:
+        - --disable-openssl
+        - --disable-samples
+        - --disable-libevent-regress
+        - --disable-static
+      cleanup:
+        - /bin
+        - /include
+        - /lib/pkgconfig
+        - '*.la'
+      sources:
+        - type: archive
+          url: https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
+          sha256: 92e6de1be9ec176428fd2367677e61ceffc2ee1cb119035037a27d346b0403bb
+
+    # Tor as a client and onion service only: the relay module is for relays,
+    # which kind-miner never runs.
+    - name: tor
+      buildsystem: autotools
+      config-opts:
+        - --disable-module-relay
+        - --disable-asciidoc
+        - --disable-manpage
+        - --disable-html-manual
+        - --disable-unittests
+        - --disable-tool-name-check
+      post-install:
+        - install -Dm755 /app/bin/tor /app/lib/kind-miner/engines/tor/tor
+        - rm -f /app/bin/tor /app/bin/tor-gencert /app/bin/tor-resolve /app/bin/tor-print-ed-signing-cert /app/bin/torify
+      cleanup:
+        - /etc/tor
+        - /share/tor
+        - /share/doc
+        - /share/man
+      sources:
+        - type: archive
+          url: https://dist.torproject.org/tor-0.4.9.9.tar.gz
+          sha256: bd75ba7fd68f607c7806fcf70156a300aa926e9ad69a5e56a8e6414f5227e833
