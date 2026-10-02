@@ -80,7 +80,13 @@ for f in preinst postinst prerm postrm; do
 	install -m755 "${PKG}/deb/${f}" "${D}/DEBIAN/${f}"
 done
 install -m644 "${PKG}/deb/conffiles" "${D}/DEBIAN/conffiles"
-SIZE="$(du -sk --apparent-size --exclude=DEBIAN "$D" | cut -f1)"
+# Installed-Size from the files' own sizes, in KiB, rounded up per file the way
+# dpkg-gencontrol does. Not `du`: it counts directory entries too, and their
+# size depends on the filesystem (ext4 on the release runner, btrfs or tmpfs on
+# a rebuilder), which made the control file — and so the whole .deb — differ
+# between machines that built every file inside it identically.
+SIZE="$(find "$D" -path "$D/DEBIAN" -prune -o -type f -printf '%s\n' |
+	awk '{ kib += int(($1 + 1023) / 1024) } END { print kib + 0 }')"
 sed -e "s/@VERSION@/${DEB_VERSION}/" -e "s/@ARCH@/${ARCH}/" -e "s/@SIZE@/${SIZE}/" \
 	"${PKG}/deb/control.in" > "${D}/DEBIAN/control"
 (cd "$D" && find . -path ./DEBIAN -prune -o -type f -print | LC_ALL=C sort | sed 's|^\./||' |
