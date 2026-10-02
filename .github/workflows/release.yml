@@ -149,8 +149,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
       - name: Make the source tarballs
         run: scripts/source-tarballs.sh "${GITHUB_REF_NAME}" dist/source
+
+      # kind-miner's own source with its Go modules vendored: what the Flathub
+      # manifest builds from, since Flathub builds offline.
+      - name: Make the vendored source tarball
+        run: |
+          bash scripts/vendor-tarball.sh "${GITHUB_REF_NAME}"
+          mv dist/kind-miner-*-vendored-src.tar.gz dist/source/
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
