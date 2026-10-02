@@ -15,8 +15,10 @@
 # once by scripts/make-apt-key.sh. Prints the .deb's path.
 #
 # Layout (files only in /opt/kind-miner, /etc/apt, /usr/lib/systemd/system,
-# /usr/share; state in /var/lib/kind-miner, made by systemd):
+# /usr/share, plus one link in /usr/bin; state in /var/lib/kind-miner, made by
+# systemd):
 #   /opt/kind-miner/kind-minerd
+#   /usr/bin/kind-minerd -> /opt/kind-miner/kind-minerd
 #   /opt/kind-miner/engines/{xmrig,p2pool,engines.json}
 #   /usr/lib/systemd/system/{kind-minerd.service,kind-miner.slice,
 #                             kind-minerd-upgrade.service,kind-minerd-upgrade.timer}
@@ -55,6 +57,11 @@ trap 'rm -rf "$STAGE"' EXIT
 D="${STAGE}/kind-minerd"
 
 install -Dm755 "$KMD" "${D}/opt/kind-miner/kind-minerd"
+# On PATH, so `kind-minerd status` works as the README says. The program stays
+# in /opt beside its engines, which is where it looks for them; this is only
+# the way in.
+install -d "${D}/usr/bin"
+ln -s /opt/kind-miner/kind-minerd "${D}/usr/bin/kind-minerd"
 install -Dm755 "$XMRIG" "${D}/opt/kind-miner/engines/xmrig"
 install -Dm755 "$P2POOL" "${D}/opt/kind-miner/engines/p2pool"
 cat > "${D}/opt/kind-miner/engines/engines.json" <<EOF
