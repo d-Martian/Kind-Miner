@@ -190,11 +190,15 @@ On a Nodo or any Debian box, install the package once from the release, over
 Tor (`torsocks` comes with the `tor` package):
 
 ```sh
-torsocks curl -LO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-minerd_X.Y.Z_arm64.deb
+torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-minerd_X.Y.Z_arm64.deb
+torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-minerd_X.Y.Z_arm64.deb.sha256
+sha256sum -c kind-minerd_X.Y.Z_arm64.deb.sha256
 sudo apt install ./kind-minerd_X.Y.Z_arm64.deb
 ```
 
-It starts at once and waits to be set up from the desktop app (see below).
+`-f` makes curl fail on an error rather than save GitHub's error page under
+the package's name, which apt then rejects as "Invalid archive signature".
+The package starts at once and waits to be set up from the desktop app (see below).
 From then on it keeps itself current:
 
 - **Its own repository, over Tor.** The package adds
