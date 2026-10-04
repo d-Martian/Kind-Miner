@@ -8,7 +8,7 @@
 // .github/workflows/kind-minerd.yml), because one import of internal/gui would
 // quietly bring back cgo, OpenGL and X11 on a box that has none of them.
 //
-//	kind-minerd init --address 4…   write a config for this wallet
+//	kind-minerd init --address 4…   set up for this wallet (with sudo: the service, hub on, pairing code)
 //	kind-minerd run                 mine until stopped (what the service runs);
 //	                                with no config, wait to be set up from the desktop
 //	kind-minerd status [--json]     what the running daemon is doing
@@ -21,15 +21,19 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/core"
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/instance"
 	"github.com/kind-miner/kind-miner/internal/nodo"
 	"github.com/kind-miner/kind-miner/internal/rollout"
@@ -40,7 +44,7 @@ var version = "dev"
 const usage = `usage: kind-minerd <command> [flags]
 
 commands:
-  init --address 4…   write a config for this wallet
+  init --address 4…   set up for this wallet (with sudo: the service and its hub, then the pairing code)
   run                 mine until stopped
   status [--json]     what the running daemon is doing
   doctor              say what is wrong, if anything
@@ -61,6 +65,7 @@ func main() {
 	configPath := fs.String("config", "", "path to config file")
 	address := fs.String("address", "", "Monero payout address (init)")
 	force := fs.Bool("force", false, "overwrite an existing config (init)")
+	noHub := fs.Bool("no-hub", false, "don't serve the household hub (init, for the service)")
 	asJSON := fs.Bool("json", false, "machine-readable output (status)")
 	name := fs.String("name", "", "device name for a plain-xmrig config (pair)")
 	host := fs.String("host", "", "address devices reach this hub at (pair; default: this machine's LAN address)")
@@ -72,7 +77,7 @@ func main() {
 	var err error
 	switch cmd {
 	case "init":
-		err = runInit(*address, *force)
+		err = runInit(os.Stdout, *address, *force, *noHub, liveInitEnv(*configPath != ""))
 	case "run":
 		err = runDaemon()
 	case "status":
@@ -99,7 +104,8 @@ func main() {
 // user reads its private copy, never the file. A Nodo set up from the desktop
 // app has none; the service wrote its own, in its state directory, the one
 // place it can write.
-const (
+// Variables only so the tests can point them at a temporary directory.
+var (
 	serviceConfig      = "/etc/kind-miner/config.yaml"
 	serviceStateConfig = "/var/lib/kind-miner/config.yaml"
 )
@@ -152,28 +158,131 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// runInit writes a config for the given wallet. It asks nothing else: the
-// defaults are the same ones the desktop's one-field setup uses, and on a Nodo
-// the node is the Nodo's own.
-func runInit(address string, force bool) error {
+// initEnv is what init needs to know about the machine, and the two things
+// it does to the service, behind fields so the decisions can be tested
+// without root or systemd.
+type initEnv struct {
+	root             bool
+	flagConfig       bool // --config was given: the caller chose the path
+	serviceInstalled bool
+	isNodo           bool
+	restart          func() error
+	// pairing prints the pairing code once the restarted service has its
+	// hub identity.
+	pairing func(w io.Writer) error
+}
+
+// liveInitEnv is the real machine.
+func liveInitEnv(flagConfig bool) initEnv {
+	_, isNodo, _ := nodo.Detect()
+	return initEnv{
+		root:             os.Getuid() == 0,
+		flagConfig:       flagConfig,
+		serviceInstalled: serviceInstalled(),
+		isNodo:           isNodo,
+		restart:          restartService,
+		pairing:          printPairingWhenReady,
+	}
+}
+
+// serviceUnits are where the unit file is when the service is installed:
+// the .deb's location, then a hand install's.
+var serviceUnits = []string{
+	"/usr/lib/systemd/system/kind-minerd.service",
+	"/etc/systemd/system/kind-minerd.service",
+}
+
+func serviceInstalled() bool {
+	for _, u := range serviceUnits {
+		if exists(u) {
+			return true
+		}
+	}
+	return false
+}
+
+// runInit sets kind-minerd up for a wallet, in one command.
+//
+// For the system service — run as root where it is installed — that is the
+// whole setup: the service's config, the household hub turned on (serving the
+// house is what a Nodo or a headless box is for; --no-hub opts out), the
+// service restarted onto it, and the pairing code for the desktops printed.
+// Anywhere else it writes this user's config, as before. Run without root on
+// a machine with the service, it refuses: a config in the user's home is one
+// the service never reads, and writing it would look like success.
+func runInit(w io.Writer, address string, force, noHub bool, env initEnv) error {
 	if err := config.CheckAddress(address); err != nil {
 		return fmt.Errorf("--address: %w", err)
+	}
+	forService := config.Path() == serviceConfig
+	if env.serviceInstalled && !env.root && !env.flagConfig {
+		return fmt.Errorf("kind-minerd is installed as a service; set it up as root:\n\n  sudo kind-minerd init --address %s", address)
 	}
 	if _, err := os.Stat(config.Path()); err == nil && !force {
 		return fmt.Errorf("%s already exists; use --force to replace it", config.Path())
 	}
-	_, isNodo, _ := nodo.Detect()
-	if err := newConfig(address, isNodo).Save(); err != nil {
+	cfg := newConfig(address, env.isNodo)
+	cfg.Hub.Serve = forService && !noHub
+	if err := cfg.Save(); err != nil {
 		return err
 	}
-	fmt.Printf("Wrote %s. Start mining with: kind-minerd run\n", config.Path())
+	if !forService || !env.serviceInstalled {
+		fmt.Fprintf(w, "Wrote %s. Start mining with: kind-minerd run\n", config.Path())
+		return nil
+	}
+	fmt.Fprintf(w, "Wrote %s.\n", config.Path())
+	if err := env.restart(); err != nil {
+		return fmt.Errorf("restarting the service: %w (try: sudo systemctl restart kind-minerd)", err)
+	}
+	fmt.Fprintln(w, "kind-minerd restarted with it, and is starting to mine.")
+	if !cfg.Hub.Serve {
+		fmt.Fprintln(w, "Follow it with: kind-minerd status")
+		return nil
+	}
+	fmt.Fprintln(w)
+	return env.pairing(w)
+}
+
+// serviceActive reports whether the system service is running.
+func serviceActive() bool {
+	return exists("/run/systemd/system") && exec.Command("systemctl", "is-active", "--quiet", "kind-minerd").Run() == nil
+}
+
+// restartService restarts the system service, when systemd is running it.
+func restartService() error {
+	if !exists("/run/systemd/system") {
+		return errors.New("systemd is not running")
+	}
+	out, err := exec.Command("systemctl", "restart", "kind-minerd").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
+	}
 	return nil
+}
+
+// printPairingWhenReady prints the pairing code once the restarted service
+// has its hub identity — at once if it made one while waiting to be set up,
+// within seconds of starting otherwise.
+func printPairingWhenReady(w io.Writer) error {
+	dir := hubDirFor(config.Path())
+	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); time.Sleep(time.Second) {
+		if _, err := hub.Load(dir); err == nil {
+			return runPair(w, "", "")
+		}
+	}
+	return errors.New("the hub has not started yet; in a minute, get the pairing code with: sudo kind-minerd pair")
 }
 
 // runDaemon mines until SIGINT or SIGTERM, first waiting to be set up if
 // there is no config. Errors come back rather than exiting mid-way, so
 // Shutdown always runs for whatever Start got going.
 func runDaemon() error {
+	// Started by hand while the service runs, a second daemon would fight it
+	// for its ports and fail with a bind error that says nothing useful.
+	// systemd sets INVOCATION_ID for the service itself.
+	if os.Getenv("INVOCATION_ID") == "" && serviceActive() {
+		return errors.New("kind-minerd is already running as the system service; see what it is doing with: kind-minerd status")
+	}
 	status, release := instance.Claim(instance.AppID, nil)
 	if status == instance.Running {
 		return errors.New("kind-miner is already running in this session")
