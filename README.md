@@ -228,7 +228,7 @@ certificate and tokens, the onion keys.
 sudo install -Dm755 kind-minerd /opt/kind-miner/kind-minerd
 sudo install -Dm644 packaging/systemd/kind-miner.slice packaging/systemd/kind-minerd.service -t /etc/systemd/system/
 sudo install -d -m 700 /etc/kind-miner
-sudo /opt/kind-miner/kind-minerd init --address 4…   # optional: writes /etc/kind-miner/config.yaml
+sudo kind-minerd init --address 4…   # optional: sets up the service and prints the pairing code
 sudo systemctl daemon-reload
 sudo systemctl enable --now kind-minerd
 kind-minerd status
@@ -260,19 +260,20 @@ cannot be set up again. Until then, whichever desktop asks first sets it up:
 there is no screen on a Nodo to show a code on, so the first connection is
 trusted, and from then on only that certificate is.
 
-**Over SSH.** Turn the hub on in its config and restart:
-
-```yaml
-hub:
-  serve: true
-```
+**Over SSH.** One command on the Nodo:
 
 ```sh
-sudo systemctl restart kind-minerd
-sudo kind-minerd pair --name garage-server
+sudo kind-minerd init --address 4…
 ```
 
-`pair` prints a code starting `km1-`. On a desktop, open **Settings →
+It writes the service's config with the hub on, restarts the service, and
+prints the pairing code. (`--no-hub` sets it up to mine on its own instead.)
+Run without `sudo`, it says so rather than writing a config the service never
+reads. Later, `sudo kind-minerd pair` prints the code again, and
+`sudo kind-minerd pair --name garage-server` a config for a box running plain
+xmrig.
+
+The pairing code starts `km1-`. On a desktop, open **Settings →
 Connection**, choose mode `hub` and paste it — this is also how the rest of
 the house pairs with a hub set up from a desktop, using the code in that
 desktop's settings: that machine now runs xmrig

@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"os"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -93,32 +93,109 @@ func TestStatusFileRoundTripAndGoesStale(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	config.SetPath(path)
-	t.Cleanup(func() { config.SetPath("") })
+	type outcome struct {
+		err       string // a fragment of the error; "" for success
+		wrote     bool
+		hub       bool
+		restarted bool
+		paired    bool
+		mode      config.Mode
+	}
+	cases := []struct {
+		name      string
+		forSvc    bool // the path is the service's config
+		env       initEnv
+		noHub     bool
+		restartOK bool
+		want      outcome
+	}{
+		{"a desktop or dev machine gets a user config, no hub",
+			false, initEnv{}, false, true,
+			outcome{wrote: true, mode: config.ModeP2PoolRemote}},
+		{"without sudo where the service is installed, it refuses",
+			false, initEnv{serviceInstalled: true}, false, true,
+			outcome{err: "sudo kind-minerd init --address"}},
+		{"--config is a deliberate choice, and is honoured",
+			false, initEnv{serviceInstalled: true, flagConfig: true}, false, true,
+			outcome{wrote: true, mode: config.ModeP2PoolRemote}},
+		{"as root on a Nodo: hub on, restarted, paired — one command",
+			true, initEnv{root: true, serviceInstalled: true, isNodo: true}, false, true,
+			outcome{wrote: true, hub: true, restarted: true, paired: true, mode: config.ModeP2PoolLocal}},
+		{"--no-hub mines on its own, and needs no pairing",
+			true, initEnv{root: true, serviceInstalled: true}, true, true,
+			outcome{wrote: true, restarted: true, mode: config.ModeP2PoolRemote}},
+		{"a restart that fails says how to do it by hand",
+			true, initEnv{root: true, serviceInstalled: true}, false, false,
+			outcome{err: "sudo systemctl restart kind-minerd", wrote: true, hub: true, restarted: true}},
+		{"root with no service installed writes the config, and says to run it",
+			true, initEnv{root: true}, false, true,
+			outcome{wrote: true, hub: true, mode: config.ModeP2PoolRemote}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			old := serviceConfig
+			serviceConfig = filepath.Join(dir, "etc", "config.yaml")
+			t.Cleanup(func() { serviceConfig = old })
+			path := filepath.Join(dir, "home", "config.yaml")
+			if c.forSvc {
+				path = serviceConfig
+			}
+			config.SetPath(path)
+			t.Cleanup(func() { config.SetPath("") })
 
-	if err := runInit("4notanaddress", false); err == nil {
-		t.Error("init accepted a malformed address")
+			var got outcome
+			env := c.env
+			env.restart = func() error {
+				got.restarted = true
+				if !c.restartOK {
+					return errors.New("exit status 1")
+				}
+				return nil
+			}
+			env.pairing = func(io.Writer) error { got.paired = true; return nil }
+			var out strings.Builder
+			err := runInit(&out, sampleAddress, false, c.noHub, env)
+
+			switch {
+			case c.want.err == "" && err != nil:
+				t.Fatalf("unexpected error: %v", err)
+			case c.want.err != "" && (err == nil || !strings.Contains(err.Error(), c.want.err)):
+				t.Fatalf("err = %v, want it to mention %q", err, c.want.err)
+			}
+			if cfg, lerr := config.Load(); lerr == nil {
+				got.wrote, got.hub, got.mode = true, cfg.Hub.Serve, cfg.Mode
+				if verr := cfg.Validate(); verr != nil {
+					t.Errorf("init wrote a config that does not validate: %v", verr)
+				}
+			}
+			if c.want.err != "" {
+				// The error was checked above; the mode is not compared
+				// when init failed.
+				got.err, got.mode = c.want.err, c.want.mode
+			}
+			if got != c.want {
+				t.Errorf("got %+v, want %+v\noutput:\n%s", got, c.want, out.String())
+			}
+		})
 	}
-	if err := runInit(sampleAddress, false); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Load()
-	if err != nil || cfg.Wallet != sampleAddress {
-		t.Fatalf("config %+v err %v", cfg, err)
-	}
-	if err := cfg.Validate(); err != nil {
-		t.Errorf("init wrote a config that does not validate: %v", err)
-	}
-	if err := runInit(sampleAddress, false); err == nil {
-		t.Error("init replaced an existing config without --force")
-	}
-	if err := runInit(sampleAddress, true); err != nil {
-		t.Errorf("--force: %v", err)
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatal(err)
-	}
+
+	t.Run("an existing config is replaced only with --force", func(t *testing.T) {
+		config.SetPath(filepath.Join(t.TempDir(), "config.yaml"))
+		t.Cleanup(func() { config.SetPath("") })
+		if err := runInit(io.Discard, "4notanaddress", false, false, initEnv{}); err == nil {
+			t.Error("init accepted a malformed address")
+		}
+		if err := runInit(io.Discard, sampleAddress, false, false, initEnv{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := runInit(io.Discard, sampleAddress, false, false, initEnv{}); err == nil {
+			t.Error("init replaced an existing config without --force")
+		}
+		if err := runInit(io.Discard, sampleAddress, true, false, initEnv{}); err != nil {
+			t.Errorf("--force: %v", err)
+		}
+	})
 }
 
 func TestConfigFor(t *testing.T) {
