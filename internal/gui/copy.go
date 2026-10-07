@@ -123,7 +123,10 @@ const (
 // that changes. Filled with the cores now, all the cores it will use, the
 // preset, and (first form) the time left.
 const (
-	statusGentleCoresCountdown = "Mining gently on %d of %d cores while you're here · all of them at full %s in %s"
+	// Short enough for the header at 16-point text: the longer "… while
+	// you're here · all of them at full Balanced in ~5m" made the dashboard
+	// 809 points wide, in a 760-point window.
+	statusGentleCoresCountdown = "Mining gently on %d of %d cores · all %d at %s in %s"
 	statusGentleCores          = "Mining gently on %d of %d cores while you're here · %s"
 )
 

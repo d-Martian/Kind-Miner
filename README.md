@@ -329,7 +329,7 @@ Setting this on a machine that has been up for a while often falls short of what
 
 A dedicated miner such as Gupax shows a higher hashrate on the same machine, and it should: the difference is kind-miner keeping out of your way, on purpose. (Run as root, Gupax's xmrig can also set CPU registers for another 10–15%; kind-miner never runs as root.)
 
-- **While you're using the computer**, kind-miner mines on the efficiency cores only, at the Ghost ceiling (52%), until the keyboard and mouse have been quiet for `idle_full_after_seconds` (5 minutes by default). The dashboard says so — "Mining gently on 8 of 12 cores while you're here". Leave the machine for five minutes and it moves to every core.
+- **While you're using the computer**, kind-miner mines on the efficiency cores only, at the Ghost ceiling (52%), until the keyboard and mouse have been quiet for `idle_full_after_seconds` (5 minutes by default). The dashboard says so — "Mining gently on 8 of 12 cores · all 12 at Balanced in ~5m". Leave the machine for five minutes and it moves to every core.
 - **Kindness**: Balanced leaves 10% of the machine free, Polite 22%. Full uses all of it, and **Full does not wait for you to step away**: it mines on every core straight away, like a dedicated miner, while still running at the lowest priority and giving the CPU to your apps whenever they want it.
 
 ---

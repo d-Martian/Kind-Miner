@@ -156,7 +156,7 @@ func TestStatusSummaryExplainsMiningGently(t *testing.T) {
 		want      string
 	}{
 		{"names the cores and when all of them are used", coreCounts{here: 8, away: 12}, countdown,
-			"Mining gently on 8 of 12 cores while you're here · all of them at full Balanced in ~5m"},
+			"Mining gently on 8 of 12 cores · all 12 at Balanced in ~5m"},
 		{"without a countdown still names the cores", coreCounts{here: 8, away: 12}, noCountdown,
 			"Mining gently on 8 of 12 cores while you're here · Balanced"},
 		{"unknown layouts keep the plain wording", coreCounts{}, countdown,

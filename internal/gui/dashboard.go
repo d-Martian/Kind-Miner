@@ -281,7 +281,7 @@ func statusSummary(state scheduler.State, reason string, held bool, override sch
 		secs, counting := countdown()
 		if cores.here > 0 && cores.here < cores.away {
 			if counting {
-				return fmt.Sprintf(statusGentleCoresCountdown, cores.here, cores.away, preset.Label, formatCountdown(secs)), colorAccent
+				return fmt.Sprintf(statusGentleCoresCountdown, cores.here, cores.away, cores.away, preset.Label, formatCountdown(secs)), colorAccent
 			}
 			return fmt.Sprintf(statusGentleCores, cores.here, cores.away, preset.Label), colorAccent
 		}
