@@ -129,12 +129,4 @@ const (
 
 // kindnessWhyNote sits under the kindness presets. It answers "why is my
 // hashrate lower than with another miner" before anyone has to ask.
-const kindnessWhyNote = "While you're using the computer, kind-miner mines on its efficiency cores at the Ghost ceiling, so you never feel it, and moves to every core once you've been away for the time set below. Full skips that wait. Dedicated miners such as Gupax mine flat out all the time and, given root, apply an MSR tweak for another 10–15% — see Advanced."
-
-// The MSR boost, on the Advanced tab: the command for this install, then
-// msr.Warning.
-const (
-	msrHintCommand = "Dedicated miners run xmrig as root so it can set a few CPU registers for 10–15%% more hashrate. kind-miner never runs as root, but you can set them yourself, once, from a terminal: sudo %s msr on — add --at-boot to keep it after reboots, and undo it with msr off."
-	msrHintBlocked = "Dedicated miners run xmrig as root so it can set a few CPU registers for 10–15%% more hashrate. Not on this machine: %v. Turning Secure Boot off would allow it; kind-miner does not suggest you do."
-	msrHintFlatpak = "Dedicated miners run xmrig as root so it can set a few CPU registers for 10–15% more hashrate. The Flatpak cannot reach those registers; run the command once from the AppImage or the tarball instead: sudo ./kind-miner msr on — add --at-boot to keep it after reboots, and undo it with msr off."
-)
+const kindnessWhyNote = "While you're using the computer, kind-miner mines on its efficiency cores at the Ghost ceiling, so you never feel it, and moves to every core once you've been away for the time set below. Full skips that wait, and mines on every core straight away, as dedicated miners such as Gupax do all the time."
