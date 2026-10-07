@@ -153,7 +153,15 @@ func writeStatus(path string, st daemonStatus) error {
 // func is called, which removes the file and returns only once it is gone. A
 // daemon starting again — for a wallet change, or a rollback — must not have
 // its new status deleted by the last run's writer finishing late.
+//
+// The first status is written before keepStatus returns, not by the writer
+// when it gets round to it, so whoever starts it can rely on the file being
+// there: a status read just after the daemon began answering on the network
+// otherwise found nothing, and said the daemon was not running.
 func keepStatus(snap func(time.Time) daemonStatus) (stop func()) {
+	if err := writeStatus(statusPath(), snap(time.Now())); err != nil {
+		log.Printf("status: %v", err)
+	}
 	quit, done := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(done)
