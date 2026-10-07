@@ -13,11 +13,22 @@ import (
 	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/gui"
 	"github.com/kind-miner/kind-miner/internal/instance"
+	"github.com/kind-miner/kind-miner/internal/msr"
 )
 
 var version = "dev"
 
 func main() {
+	// `kind-miner msr on|off|status`: the opt-in root command for xmrig's MSR
+	// boost. Handled before anything else, since it is run with sudo and must
+	// never start a miner or a window as root.
+	if len(os.Args) > 1 && os.Args[1] == "msr" {
+		if err := msr.Run(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "kind-miner: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	flags := flag.NewFlagSet("kind-miner", flag.ExitOnError)
 	showVersion := flags.Bool("version", false, "print version and exit")
 	configPath := flags.String("config", "", "path to config file (default: ~/.config/kind-miner/config.yaml)")

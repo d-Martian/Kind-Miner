@@ -54,7 +54,7 @@ it back.
 | **Ghost** | 52% | Only genuinely idle cycles. You will never notice it; payouts are slow. |
 | **Polite** | 78% | Steps aside the moment you touch the machine, and comes back slowly. The default, and the one most people keep. |
 | **Balanced** | 90% | Shares the machine evenly. Heavy work still wins, but you may feel a short lag. |
-| **Full** | 100% | Fills the rest of the machine and gives it back slowly. Still yields to your apps — it just aims to use what's spare. For machines you are not sitting at. |
+| **Full** | 100% | Every core, straight away — it doesn't wait for you to step away. Still yields to your apps and gives the CPU back slowly. For machines you are not sitting at. |
 
 The miner only ever asks for what is left underneath the ceiling, so other work
 always has the rest of the machine reserved:
@@ -324,6 +324,25 @@ grep HugePages_Total /proc/meminfo
 ```
 
 Setting this on a machine that has been up for a while often falls short of what you asked for: memory is fragmented and the kernel cannot find enough contiguous blocks. The drop-in above is applied at boot, when memory is clean — so if the number comes back low, reboot rather than raising it further.
+
+### Compared with other miners
+
+A dedicated miner such as Gupax shows a higher hashrate on the same machine, and it should. Most of the difference is kind-miner keeping out of your way, on purpose:
+
+- **While you're using the computer**, kind-miner mines on the efficiency cores only, at the Ghost ceiling (52%), until the keyboard and mouse have been quiet for `idle_full_after_seconds` (5 minutes by default). The dashboard says so — "Mining gently on 8 of 12 cores while you're here". Leave the machine for five minutes and it moves to every core.
+- **Kindness**: Balanced leaves 10% of the machine free, Polite 22%. Full uses all of it, and **Full does not wait for you to step away**: it mines on every core straight away, like a dedicated miner, while still running at the lowest priority and giving the CPU to your apps whenever they want it.
+- **The MSR boost**: dedicated miners run xmrig as root, so it can set a few CPU registers that switch off prefetchers RandomX gains nothing from — 10–15% on most Intel and AMD CPUs. kind-miner never runs as root, but you can set them yourself, once:
+
+  ```sh
+  sudo kind-miner msr on            # until the next reboot or sleep
+  sudo kind-miner msr on --at-boot  # and again at every boot and resume
+  sudo kind-miner msr off           # put the registers back as they were
+  kind-miner msr status
+  ```
+
+  From the AppImage that is `sudo ./kind-miner-….AppImage msr on`; on a Nodo-style box, `sudo kind-minerd msr on`. The Flatpak cannot reach the registers — use the AppImage or the tarball for the one command. The values are xmrig 6.26.0's own presets for your CPU. The registers belong to the whole machine, so while the boost is on other programs may run a little slower: it suits a machine left mining.
+
+  **With Secure Boot on**, Linux runs in lockdown mode, which forbids setting CPU registers for anyone — Gupax's xmrig is refused too, and `kind-miner msr status` says so.
 
 ---
 

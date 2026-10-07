@@ -35,6 +35,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/core"
 	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/instance"
+	"github.com/kind-miner/kind-miner/internal/msr"
 	"github.com/kind-miner/kind-miner/internal/nodo"
 	"github.com/kind-miner/kind-miner/internal/rollout"
 )
@@ -49,6 +50,7 @@ commands:
   status [--json]     what the running daemon is doing
   doctor              say what is wrong, if anything
   pair [--name N]     print the code that pairs a device with this hub
+  msr on|off|status   opt-in, as root: xmrig's MSR boost (x86 only)
   version             print the version
 
 common flags:
@@ -86,6 +88,8 @@ func main() {
 		os.Exit(runDoctor(os.Stdout))
 	case "pair":
 		err = runPair(os.Stdout, *name, *host)
+	case "msr":
+		err = msr.Run(args, os.Stdout)
 	case "version", "--version", "-version":
 		fmt.Printf("kind-minerd %s\n", version)
 	default:

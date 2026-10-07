@@ -226,7 +226,11 @@ func (d *dashboard) refresh() {
 
 func (d *dashboard) refreshStatus(sched *scheduler.Scheduler, state scheduler.State, reason string, override scheduler.Override, preset kindness.Preset) {
 	_, held := sched.Held()
-	text, tint := statusSummary(state, reason, held, override, preset, sched.IdleCountdown)
+	var cores coreCounts
+	if here, away, ok := sched.LayoutSizes(); ok {
+		cores = coreCounts{here: here, away: away}
+	}
+	text, tint := statusSummary(state, reason, held, override, preset, sched.IdleCountdown, cores)
 	if until, paused := sched.PausedUntil(); paused && !until.IsZero() {
 		// A snooze from the tray ends by itself; saying when is the difference
 		// between "paused" and "forgotten".
@@ -254,7 +258,11 @@ func (d *dashboard) refreshStatus(sched *scheduler.Scheduler, state scheduler.St
 // A hold is still standing by — it lifts itself when the fault clears — but in
 // amber, because unlike heat or a busy machine the user may be the one who has
 // to fix it.
-func statusSummary(state scheduler.State, reason string, held bool, override scheduler.Override, preset kindness.Preset, countdown func() (int, bool)) (string, color.Color) {
+// coreCounts are the miner's two layouts, by size: the cores it mines on while
+// the user is here, and once they are away. Zero means unknown.
+type coreCounts struct{ here, away int }
+
+func statusSummary(state scheduler.State, reason string, held bool, override scheduler.Override, preset kindness.Preset, countdown func() (int, bool), cores coreCounts) (string, color.Color) {
 	switch {
 	case override == scheduler.OverridePause:
 		return "Paused — nothing runs until you resume", colorMuted
@@ -265,7 +273,17 @@ func statusSummary(state scheduler.State, reason string, held bool, override sch
 	case state == scheduler.StatePaused:
 		return "Standing by", colorAccent
 	case reason == scheduler.ReasonWaitingForIdle:
-		if secs, ok := countdown(); ok {
+		// The lower hashrate while someone is here is the design, not a fault;
+		// saying where it is mining and when that changes is what keeps it
+		// from reading as broken next to a dedicated miner.
+		secs, counting := countdown()
+		if cores.here > 0 && cores.here < cores.away {
+			if counting {
+				return fmt.Sprintf(statusGentleCoresCountdown, cores.here, cores.away, preset.Label, formatCountdown(secs)), colorAccent
+			}
+			return fmt.Sprintf(statusGentleCores, cores.here, cores.away, preset.Label), colorAccent
+		}
+		if counting {
 			return fmt.Sprintf("Mining gently · full %s kindness in %s", preset.Label, formatCountdown(secs)), colorAccent
 		}
 		return "Mining gently · " + preset.Label, colorAccent

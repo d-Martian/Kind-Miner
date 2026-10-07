@@ -43,7 +43,7 @@ func TestOverrideInteractionsWithLoad(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(after, tt.override, tt.idle)
 			p := policy{preset: s.preset}
-			c := conditions{otherCPU: tt.otherCPU, idleGated: s.idleGated(tt.override)}
+			c := conditions{otherCPU: tt.otherCPU, idleGated: s.idleGated(tt.override, s.preset)}
 
 			target, _, _ := decide(p, c, tt.override)
 			if diff := target - tt.wantTarget; diff > 1e-9 || diff < -1e-9 {

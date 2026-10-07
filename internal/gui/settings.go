@@ -2,6 +2,8 @@ package gui
 
 import (
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/kind-miner/kind-miner/internal/msr"
 )
 
 // The settings window, grouped the way the design groups them: payout,
@@ -315,6 +318,7 @@ func (f *settingsForm) kindnessTab() fyne.CanvasObject {
 		sectionLabel("How much of the machine the miner may take, and how fast it lets go"),
 		f.kindness,
 		f.kindnessBlurb,
+		note(kindnessWhyNote),
 		widget.NewSeparator(),
 		f.battery,
 		f.thermal,
@@ -322,7 +326,7 @@ func (f *settingsForm) kindnessTab() fyne.CanvasObject {
 		f.startup,
 		sectionLabel("Full kindness after idle (seconds)"),
 		f.idleAfter,
-		note("Until the keyboard and mouse have been quiet this long, mining is held to the Ghost ceiling. 0 mines at the chosen kindness immediately."),
+		note("Until the keyboard and mouse have been quiet this long, mining is held to the Ghost ceiling on the efficiency cores. 0 mines at the chosen kindness immediately; Full never waits."),
 		sectionLabel("Temperature limit (°C)"),
 		f.tempLimit,
 		sectionLabel("Maximum threads (0 = half the machine)"),
@@ -351,12 +355,40 @@ func (f *settingsForm) advancedTab() fyne.CanvasObject {
 	openCfg := widget.NewButton("Open config file", func() { openInEditor(config.Path()) })
 	openDir := widget.NewButton("Open data folder", func() { openFolder(config.Dir()) })
 
-	return container.NewVBox(
+	box := container.NewVBox(
 		sectionLabel("Files"),
 		facts.Object(),
 		container.NewHBox(openCfg, openDir),
 		note("Everything above writes to one file. Anything you set there by hand is kept — kind-miner only rewrites the keys it owns."),
 	)
+	if hint := msrHint(); hint != "" {
+		box.Add(sectionLabel("MSR boost (optional, needs root)"))
+		box.Add(note(hint))
+	}
+	return box
+}
+
+// msrHint is the Advanced tab's note on the MSR boost: what it is, its cost,
+// and the exact command for however this copy of kind-miner was installed.
+// Empty on CPUs it does not apply to.
+func msrHint() string {
+	if runtime.GOARCH != "amd64" {
+		return ""
+	}
+	if err := msr.Blocked(); err != nil {
+		return fmt.Sprintf(msrHintBlocked, err)
+	}
+	switch {
+	case os.Getenv("FLATPAK_ID") != "":
+		return msrHintFlatpak + " " + msr.Warning
+	case os.Getenv("APPIMAGE") != "":
+		return fmt.Sprintf(msrHintCommand, os.Getenv("APPIMAGE")) + " " + msr.Warning
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		exe = "kind-miner"
+	}
+	return fmt.Sprintf(msrHintCommand, exe) + " " + msr.Warning
 }
 
 // ---- applying ----
