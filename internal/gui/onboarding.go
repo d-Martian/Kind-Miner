@@ -58,7 +58,7 @@ func (o *onboarding) build() {
 	o.wallet.SetPlaceHolder(WalletPlaceholder)
 	o.wallet.SetText(o.cfg.Wallet)
 	o.feedback = canvas.NewText("", colorMuted)
-	o.feedback.TextSize = 12
+	o.feedback.TextSize = textSize(12)
 
 	o.startup = widget.NewCheck(OnboardStartupLabel, nil)
 	o.startup.SetChecked(true)
@@ -181,7 +181,7 @@ const (
 
 func heading(text string) fyne.CanvasObject {
 	t := canvas.NewText(text, colorForeground)
-	t.TextSize = 19
+	t.TextSize = textSize(19)
 	t.TextStyle = fyne.TextStyle{Bold: true}
 	return t
 }
