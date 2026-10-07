@@ -79,7 +79,9 @@ func (u *uiApp) showSettings() {
 	cfg := u.sup.Config()
 
 	w := u.app.NewWindow("kind-miner — settings")
-	w.Resize(fyne.NewSize(620, 560))
+	// Wider than it was at 14-point text: the section headings are single
+	// lines that cannot wrap, and at 16 points the longest ran off the edge.
+	w.Resize(fyne.NewSize(720, 620))
 	w.CenterOnScreen()
 	u.settingsWin = w
 	w.SetOnClosed(func() { u.settingsWin = nil })
@@ -87,7 +89,7 @@ func (u *uiApp) showSettings() {
 	f := u.newSettingsForm(cfg)
 
 	status := canvas.NewText("", colorMuted)
-	status.TextSize = 12
+	status.TextSize = textSize(12)
 	fail := func(msg string) {
 		status.Text = "× " + msg
 		status.Color = colorError

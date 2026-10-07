@@ -39,6 +39,11 @@ func awaitSetup(ctx context.Context) (*config.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("making the hub's certificate: %w", err)
 	}
+	// The status first: once the setup port answers, a desktop — or the test
+	// standing in for one — may ask kind-minerd status straight away.
+	defer keepStatus(func(now time.Time) daemonStatus {
+		return daemonStatus{Version: version, UpdatedAt: now, State: stateAwaitingSetup, Reason: awaitingReason}
+	})()
 	hello := core.HubHello()
 	got := make(chan *config.Config, 1)
 	srv, err := hub.Serve(fmt.Sprintf(":%d", setupPort), id, hub.Handlers{
@@ -75,10 +80,6 @@ func awaitSetup(ctx context.Context) (*config.Config, error) {
 		defer beacon.Close()
 	}
 	log.Printf("No config at %s yet. Waiting to be set up: %s", config.Path(), awaitingReason)
-
-	defer keepStatus(func(now time.Time) daemonStatus {
-		return daemonStatus{Version: version, UpdatedAt: now, State: stateAwaitingSetup, Reason: awaitingReason}
-	})()
 
 	select {
 	case <-ctx.Done():

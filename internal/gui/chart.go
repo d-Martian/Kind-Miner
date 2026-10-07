@@ -49,7 +49,7 @@ func newChart() *chart {
 
 	for _, pct := range []string{"100%", "50%", "0%"} {
 		t := canvas.NewText(pct, withAlpha(colorForeground, 0x5c))
-		t.TextSize = 9
+		t.TextSize = textSize(9)
 		c.labels = append(c.labels, t)
 	}
 

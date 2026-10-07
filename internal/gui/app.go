@@ -209,11 +209,11 @@ func (u *uiApp) tuckIntoTray() {
 
 func (u *uiApp) progressScreen(step core.Step) fyne.CanvasObject {
 	title := canvas.NewText(SetupTitle, colorForeground)
-	title.TextSize = 20
+	title.TextSize = textSize(20)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	line := canvas.NewText(step.String()+"…", colorAccent)
-	line.TextSize = 15
+	line.TextSize = textSize(15)
 
 	// The step blurbs are full paragraphs, so they must wrap: a non-wrapping
 	// canvas.Text would size this screen to the blurb's single-line width
@@ -245,7 +245,7 @@ func (u *uiApp) dashboardScreen() fyne.CanvasObject {
 
 func (u *uiApp) errorScreen(err error) fyne.CanvasObject {
 	title := canvas.NewText("Something went wrong", colorError)
-	title.TextSize = 20
+	title.TextSize = textSize(20)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	msg := widget.NewLabel(err.Error())
