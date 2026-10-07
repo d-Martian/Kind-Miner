@@ -62,7 +62,7 @@ func (u *uiApp) newDashboard() *dashboard {
 
 	d.pill = newStatusPill()
 	d.uptime = canvas.NewText("", colorMuted)
-	d.uptime.TextSize = 11
+	d.uptime.TextSize = textSize(11)
 	d.uptime.TextStyle = fyne.TextStyle{Monospace: true}
 
 	settings := widget.NewButton("Settings", u.onSettings)
@@ -126,10 +126,10 @@ func (u *uiApp) newDashboard() *dashboard {
 
 	d.chart = newChart()
 	d.totalNow = canvas.NewText("", colorMuted)
-	d.totalNow.TextSize = 11
+	d.totalNow.TextSize = textSize(11)
 	d.totalNow.TextStyle = fyne.TextStyle{Monospace: true}
 	d.backoff = canvas.NewText("", colorMuted)
-	d.backoff.TextSize = 11
+	d.backoff.TextSize = textSize(11)
 
 	legend := container.NewBorder(nil, nil,
 		container.NewHBox(
@@ -142,8 +142,7 @@ func (u *uiApp) newDashboard() *dashboard {
 
 	plot := container.NewBorder(legend, nil, nil, nil, d.chart.Object())
 
-	// Short labels here: the footer shares its row with the kindness control,
-	// and the tray has the room for the fuller wording.
+	// Short labels here: the tray has the room for the fuller wording.
 	d.pause = widget.NewButton(labelPause, u.onToggle)
 	d.mineNow = widget.NewButton(labelMineNowShort, u.onMineNowToggle)
 
@@ -163,9 +162,12 @@ func (u *uiApp) newDashboard() *dashboard {
 		// the window only tucks kind-miner away — so the window carries it.
 		left.Add(widget.NewButton("Quit", u.confirmQuit))
 	}
-	footer := container.NewBorder(nil, nil,
-		left,
+	// Two rows, not one: at the body text size people can read, the buttons
+	// and the four presets no longer fit side by side in the window, and
+	// squeezed together they drew over each other.
+	footer := container.NewVBox(
 		container.NewHBox(sectionLabel("Kindness"), d.kindness),
+		left,
 	)
 
 	body := container.NewBorder(
@@ -186,7 +188,7 @@ func detailColumn(title string, list *kvList) fyne.CanvasObject {
 
 func legendText(s string) fyne.CanvasObject {
 	t := canvas.NewText(s, colorMuted)
-	t.TextSize = 11
+	t.TextSize = textSize(11)
 	return t
 }
 

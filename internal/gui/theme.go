@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"math"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -62,8 +63,29 @@ func (kindTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return theme.DefaultTheme().Icon(name)
 }
 
+// bodyText is the body text size. Fyne's default is 14, and people found it
+// too small to read comfortably — notes and labels most of all — so every
+// size of text in the app is scaled from it together: the theme's own body,
+// caption and heading sizes, and each size set by hand (textSize), so the
+// app grows without anything losing its place in the hierarchy.
+const bodyText = 16
+
+// textScale is how much larger than designed: the sizes in the code were
+// chosen against Fyne's 14.
+const textScale = bodyText / 14.0
+
+// textSize is a hand-set text size, as designed against 14-point body text,
+// at the size the app now uses.
+func textSize(designed float32) float32 {
+	return float32(math.Round(float64(designed) * textScale))
+}
+
 func (kindTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
+	case theme.SizeNameText:
+		return bodyText
+	case theme.SizeNameCaptionText, theme.SizeNameSubHeadingText, theme.SizeNameHeadingText:
+		return textSize(theme.DefaultTheme().Size(name))
 	case theme.SizeNamePadding:
 		return 10
 	case theme.SizeNameInnerPadding:

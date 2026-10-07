@@ -23,7 +23,7 @@ func RunConfigError(err error) {
 	w.CenterOnScreen()
 
 	title := canvas.NewText("Configuration problem", colorError)
-	title.TextSize = 20
+	title.TextSize = textSize(20)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	msg := widget.NewLabel(err.Error())

@@ -37,10 +37,10 @@ func newStatTile(label string) *statTile {
 		unit:  canvas.NewText("", colorMuted),
 		label: canvas.NewText(label, colorMuted),
 	}
-	t.value.TextSize = 22
+	t.value.TextSize = textSize(22)
 	t.value.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
-	t.unit.TextSize = 11
-	t.label.TextSize = 11
+	t.unit.TextSize = textSize(11)
+	t.label.TextSize = textSize(11)
 
 	// Baseline-align the unit with the value by pinning it to the bottom of the
 	// row; an HBox would centre it against the much taller number.
@@ -85,7 +85,7 @@ func newStatusPill() *statusPill {
 		text: canvas.NewText("Starting…", colorForeground),
 	}
 	p.dot.Resize(fyne.NewSize(8, 8))
-	p.text.TextSize = 13
+	p.text.TextSize = textSize(13)
 
 	dot := container.NewWithoutLayout(p.dot)
 	dot.Resize(fyne.NewSize(8, 8))
@@ -120,9 +120,9 @@ func newKVList() *kvList {
 // Add appends a row and returns the list for chaining.
 func (l *kvList) Add(key, value string) *kvList {
 	k := canvas.NewText(key, colorMuted)
-	k.TextSize = 11
+	k.TextSize = textSize(11)
 	v := canvas.NewText(shortenMiddle(value, valueWidth), colorForeground)
-	v.TextSize = 11
+	v.TextSize = textSize(11)
 	v.TextStyle = fyne.TextStyle{Monospace: true}
 	v.Alignment = fyne.TextAlignTrailing
 
@@ -155,7 +155,7 @@ func (l *kvList) Object() fyne.CanvasObject { return container.NewVBox(l.rows...
 // sectionLabel is a small heading above a group of controls.
 func sectionLabel(text string) fyne.CanvasObject {
 	t := canvas.NewText(text, colorMuted)
-	t.TextSize = 11
+	t.TextSize = textSize(11)
 	t.TextStyle = fyne.TextStyle{Bold: true}
 	return t
 }
