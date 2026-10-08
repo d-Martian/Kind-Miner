@@ -778,7 +778,7 @@ func (s *Scheduler) observe(p policy, override Override) conditions {
 		}
 		c.otherCPU = other
 	}
-	c.idleGated = s.idleGated(override)
+	c.idleGated = s.idleGated(override, p.preset)
 	if s.gameMode != nil {
 		active, known := s.gameMode.Active()
 		c.gameActive = known && active
@@ -798,12 +798,14 @@ func (s *Scheduler) observe(p policy, override Override) conditions {
 
 // idleGated reports whether the user still being present should hold the miner
 // to the kindest ceiling.
-func (s *Scheduler) idleGated(override Override) bool {
+func (s *Scheduler) idleGated(override Override, preset kindness.Preset) bool {
 	s.mu.Lock()
 	after := s.idleFullAfter
 	s.mu.Unlock()
 
-	if after <= 0 || override == OverrideMine {
+	// Full does not wait, and neither does a "mine now": both mean the user
+	// has said this machine may be mined on fully while they are here.
+	if after <= 0 || override == OverrideMine || !preset.WaitsForIdle {
 		return false
 	}
 	idleFor, ok := s.idle.IdleTime()

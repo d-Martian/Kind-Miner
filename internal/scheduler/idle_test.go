@@ -51,6 +51,7 @@ func TestIdleGate(t *testing.T) {
 		name      string
 		after     time.Duration
 		override  Override
+		preset    kindness.Level // "" uses the test scheduler's own
 		idle      fakeIdle
 		wantGated bool
 	}{
@@ -93,6 +94,22 @@ func TestIdleGate(t *testing.T) {
 			wantGated: false,
 		},
 		{
+			// Full is for a machine nobody is sitting at: it mines on every core
+			// at its own ceiling straight away, like a dedicated miner.
+			name:      "Full does not wait for the user to step away",
+			after:     after,
+			preset:    kindness.Full,
+			idle:      fakeIdle{dur: time.Second, ok: true},
+			wantGated: false,
+		},
+		{
+			name:      "Balanced still waits",
+			after:     after,
+			preset:    kindness.Balanced,
+			idle:      fakeIdle{dur: time.Second, ok: true},
+			wantGated: true,
+		},
+		{
 			// Pausing is not the same as being present: the gate is about which
 			// ceiling applies, and a paused miner has no allowance either way.
 			name:      "pause does not suppress the gate",
@@ -106,7 +123,11 @@ func TestIdleGate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(tt.after, tt.override, tt.idle)
-			if got := s.idleGated(tt.override); got != tt.wantGated {
+			preset := s.preset
+			if tt.preset != "" {
+				preset = kindness.Get(tt.preset)
+			}
+			if got := s.idleGated(tt.override, preset); got != tt.wantGated {
 				t.Errorf("idleGated() = %v, want %v", got, tt.wantGated)
 			}
 		})

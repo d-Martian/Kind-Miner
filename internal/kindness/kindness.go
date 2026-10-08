@@ -64,6 +64,13 @@ type Preset struct {
 	// higher target respectively.
 	Fall float64
 	Rise float64
+	// WaitsForIdle holds the preset to Ghost's ceiling, on the efficiency
+	// cores, until the keyboard and mouse have been quiet for
+	// idle_full_after_seconds. Every preset but Full does: Full is for a
+	// machine nobody is sitting at, and waiting for an absent user to step
+	// away left it mining at half speed on its slowest cores — the gap people
+	// saw against dedicated miners.
+	WaitsForIdle bool
 	// Blurb is the one-sentence explanation shown under the preset picker.
 	Blurb string
 }
@@ -78,20 +85,20 @@ var Order = []Level{Ghost, Polite, Balanced, Full}
 
 var presets = map[Level]Preset{
 	Ghost: {
-		Level: Ghost, Label: "Ghost", Ceiling: 0.52, Fall: 0.62, Rise: 0.010,
+		Level: Ghost, Label: "Ghost", Ceiling: 0.52, Fall: 0.62, Rise: 0.010, WaitsForIdle: true,
 		Blurb: "Only genuinely idle cycles. You will never notice it; payouts are slow.",
 	},
 	Polite: {
-		Level: Polite, Label: "Polite", Ceiling: 0.78, Fall: 0.45, Rise: 0.020,
+		Level: Polite, Label: "Polite", Ceiling: 0.78, Fall: 0.45, Rise: 0.020, WaitsForIdle: true,
 		Blurb: "Steps aside the moment you touch the machine, and comes back slowly. The default, and the one most people keep.",
 	},
 	Balanced: {
-		Level: Balanced, Label: "Balanced", Ceiling: 0.90, Fall: 0.30, Rise: 0.038,
+		Level: Balanced, Label: "Balanced", Ceiling: 0.90, Fall: 0.30, Rise: 0.038, WaitsForIdle: true,
 		Blurb: "Shares the machine evenly. Heavy work still wins, but you may feel a short lag.",
 	},
 	Full: {
 		Level: Full, Label: "Full", Ceiling: 1.00, Fall: 0.15, Rise: 0.075,
-		Blurb: "Uses whatever is free, and gives it back slowly. Still yields to your apps — it just aims to fill the rest of the machine. For computers you are not sitting at.",
+		Blurb: "Every core, straight away — no waiting for you to step away. Still runs at the lowest priority and gives the CPU to your apps whenever they want it. For computers you are not sitting at.",
 	},
 }
 

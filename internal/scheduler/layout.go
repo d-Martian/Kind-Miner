@@ -122,6 +122,19 @@ func Layouts(cfg *config.Config) (present, idle []int, ok bool) {
 	return l.present, l.idle, true
 }
 
+// LayoutSizes is how many cores the miner uses while the user is present and
+// once they are away, for the dashboard to say why it is mining on fewer cores
+// than the machine has. ok is false where the topology could not be read and
+// one layout is all there is.
+func (s *Scheduler) LayoutSizes() (present, away int, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.haveLayouts {
+		return 0, 0, false
+	}
+	return len(s.layouts.present), len(s.layouts.idle), true
+}
+
 // layoutSetter is implemented by engines that can be re-threaded in place.
 // Separate from miner, like starter: a layout change keeps the dataset, but it
 // is still a change of cores, not the throttle.

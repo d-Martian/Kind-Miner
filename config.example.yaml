@@ -68,7 +68,8 @@ run_at_startup: false
 # How long the keyboard and mouse must be quiet before mining is allowed its
 # full kindness ceiling (seconds). Until then it is held to the Ghost ceiling,
 # so a machine you are sitting at never has most of it taken. Set to 0 to use
-# the chosen kindness immediately, without waiting for you to step away.
+# the chosen kindness immediately, without waiting for you to step away. The
+# Full kindness never waits: it mines on every core straight away.
 idle_full_after_seconds: 300
 
 # --- p2pool-local settings ---

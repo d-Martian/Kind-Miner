@@ -118,3 +118,18 @@ const (
 	hubUnreachable = "Hub unreachable"
 	hubWrongCert   = "Not your hub"
 )
+
+// The dashboard while the user is at the machine: where it is mining and when
+// that changes. Filled with the cores now, all the cores it will use, the
+// preset, and (first form) the time left.
+const (
+	// Short enough for the header at 16-point text: the longer "… while
+	// you're here · all of them at full Balanced in ~5m" made the dashboard
+	// 809 points wide, in a 760-point window.
+	statusGentleCoresCountdown = "Mining gently on %d of %d cores · all %d at %s in %s"
+	statusGentleCores          = "Mining gently on %d of %d cores while you're here · %s"
+)
+
+// kindnessWhyNote sits under the kindness presets. It answers "why is my
+// hashrate lower than with another miner" before anyone has to ask.
+const kindnessWhyNote = "While you're using the computer, kind-miner mines on its efficiency cores at the Ghost ceiling, so you never feel it, and moves to every core once you've been away for the time set below. Full skips that wait, and mines on every core straight away, as dedicated miners such as Gupax do all the time."

@@ -67,7 +67,7 @@ func TestStatusSummaryAnswersAmIMining(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			text, _ := statusSummary(tt.state, tt.reason, false, tt.override, polite, noCountdown)
+			text, _ := statusSummary(tt.state, tt.reason, false, tt.override, polite, noCountdown, coreCounts{})
 			if !strings.HasPrefix(text, tt.wantPrefix) {
 				t.Fatalf("summary = %q, want prefix %q", text, tt.wantPrefix)
 			}
@@ -110,7 +110,7 @@ func TestPauseLabelNeverContradictsTheHeader(t *testing.T) {
 
 func TestHeldIsAmberAndSaysWhy(t *testing.T) {
 	polite := kindness.Get(kindness.Polite)
-	text, tint := statusSummary(scheduler.StatePaused, "p2pool has no peers", true, scheduler.OverrideNone, polite, noCountdown)
+	text, tint := statusSummary(scheduler.StatePaused, "p2pool has no peers", true, scheduler.OverrideNone, polite, noCountdown, coreCounts{})
 	if tint != colorWarn {
 		t.Errorf("tint = %v, want amber", tint)
 	}
@@ -140,5 +140,36 @@ func TestHouseholdLine(t *testing.T) {
 		if got := householdLine(tt.workers); got != tt.want {
 			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+// While the user is here the miner deliberately runs on fewer cores at the
+// Ghost ceiling. Saying so — and when it changes — is what keeps a lower
+// hashrate than a dedicated miner's from reading as a fault.
+func TestStatusSummaryExplainsMiningGently(t *testing.T) {
+	balanced := kindness.Get(kindness.Balanced)
+	countdown := func() (int, bool) { return 272, true }
+	tests := []struct {
+		name      string
+		cores     coreCounts
+		countdown func() (int, bool)
+		want      string
+	}{
+		{"names the cores and when all of them are used", coreCounts{here: 8, away: 12}, countdown,
+			"Mining gently on 8 of 12 cores · all 12 at Balanced in ~5m"},
+		{"without a countdown still names the cores", coreCounts{here: 8, away: 12}, noCountdown,
+			"Mining gently on 8 of 12 cores while you're here · Balanced"},
+		{"unknown layouts keep the plain wording", coreCounts{}, countdown,
+			"Mining gently · full Balanced kindness in ~5m"},
+		{"one layout for both says nothing about cores", coreCounts{here: 12, away: 12}, noCountdown,
+			"Mining gently · Balanced"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			text, _ := statusSummary(scheduler.StateReduced, scheduler.ReasonWaitingForIdle, false, scheduler.OverrideNone, balanced, tt.countdown, tt.cores)
+			if text != tt.want {
+				t.Errorf("summary = %q\n want %q", text, tt.want)
+			}
+		})
 	}
 }
