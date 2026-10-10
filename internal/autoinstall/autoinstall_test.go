@@ -215,3 +215,31 @@ func TestBinDirUnderAService(t *testing.T) {
 		t.Errorf("BinDir = %q, want the service's state directory", got)
 	}
 }
+
+func TestBinDirBeside(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write anywhere, so a read-only directory cannot be made")
+	}
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+
+	t.Run("an unpacked tarball keeps its data beside itself", func(t *testing.T) {
+		dir := t.TempDir()
+		if got := binDirBeside(dir); got != filepath.Join(dir, "bin") {
+			t.Errorf("BinDir = %q, want beside the program", got)
+		}
+	})
+	t.Run("a system install keeps it in the user's data directory", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Chmod(dir, 0o555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(dir, 0o755) })
+		if got, want := binDirBeside(dir), filepath.Join(data, "kind-miner", "bin"); got != want {
+			t.Errorf("BinDir = %q, want %q", got, want)
+		}
+		if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+			t.Errorf("the check left %d files behind in the program's directory", len(entries))
+		}
+	})
+}

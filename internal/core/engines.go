@@ -13,8 +13,9 @@ import (
 )
 
 // Every packaged release ships its engines: the AppImage and the Flatpak in
-// <prefix>/lib/kind-miner/engines beside <prefix>/bin/kind-miner, the .deb in
-// /opt/kind-miner/engines beside the daemon. A build that finds them there
+// <prefix>/lib/kind-miner/engines beside <prefix>/bin/kind-miner, the .debs in
+// an engines directory beside the program (/opt/kind-miner for the daemon,
+// /opt/kind-miner-desktop for the desktop app). A build that finds them there
 // downloads nothing, ever. First-run downloads told GitHub a miner had been
 // installed before Tor was up, failed wherever antivirus flags Monero
 // binaries, and never moved without an app release anyway. Only a build with
@@ -42,7 +43,7 @@ type binaries struct {
 func bundleDirs(exe string) []string {
 	dir := filepath.Dir(exe)
 	return []string{
-		filepath.Join(dir, "engines"),                            // .deb: /opt/kind-miner
+		filepath.Join(dir, "engines"),                            // the .debs: /opt/kind-miner, /opt/kind-miner-desktop
 		filepath.Join(dir, "..", "lib", "kind-miner", "engines"), // AppImage, Flatpak: <prefix>/bin
 	}
 }

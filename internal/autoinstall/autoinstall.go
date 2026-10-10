@@ -47,7 +47,31 @@ func BinDir() string {
 	if err != nil {
 		return "bin"
 	}
-	return filepath.Join(filepath.Dir(exe), "bin")
+	// A system install — the desktop .deb puts kind-miner in
+	// /opt/kind-miner-desktop, owned by root — cannot keep p2pool's data
+	// beside itself. Where the program's own directory is not ours to write,
+	// the data goes where the Flatpak's and the AppImage's do. A tarball
+	// unpacked into the user's home keeps everything together, as before.
+	return binDirBeside(filepath.Dir(exe))
+}
+
+func binDirBeside(dir string) string {
+	if !writable(dir) {
+		return xdgDataBin()
+	}
+	return filepath.Join(dir, "bin")
+}
+
+// writable reports whether this user can create files in dir.
+func writable(dir string) bool {
+	f, err := os.CreateTemp(dir, ".kind-miner-write-test-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
+	return true
 }
 
 func xdgDataBin() string {

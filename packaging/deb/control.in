@@ -5,6 +5,8 @@ Maintainer: d-Martian <d-Martian@users.noreply.github.com>
 Installed-Size: @SIZE@
 Depends: apt-transport-tor
 Recommends: tor
+Conflicts: kind-miner
+Replaces: kind-miner
 Section: net
 Priority: optional
 Homepage: https://github.com/d-Martian/Kind-Miner

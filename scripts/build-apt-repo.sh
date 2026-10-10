@@ -5,8 +5,8 @@
 #
 # OUT_DIR gets the .debs, Packages(.gz), Release, and Release signed both
 # ways apt reads (InRelease, Release.gpg), with the one secret key in the
-# current GNUPGHOME. Flat — `deb … ./` — because one package in two
-# architectures needs no pool or dists tree.
+# current GNUPGHOME. Flat — `deb … ./` — because two packages, kind-minerd
+# and kind-miner, in at most two architectures need no pool or dists tree.
 #
 # Release dates come from SOURCE_DATE_EPOCH, so the same .debs make the same
 # unsigned files; the signatures differ each time, as signatures do.

@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+	if [ -d /run/systemd/system ]; then
+		systemctl daemon-reload
+		# Only the upgrade timer: the miner itself is the desktop app, which
+		# each user starts from the menu, or at login if they choose to.
+		systemctl enable --now kind-miner-upgrade.timer
+	fi
+	command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
+	command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true
+fi
+exit 0

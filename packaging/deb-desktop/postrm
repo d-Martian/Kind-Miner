@@ -1,0 +1,10 @@
+#!/bin/sh
+# Each user's own data — p2pool's, the ledger, the config — lives in their
+# home directory, and stays there: a package removal is not the place to
+# delete what is in people's homes.
+set -e
+if [ -d /run/systemd/system ]; then
+	systemctl daemon-reload || true
+fi
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
+exit 0

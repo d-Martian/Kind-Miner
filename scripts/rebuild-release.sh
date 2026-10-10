@@ -10,6 +10,9 @@
 #   kind-miner-TAG-linux-amd64.tar.gz       scripts/release-gui-linux.sh
 #   kind-minerd_X_amd64.deb                 scripts/release-deb.sh, with
 #                                           xmrig from scripts/build-xmrig.sh
+#   kind-miner_X_amd64.deb                  scripts/release-deb-desktop.sh, with
+#                                           the engines from tools/stage-engines
+#                                           (needs go; tags before it skip it)
 #   kind-miner-TAG-xmrig-*-source.tar.gz    scripts/source-tarballs.sh
 #   p2pool_source-v*.tar.xz                 (p2pool's own, checked by pin)
 #
@@ -62,6 +65,11 @@ scripts/release-gui-linux.sh "$TAG" "$OUT" >/dev/null
 scripts/build-xmrig.sh "$WORK/xmrig" >/dev/null
 bash scripts/download-p2pool.sh >/dev/null
 scripts/release-deb.sh "$TAG" "$WORK/xmrig/xmrig" dist/linux-amd64/bin/p2pool "$OUT" >/dev/null
+if [[ -x scripts/release-deb-desktop.sh ]]; then
+	command -v go >/dev/null || { echo "needs go, to stage the desktop .deb's engines" >&2; exit 1; }
+	go run ./tools/stage-engines -xmrig "$WORK/xmrig/xmrig" -out "$WORK/engines" >/dev/null
+	scripts/release-deb-desktop.sh "$TAG" "$WORK/engines" "$OUT" >/dev/null
+fi
 scripts/source-tarballs.sh "$TAG" "$OUT" >/dev/null
 rm -f "$OUT"/*.sha256 "$OUT/SHA256SUMS-source"
 

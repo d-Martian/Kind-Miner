@@ -20,8 +20,10 @@ scripts/rebuild-release.sh v1.2.3          # add --sign to co-sign, --upload to 
 
 It checks out the tag and runs the release's own recipes — the linux-amd64 GUI
 archive (`scripts/release-gui-linux.sh`), the amd64 `.deb`
-(`scripts/release-deb.sh`, with xmrig from `scripts/build-xmrig.sh`), and the
-engine source tarballs (`scripts/source-tarballs.sh`) — then prints, file by
+(`scripts/release-deb.sh`, with xmrig from `scripts/build-xmrig.sh`), the
+desktop `.deb` (`scripts/release-deb-desktop.sh`, with the engines
+`tools/stage-engines` stages from the same pins; this one needs Go on the
+host), and the engine source tarballs (`scripts/source-tarballs.sh`) — then prints, file by
 file, whether it got the same bytes. The lines it reproduced go in
 `SHA256SUMS.rebuilt-<host>`; `--sign` signs that with the rebuilder's own
 minisign key (its public half is in `rebuilders/<host>.pub`), which is a second
@@ -62,13 +64,13 @@ make verify-repro
 | Local `go env` | `GOENV=off` — ignores `~/.config/go/env`, so a personal `CGO_LDFLAGS` shim can't bake a host path into the build. |
 | cgo flags | `CGO_*` cleared — the C/OpenGL libraries are found via standard system paths. |
 | Module source | `GOFLAGS=-mod=mod` — the module cache, checked by `go.sum`, never a stray (gitignored) `vendor/` tree, which would change the binary. |
-| C toolchain, headers, packaging tools | the pinned build container (below), for the linux GUI and the `.deb`. |
+| C toolchain, headers, packaging tools | the pinned build container (below), for the linux GUI and the `.deb`s. |
 | Dependencies | `go.sum` pins every module by hash. |
 | Timestamps | `SOURCE_DATE_EPOCH` (the commit time) for any packaging step. |
 
 ## Scope and caveats (honest status)
 
-- **The linux GUI and the `.deb` are reproducible across hosts**, because they
+- **The linux GUI and the `.deb`s are reproducible across hosts**, because they
   are built in `packaging/buildenv/Containerfile`: Debian 12 by index digest,
   every package from snapshot.debian.org at one fixed moment, and Go 1.25.0 by
   its published SHA256. `scripts/in-build-container.sh` runs builds in it with
@@ -146,7 +148,7 @@ All CI runs on GitHub Actions:
 | Workflow | Trigger | What it guards |
 |---|---|---|
 | `.github/workflows/repro-verify.yml` | push, PR, manual | Builds the linux release archive twice in the pinned container, from two different paths, and fails if the SHA256 differ |
-| `.github/workflows/release.yml` | `v*` tag | The linux GUI and the `.deb` in the pinned container, native macOS/Windows builds, deterministic archives, uploaded to a draft release |
+| `.github/workflows/release.yml` | `v*` tag | The linux GUI and the `.deb`s in the pinned container, native macOS/Windows builds, deterministic archives, uploaded to a draft release |
 | `.github/workflows/kind-minerd.yml` | push, PR, manual | kind-minerd has no Fyne dependency, builds with `CGO_ENABLED=0`, and rebuilds bit-for-bit for amd64 and arm64 |
 | `.github/workflows/xmrig-build.yml` | changes to the xmrig recipe or pins, manual | Builds the patched xmrig twice on native x86_64 and aarch64 runners, fails if the SHA256 differ, and checks the donation patch took |
 | `.github/workflows/dependency-watch.yml` | weekly cron, manual | Opens a tracking issue when XMRig/P2Pool publish a new release |

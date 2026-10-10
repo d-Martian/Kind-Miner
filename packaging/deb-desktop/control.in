@@ -1,0 +1,21 @@
+Package: kind-miner
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: d-Martian <d-Martian@users.noreply.github.com>
+Installed-Size: @SIZE@
+Depends: apt-transport-tor, libc6, libgl1, libx11-6, libxcursor1, libxi6, libxinerama1, libxrandr2, libxxf86vm1
+Recommends: tor
+Conflicts: kind-minerd
+Replaces: kind-minerd
+Section: net
+Priority: optional
+Homepage: https://github.com/d-Martian/Kind-Miner
+Description: Monero miner that uses only the CPU you aren't using
+ kind-miner mines Monero on P2Pool over Tor, in the background of a desktop
+ you use, and steps aside the moment you need the machine. It has a window
+ and a tray icon, and is set up from the window on first run.
+ .
+ The package ships xmrig, p2pool and Tor, and upgrades itself weekly from
+ its own repository over Tor. It cannot be installed beside kind-minerd,
+ the service for machines with no screen: two miners on one machine would
+ compete for the same CPU.
