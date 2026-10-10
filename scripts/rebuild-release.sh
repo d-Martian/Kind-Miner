@@ -41,7 +41,8 @@
 # release's. Exit status 1 if anything it rebuilt differs.
 set -euo pipefail
 
-usage() { sed -n '2,44p' "$0" >&2; exit 2; }
+# The comment block above, however long it grows.
+usage() { awk 'NR > 1 && /^#/ { print; next } NR > 1 { exit }' "$0" >&2; exit 2; }
 TAG="" SIGN=0 UPLOAD=0 AGAINST="" WHO="" SIGN_FILE=""
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -59,9 +60,13 @@ done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO=d-Martian/Kind-Miner
+# The name only labels the list until it is signed, so an ordinary git name
+# ("Jane Doe") or none at all must not stop a run that just compares
+# bytes: it is made safe for a file name, as the hostname used to be.
+# Signing is where it has to be exact — rebuilders/NAME.asc must exist.
 WHO="${WHO:-$(git -C "$ROOT" config user.name || true)}"
-[[ "$WHO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] ||
-	{ echo "who is vouching? pass --as NAME (letters, digits, . _ -); git user.name is '${WHO}'" >&2; exit 2; }
+WHO="$(printf '%s' "$WHO" | tr -c 'A-Za-z0-9._-' '-' | sed 's/^[-.]*//')"
+WHO="${WHO:-unnamed}"
 for a in amd64 arm64; do
 	[[ "$WHO" != *-"$a" ]] || { echo "--as must not end in -${a}: that is where the architecture goes" >&2; exit 2; }
 done
@@ -173,6 +178,6 @@ if [[ $bad == 1 ]]; then
 elif [[ $SIGN == 1 ]]; then
 	sign "$SUMS"
 else
-	echo "to co-sign, where ${WHO}'s key is: scripts/rebuild-release.sh ${TAG} --sign-file $(basename "$SUMS") --upload" >&2
+	echo "to co-sign, where ${WHO}'s key is: scripts/rebuild-release.sh ${TAG} --as ${WHO} --sign-file $(basename "$SUMS") --upload" >&2
 fi
 exit "$bad"
