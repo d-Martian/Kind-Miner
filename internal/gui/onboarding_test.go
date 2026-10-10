@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -88,6 +89,22 @@ func TestOnboardingStartWaitsForAValidAddress(t *testing.T) {
 	o.wallet.SetText("4notanaddress")
 	if !o.start.Disabled() {
 		t.Error("Start is enabled with a malformed address")
+	}
+	// Shaped like an address, and each would make p2pool abort without a
+	// word: Start must stay off, and the line must say which mistake it is.
+	typo := []byte(sampleAddress)
+	typo[40] = map[bool]byte{true: 'c', false: 'b'}[typo[40] == 'b']
+	for _, c := range []struct{ name, addr, want string }{
+		{"a one-character typo", string(typo), WalletErrChecksum},
+		{"a subaddress", sampleSubaddress, WalletErrSubaddress},
+	} {
+		o.wallet.SetText(c.addr)
+		if !o.start.Disabled() {
+			t.Errorf("Start is enabled for %s", c.name)
+		}
+		if !strings.Contains(o.feedback.Text, c.want) {
+			t.Errorf("for %s the feedback says %q", c.name, o.feedback.Text)
+		}
 	}
 	o.wallet.SetText(sampleAddress)
 	if o.start.Disabled() {

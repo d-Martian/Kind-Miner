@@ -36,11 +36,15 @@ const (
 	WalletHelpLink    = "Get one"
 	WalletHelpURL     = "https://www.getmonero.org/downloads/"
 
-	WalletErrEmpty   = "Address is required."
-	WalletErrPrefix  = "Address must start with 4 or 8."
-	WalletErrLength  = "Address should be 95 characters long."
-	WalletErrCharset = "Address contains invalid characters."
-	WalletOK         = "Looks like a valid Monero address."
+	WalletErrEmpty      = "Address is required."
+	WalletErrPrefix     = "Address must start with 4."
+	WalletErrLength     = "Address should be 95 characters long."
+	WalletErrCharset    = "Address contains invalid characters."
+	WalletErrChecksum   = "This address has a typo — its checksum doesn't match. Copy it from your wallet again."
+	WalletErrSubaddress = "That's a subaddress, which P2Pool can't pay. Use your primary address — it starts with 4."
+	WalletErrIntegrated = "That's an integrated address, which P2Pool can't pay. Use your primary address."
+	// Checked in full, checksum included, so "valid" is earned.
+	WalletOK = "A valid Monero address."
 )
 
 // Setup-progress screen. Each component shown during first run gets a

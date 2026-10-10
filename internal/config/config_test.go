@@ -21,7 +21,7 @@ func TestValidate(t *testing.T) {
 	}{
 		{
 			name: "valid p2pool-remote",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite},
 		},
 		{
 			name:    "missing wallet",
@@ -29,77 +29,92 @@ func TestValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "a real address, for the p2pool kind-miner runs",
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote, ManageP2Pool: true, Kindness: kindness.Polite},
+		},
+		{
+			// p2pool 4.18 aborts on it without a word, so it must never get there.
+			name:    "a typo in the address, for the p2pool kind-miner runs",
+			cfg:     Config{Wallet: "4At3X5rvVypTofgmueN9s9QtrzdRe5BueFrskAZi17BoYbhzysozzoMFB6zWnTKdGC6AxEAbEE5czFR3hbEEJbsm4hVwCJk", Mode: ModeP2PoolRemote, ManageP2Pool: true, Kindness: kindness.Polite},
+			wantErr: true,
+		},
+		{
+			name:    "a subaddress, for the p2pool kind-miner runs",
+			cfg:     Config{Wallet: "8" + generalFund[1:], Mode: ModeP2PoolLocal, ManageP2Pool: true, Kindness: kindness.Polite},
+			wantErr: true,
+		},
+		{
 			name:    "invalid mode",
-			cfg:     Config{Wallet: "4ABC", Mode: "unknown", Kindness: kindness.Polite},
+			cfg:     Config{Wallet: generalFund, Mode: "unknown", Kindness: kindness.Polite},
 			wantErr: true,
 		},
 		{
 			// Only a hand-built struct can get here: Load migrates the old mode.
 			name:    "the removed pool mode is rejected",
-			cfg:     Config{Wallet: "4ABC", Mode: modePool, Kindness: kindness.Polite},
+			cfg:     Config{Wallet: generalFund, Mode: modePool, Kindness: kindness.Polite},
 			wantErr: true,
 		},
 		{
 			name:    "invalid kindness",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: "ferocious"},
+			cfg:     Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: "ferocious"},
 			wantErr: true,
 		},
 		{
 			// A struct built before migration has run reads as the default
 			// rather than being rejected.
 			name: "empty kindness is accepted",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote},
 		},
 		{
 			name: "explicit mini chain",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: ChainMini},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: ChainMini},
 		},
 		{
 			name: "explicit main chain",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: ChainMain},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: ChainMain},
 		},
 		{
 			name: "explicit nano chain",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: ChainNano},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: ChainNano},
 		},
 		{
 			name: "remote node with host:port",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:18089"},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:18089"},
 		},
 		{
 			// Blank means "use the default Nodo over Tor", not a bad address.
 			name: "blank remote node is accepted",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: ""},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: ""},
 		},
 		{
 			// The failure this guards: caught here it is one dialog at startup;
 			// left to node selection it is a minute of downloads and retries
 			// before the same message appears.
 			name:    "remote node without a port is rejected",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192"},
+			cfg:     Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192"},
 			wantErr: true,
 		},
 		{
 			name:    "remote node with a non-numeric port is rejected",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:rpc"},
+			cfg:     Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:rpc"},
 			wantErr: true,
 		},
 		{
 			name:    "remote node with an out-of-range port is rejected",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:70000"},
+			cfg:     Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, RemoteNode: "192.168.8.192:70000"},
 			wantErr: true,
 		},
 		{
 			// Other modes ignore remote_node, so a stale value must not block
 			// a config that is otherwise fine.
 			name: "remote node ignored in local mode",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, Kindness: kindness.Polite, RemoteNode: "192.168.8.192"},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolLocal, Kindness: kindness.Polite, RemoteNode: "192.168.8.192"},
 		},
 		{
 			// Without this check a typo joins the main chain, where a desktop
 			// miner may never accumulate a payout.
 			name:    "misspelled chain is rejected",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: "minni"},
+			cfg:     Config{Wallet: generalFund, Mode: ModeP2PoolRemote, Kindness: kindness.Polite, P2PoolChain: "minni"},
 			wantErr: true,
 		}, {
 			// The hub pays its owner; a paired machine needs no wallet of its own.
@@ -108,7 +123,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name:    "hub mode needs a pairing code",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeHub},
+			cfg:     Config{Wallet: generalFund, Mode: ModeHub},
 			wantErr: true,
 		},
 		{
@@ -123,17 +138,17 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "serving the hub",
-			cfg:  Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, ManageP2Pool: true, Hub: HubOptions{Serve: true}},
+			cfg:  Config{Wallet: generalFund, Mode: ModeP2PoolLocal, ManageP2Pool: true, Hub: HubOptions{Serve: true}},
 		},
 		{
 			// There would be no p2pool of ours to put on the LAN.
 			name:    "serving the hub needs a managed p2pool",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, Hub: HubOptions{Serve: true}},
+			cfg:     Config{Wallet: generalFund, Mode: ModeP2PoolLocal, Hub: HubOptions{Serve: true}},
 			wantErr: true,
 		},
 		{
 			name:    "a hub port out of range",
-			cfg:     Config{Wallet: "4ABC", Mode: ModeP2PoolLocal, ManageP2Pool: true, Hub: HubOptions{Serve: true, APIPort: 70000}},
+			cfg:     Config{Wallet: generalFund, Mode: ModeP2PoolLocal, ManageP2Pool: true, Hub: HubOptions{Serve: true, APIPort: 70000}},
 			wantErr: true,
 		},
 	}
@@ -204,11 +219,11 @@ func TestLoadChainDefaults(t *testing.T) {
 	}{
 		// New configs default to nano; one that never named a chain was
 		// written when mini was the default, and must not be moved.
-		{"key absent keeps the old default", "wallet: 4ABC\n", ChainMini},
-		{"key present but empty keeps the old default", "wallet: 4ABC\np2pool_chain:\n", ChainMini},
-		{"explicit mini is kept", "wallet: 4ABC\np2pool_chain: mini\n", ChainMini},
-		{"explicit main is kept", "wallet: 4ABC\np2pool_chain: main\n", ChainMain},
-		{"explicit nano is kept", "wallet: 4ABC\np2pool_chain: nano\n", ChainNano},
+		{"key absent keeps the old default", "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\n", ChainMini},
+		{"key present but empty keeps the old default", "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\np2pool_chain:\n", ChainMini},
+		{"explicit mini is kept", "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\np2pool_chain: mini\n", ChainMini},
+		{"explicit main is kept", "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\np2pool_chain: main\n", ChainMain},
+		{"explicit nano is kept", "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\np2pool_chain: nano\n", ChainNano},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -231,22 +246,22 @@ func TestLoadMigratesThrottleSensitivity(t *testing.T) {
 			// "high" meant highly sensitive to other work, so it maps to the
 			// kindest preset — the opposite end of the name.
 			name: "high sensitivity becomes ghost",
-			yaml: "wallet: 4ABC\nthrottle_sensitivity: high\n",
+			yaml: "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nthrottle_sensitivity: high\n",
 			want: kindness.Ghost,
 		},
 		{
 			name: "medium sensitivity becomes polite",
-			yaml: "wallet: 4ABC\nthrottle_sensitivity: medium\n",
+			yaml: "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nthrottle_sensitivity: medium\n",
 			want: kindness.Polite,
 		},
 		{
 			name: "low sensitivity becomes balanced",
-			yaml: "wallet: 4ABC\nthrottle_sensitivity: low\n",
+			yaml: "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nthrottle_sensitivity: low\n",
 			want: kindness.Balanced,
 		},
 		{
 			name: "neither key present falls back to the default",
-			yaml: "wallet: 4ABC\n",
+			yaml: "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\n",
 			want: kindness.Default,
 		},
 		{
@@ -254,12 +269,12 @@ func TestLoadMigratesThrottleSensitivity(t *testing.T) {
 			// people who never made one. "greedy" is also the pre-rename name
 			// of Full, so this doubles as the alias-migration case.
 			name: "an explicit kindness wins over the old key",
-			yaml: "wallet: 4ABC\nkindness: greedy\nthrottle_sensitivity: high\n",
+			yaml: "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nkindness: greedy\nthrottle_sensitivity: high\n",
 			want: kindness.Full,
 		},
 		{
 			name: "an unrecognised old value falls back to the default",
-			yaml: "wallet: 4ABC\nthrottle_sensitivity: extreme\n",
+			yaml: "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nthrottle_sensitivity: extreme\n",
 			want: kindness.Default,
 		},
 	}
@@ -281,7 +296,7 @@ func TestLoadMigratesThrottleSensitivity(t *testing.T) {
 
 // Migration is only complete once the dead key stops being written back.
 func TestSaveDropsThrottleSensitivity(t *testing.T) {
-	cfg := loadYAML(t, "wallet: 4ABC\nthrottle_sensitivity: high\n")
+	cfg := loadYAML(t, "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nthrottle_sensitivity: high\n")
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
@@ -301,7 +316,7 @@ func TestSaveDropsThrottleSensitivity(t *testing.T) {
 // a bool that silently reverts to its default on restart is worse than not
 // offering the setting.
 func TestChartOptionsRoundTrip(t *testing.T) {
-	cfg := loadYAML(t, "wallet: 4ABC\n")
+	cfg := loadYAML(t, "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\n")
 	cfg.Chart = ChartOptions{
 		ShadeHeadroom: false,
 		MarkBackoff:   false,
@@ -323,7 +338,7 @@ func TestChartOptionsRoundTrip(t *testing.T) {
 
 // A zero or missing window would divide the chart by nothing.
 func TestLoadRepairsChartWindow(t *testing.T) {
-	cfg := loadYAML(t, "wallet: 4ABC\nchart:\n  window_seconds: 0\n")
+	cfg := loadYAML(t, "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nchart:\n  window_seconds: 0\n")
 	if cfg.Chart.WindowSeconds <= 0 {
 		t.Errorf("chart window = %d, want it repaired to a positive span", cfg.Chart.WindowSeconds)
 	}
@@ -343,7 +358,7 @@ func TestPresetFollowsConfig(t *testing.T) {
 }
 
 func TestLoadMigratesPoolMode(t *testing.T) {
-	cfg := loadYAML(t, "wallet: 4ABC\nmode: pool\npool_url: pool.example:3333\n")
+	cfg := loadYAML(t, "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nmode: pool\npool_url: pool.example:3333\n")
 	if cfg.Mode != ModeP2PoolRemote {
 		t.Errorf("mode = %q, want the default %q", cfg.Mode, ModeP2PoolRemote)
 	}
@@ -367,7 +382,7 @@ func TestLoadMigratesPoolMode(t *testing.T) {
 
 func TestLoadLeavesP2PoolModesAlone(t *testing.T) {
 	for _, mode := range []Mode{ModeP2PoolRemote, ModeP2PoolLocal} {
-		if cfg := loadYAML(t, "wallet: 4ABC\nmode: "+string(mode)+"\n"); cfg.Mode != mode {
+		if cfg := loadYAML(t, "wallet: 44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A\nmode: "+string(mode)+"\n"); cfg.Mode != mode {
 			t.Errorf("mode %q loaded as %q", mode, cfg.Mode)
 		}
 	}

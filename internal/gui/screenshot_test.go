@@ -187,7 +187,13 @@ func TestDashboardRefreshBeforeStartup(t *testing.T) {
 
 var errRender = errors.New("p2pool exited before becoming ready; last output: could not connect to 127.0.0.1:18081")
 
-// sampleAddress is a syntactically valid primary address used so the captured
-// screens show the "looks good" state rather than a validation error. It is a
-// well-known example address, not anywhere anyone should send coins.
-const sampleAddress = "4At3X5rvVypTofgmueN9s9QtrzdRe5BueFrskAZi17BoYbhzysozzoMFB6zWnTKdGC6AxEAbEE5czFR3hbEEJbsm4hVwCJk"
+// sampleAddress is a valid primary address, so the captured screens show the
+// "valid" state rather than a validation error. It has to be a real one —
+// the check verifies the checksum — so it is the Monero General Fund's
+// published donation address.
+const sampleAddress = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+
+// sampleSubaddress is sampleAddress's keys under the subaddress tag, with its
+// checksum recomputed: a well-formed subaddress no wallet made, and nowhere
+// to send coins.
+const sampleSubaddress = "84zPbCjb38gBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGMwZRBo"

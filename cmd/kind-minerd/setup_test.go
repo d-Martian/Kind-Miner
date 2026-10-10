@@ -146,11 +146,16 @@ func TestPushWallet(t *testing.T) {
 	if err := cfg.Save(); err != nil {
 		t.Fatal(err)
 	}
-	next := "4" + strings.Repeat("B", 94)
+	next := sampleAddress
 	reload := make(chan struct{}, 1)
 
 	if err := pushWallet(cfg, "not an address", reload); err == nil {
 		t.Error("a bad address was accepted")
+	}
+	// The shape of an address, with a checksum that fails: p2pool aborts on
+	// one, so the hub must refuse it rather than restart onto it.
+	if err := pushWallet(cfg, "4"+strings.Repeat("B", 94), reload); err == nil || len(reload) != 0 {
+		t.Errorf("an address with a bad checksum: err %v, restart asked %v", err, len(reload) != 0)
 	}
 	if err := pushWallet(cfg, wallet, reload); err != nil || len(reload) != 0 {
 		t.Errorf("the same wallet: err %v, restart asked %v", err, len(reload) != 0)
@@ -162,11 +167,11 @@ func TestPushWallet(t *testing.T) {
 		t.Error("a new wallet did not ask for a restart")
 	}
 	// A second change before the restart does not block the API.
-	if err := pushWallet(cfg, "4"+strings.Repeat("C", 94), reload); err != nil {
+	if err := pushWallet(cfg, thirdAddress, reload); err != nil {
 		t.Fatal(err)
 	}
 	saved, err := config.Load()
-	if err != nil || saved.Wallet != "4"+strings.Repeat("C", 94) || !saved.Hub.Serve {
+	if err != nil || saved.Wallet != thirdAddress || !saved.Hub.Serve {
 		t.Errorf("saved: %v, %+v", err, saved)
 	}
 }
