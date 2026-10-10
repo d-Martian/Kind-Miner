@@ -139,6 +139,35 @@ On first run with no config file, kind-miner asks one thing: where your rewards 
 
 Launched from a terminal, kind-miner runs a short text wizard instead, and a headless launch with no display writes a config template for you to edit.
 
+### On Debian or Ubuntu, from apt
+
+The desktop app also comes as a .deb (amd64), which installs it for every
+user and keeps it current through apt:
+
+```sh
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-miner_X.Y.Z_amd64.deb
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-miner_X.Y.Z_amd64.deb.sha256
+sha256sum -c kind-miner_X.Y.Z_amd64.deb.sha256
+sudo apt install ./kind-miner_X.Y.Z_amd64.deb tor
+```
+
+Then open kind-miner from the applications menu. The package carries the same
+engines as the AppImage, adds the same signed repository over Tor as the
+kind-minerd .deb (below), and a timer upgrades it weekly, on Thursday
+afternoon or at the next boot if the machine was off; a running app keeps
+its version until it is next opened. `tor` is for those upgrades; the app
+uses it too while it runs, and starts its own Tor only when there is none.
+
+- **One or the other.** It cannot be installed beside `kind-minerd`, the
+  service for machines with no screen: installing either removes the other,
+  so a machine never runs two miners.
+- **Coming from the AppImage?** Your data carries over, since both keep it in
+  `~/.local/share/kind-miner`. Delete the menu entry the AppImage made,
+  `~/.local/share/applications/kind-miner.desktop`, or it shadows the
+  package's.
+- `sudo apt purge kind-miner` removes the program, the timer and the
+  repository; each user's data stays in their home.
+
 ---
 
 ## Headless: kind-minerd

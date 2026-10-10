@@ -226,7 +226,10 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   The repository publishes from `pages.yml` on *release published*, never
   on tag, because releases are drafts until reviewed; its key's public half is
   `packaging/deb/kind-miner.asc`, the private half the `APT_SIGNING_KEY`
-  secret (`scripts/make-apt-key.sh`, run once).
+  secret (`scripts/make-apt-key.sh`, run once). The desktop app has its own
+  .deb, `kind-miner` (`scripts/build-deb-desktop.sh`, `packaging/deb-desktop/`,
+  amd64, in `/opt/kind-miner-desktop`): it shares that repository, key and pin
+  file, and conflicts with `kind-minerd`, so a machine never runs two miners.
 - **The advisory** (`internal/advisory`, `core/advisory.go`) is signed
   offline with minisign's legacy mode (`-l`, plain Ed25519 — the default
   needs BLAKE2b, which would be our first x/crypto dependency); the public key
