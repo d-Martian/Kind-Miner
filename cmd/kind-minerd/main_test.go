@@ -14,6 +14,9 @@ import (
 
 const sampleAddress = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
 
+// thirdAddress is a third real address, for a change between two others.
+const thirdAddress = "48n5Ygcu2EpGSKE4NhKcqpQftUYvcmCweWh2mAPngjPZR96UEE5mAwvCGv9QJLXPnFYjnnDhiZoqXUxmDd5CZrDP9t6onUg"
+
 func TestDiagnoseNamesTheFirstProblem(t *testing.T) {
 	mining := daemonStatus{State: "mining", Hashrate: 3420}
 	cases := []struct {

@@ -346,6 +346,16 @@ func (c *Config) Validate() error {
 		if c.Wallet == "" {
 			return fmt.Errorf("wallet address is required")
 		}
+		// Checked in full only when the address goes to the p2pool this
+		// program runs: 4.18 aborts on one it cannot pay, silently, and a
+		// config saved before the checksum was checked, or edited by hand,
+		// would otherwise reach it. Someone running their own p2pool gives
+		// it their address themselves.
+		if c.ManageP2Pool {
+			if err := CheckAddress(c.Wallet); err != nil {
+				return fmt.Errorf("wallet: %w", err)
+			}
+		}
 	case ModeHub:
 		// The hub pays its owner's wallet; this machine's is not used.
 		if strings.TrimSpace(c.HubCode) == "" {
@@ -417,9 +427,9 @@ func RunWizard() (*Config, error) {
 	fmt.Println("Your coins go directly to your wallet — no account, no fee.")
 	fmt.Println()
 
-	cfg.Wallet = prompt(scanner, "Monero wallet address: ", "")
-	if cfg.Wallet == "" {
-		return nil, fmt.Errorf("wallet address is required")
+	cfg.Wallet = strings.TrimSpace(prompt(scanner, "Monero wallet address: ", ""))
+	if err := CheckAddress(cfg.Wallet); err != nil {
+		return nil, fmt.Errorf("wallet: %w", err)
 	}
 
 	if err := cfg.Save(); err != nil {
