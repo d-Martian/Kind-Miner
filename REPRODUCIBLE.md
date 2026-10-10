@@ -10,34 +10,59 @@ checksums (see `dMartian.pub`) prove *we* built a given file; reproducibility le
 
 ## Reproduce a release
 
-On an x86_64 Linux machine with podman, one command rebuilds everything a
-container can reproduce and compares it with what the release published:
+On a Linux machine with podman, one command rebuilds everything a container
+can reproduce there and compares it with what the release published:
 
 ```sh
 git clone https://github.com/d-Martian/Kind-Miner && cd Kind-Miner
 scripts/rebuild-release.sh v1.2.3          # add --sign to co-sign, --upload to publish it
 ```
 
-It checks out the tag and runs the release's own recipes — the linux-amd64 GUI
-archive (`scripts/release-gui-linux.sh`), the amd64 `.deb`
+It checks out the tag and runs the release's own recipes. On x86_64: the
+linux-amd64 GUI archive (`scripts/release-gui-linux.sh`), the amd64 `.deb`
 (`scripts/release-deb.sh`, with xmrig from `scripts/build-xmrig.sh`), the
 desktop `.deb` (`scripts/release-deb-desktop.sh`, with the engines
 `tools/stage-engines` stages from the same pins; this one needs Go on the
-host), and the engine source tarballs (`scripts/source-tarballs.sh`) — then prints, file by
-file, whether it got the same bytes. The lines it reproduced go in
-`SHA256SUMS.rebuilt-<host>`; `--sign` signs that with the rebuilder's own
-minisign key (its public half is in `rebuilders/<host>.pub`), which is a second
-machine, not GitHub's, vouching for those bytes.
+host), and the engine source tarballs (`scripts/source-tarballs.sh`). On
+aarch64 — a Nodo will do — the arm64 `.deb`, which only an arm64 machine can
+make. Then it prints, file by file, whether it got the same bytes.
 
-## A second rebuilder
+The lines it reproduced go in `SHA256SUMS.rebuilt-<name>-<arch>`, where
+`<name>` is who vouches for them (`--as`, or the repository's git
+`user.name`) — a person, not a machine. `--sign` signs that file with their
+own PGP key, one of those in `rebuilders/<name>.asc`; for the maintainer
+that is a link to `dMartian.pub`, the same key that signs the project.
 
-Release artifacts are built on GitHub's runners. A rebuilder is a machine
-that is not GitHub's — the maintainer's Fedora box, to start — that runs
-`scripts/rebuild-release.sh` on every release and, when everything it rebuilt
-matched, uploads `SHA256SUMS.rebuilt-<host>` and its `.minisig` to the release.
-Anyone can check the co-signature with `minisign -V -p rebuilders/<host>.pub`.
-It covers what an x86_64 machine can rebuild; the macOS and Windows builds,
-the AppImage, the Flatpak and the arm64 `.deb` are outside it (see Scope).
+## Co-signatures
+
+Release artifacts are built on GitHub's runners. A co-signature is someone
+with a machine that is not GitHub's rebuilding the tag and signing the hashes
+they got, so a file only GitHub's runners ever made — a compromised runner,
+cache or action — would show up as a rebuild that does not match. One rebuild
+per architecture:
+
+```sh
+# on an x86_64 machine with your key:
+scripts/rebuild-release.sh v1.2.3 --upload
+
+# on the Nodo (no key needed there):
+scripts/rebuild-release.sh v1.2.3 --as dMartian
+# copy SHA256SUMS.rebuilt-dMartian-arm64 to the machine with the key, then:
+scripts/rebuild-release.sh v1.2.3 --sign-file SHA256SUMS.rebuilt-dMartian-arm64 --upload
+```
+
+Anyone can check one:
+
+```sh
+gpg --import rebuilders/dMartian.asc
+gpg --verify SHA256SUMS.rebuilt-dMartian-amd64.asc SHA256SUMS.rebuilt-dMartian-amd64
+sha256sum -c SHA256SUMS.rebuilt-dMartian-amd64 --ignore-missing
+```
+
+Nothing enforces them yet: apt checks the repository's signature, made with
+a key that is a GitHub secret, not these. They are a public record to audit.
+The macOS and Windows builds, the AppImage and the Flatpak are outside them
+(see Scope).
 
 ## Verify determinism locally
 
