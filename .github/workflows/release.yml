@@ -257,6 +257,53 @@ jobs:
             ${{ env.DEB }}.sha256
 
   # ---------------------------------------------------------------------------
+  # The kind-miner desktop .deb: the app the AppImage carries, installed
+  # system-wide and upgraded weekly through the same repository. amd64 only,
+  # like the GUI tarball. The engines are staged on the runner, because the
+  # build container has no network; the GUI is compiled and packed inside it,
+  # by the script a rebuilder runs too.
+  # ---------------------------------------------------------------------------
+  deb-desktop:
+    name: kind-miner amd64 desktop .deb
+    needs: xmrig
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Ensure podman
+        run: command -v podman || { sudo apt-get update && sudo apt-get install -y --no-install-recommends podman; }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: xmrig-linux-amd64
+          path: ${{ runner.temp }}/xmrig
+
+      - name: Stage the engines
+        run: |
+          chmod +x "$RUNNER_TEMP/xmrig/xmrig"
+          go run ./tools/stage-engines -xmrig "$RUNNER_TEMP/xmrig/xmrig" -out build/engines
+
+      - name: Build the .deb
+        run: |
+          deb="$(scripts/release-deb-desktop.sh "$GITHUB_REF_NAME" build/engines dist/deb-desktop)"
+          echo "DEB=$deb" >> "$GITHUB_ENV"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            ${{ env.DEB }}
+            ${{ env.DEB }}.sha256
+
+  # ---------------------------------------------------------------------------
   # Linux desktop packages. Separate jobs (not the matrix above) because each
   # needs its own toolchain — appimagetool for one, flatpak-builder for the
   # other — and produces a single linux/amd64 artifact.

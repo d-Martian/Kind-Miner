@@ -62,7 +62,7 @@ jobs:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           mkdir debs
-          if gh release download ${TAG:+"$TAG"} --pattern 'kind-minerd_*.deb' --pattern 'kind-minerd_*.deb.sha256' --dir debs; then
+          if gh release download ${TAG:+"$TAG"} --pattern 'kind-minerd_*.deb' --pattern 'kind-minerd_*.deb.sha256' --pattern 'kind-miner_*.deb' --pattern 'kind-miner_*.deb.sha256' --dir debs; then
             (cd debs && sha256sum -c ./*.sha256)
             echo "apt=true" >> "$GITHUB_OUTPUT"
           elif [ -n "$TAG" ]; then

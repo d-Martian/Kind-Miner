@@ -1,10 +1,11 @@
-# The kind-miner repository may supply kind-minerd and nothing else. Every
+# The kind-miner repository may supply its own two packages — kind-minerd,
+# the service, and kind-miner, the desktop app — and nothing else. Every
 # other package from it is pinned to -1, never installed: whoever controls
 # that repository — or its signing key — cannot use it to replace a system
 # package. Pinned by host, not by the Release file's Origin field, which the
 # repository writes itself and could set to anything.
 
-Package: kind-minerd
+Package: kind-minerd kind-miner
 Pin: origin "d-martian.github.io"
 Pin-Priority: 500
 

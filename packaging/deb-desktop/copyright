@@ -1,0 +1,38 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: kind-miner
+Source: https://github.com/d-Martian/Kind-Miner
+
+Files: opt/kind-miner-desktop/kind-miner
+License: unspecified
+Comment: The repository has no license file yet.
+
+Files: opt/kind-miner-desktop/engines/xmrig
+Copyright: XMRig <support@xmrig.com>
+License: GPL-3.0-or-later
+Comment: Built from source with kind-miner's two patches; see engines/xmrig.
+ The complete source — the pinned archives, the patches and the recipe — is
+ published with every kind-miner release as
+ kind-miner-<version>-xmrig-<version>-source.tar.gz.
+
+Files: opt/kind-miner-desktop/engines/p2pool
+Copyright: SChernykh
+License: GPL-3.0-only
+Comment: The upstream release, SHA256-pinned in internal/autoinstall/deps.json.
+ Its complete source, p2pool_source-v<version>.tar.xz, is republished with
+ every kind-miner release.
+
+Files: opt/kind-miner-desktop/engines/tor/tor
+Copyright: The Tor Project, Inc.
+License: BSD-3-Clause
+Comment: From the Tor Expert Bundle, SHA256-pinned in
+ internal/autoinstall/deps.json.
+
+Files: opt/kind-miner-desktop/engines/tor/libevent-*
+Copyright: Niels Provos and Nick Mathewson
+License: BSD-3-Clause
+Comment: Shipped in the Tor Expert Bundle.
+
+Files: opt/kind-miner-desktop/engines/tor/libssl* opt/kind-miner-desktop/engines/tor/libcrypto*
+Copyright: The OpenSSL Project Authors
+License: Apache-2.0
+Comment: Shipped in the Tor Expert Bundle.

@@ -1,0 +1,14 @@
+# Weekly, like kind-minerd's, but at midday: a desktop is rarely on at 3 a.m.
+# A week missed because the machine was off catches up after the next boot,
+# at the lowest CPU and I/O priority, so it is not felt during the login.
+
+[Unit]
+Description=Weekly kind-miner desktop app upgrade
+
+[Timer]
+OnCalendar=Thu *-*-* 12:00:00
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
