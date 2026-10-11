@@ -69,22 +69,31 @@ type settingsForm struct {
 }
 
 // showSettings opens the settings window, or focuses it if already open.
+//
+// The window is made once and only ever hidden, never closed. Fyne 2.5.3,
+// when any window closes, rebuilds its window list without the windows that
+// have never been shown, and quits if that list comes out empty. Living in
+// the tray, the main window is exactly such a window, so closing Settings —
+// Save, Cancel or its ✕ — quit kind-miner without a word, which looked like
+// a crash. Hidden, it stays on the list. Each opening builds the form anew
+// from the config as it is then.
 func (u *uiApp) showSettings() {
-	if u.settingsWin != nil {
-		u.settingsWin.Show()
+	if u.settingsShown {
 		u.settingsWin.RequestFocus()
 		return
 	}
 
 	cfg := u.sup.Config()
 
-	w := u.app.NewWindow("kind-miner — settings")
+	if u.settingsWin == nil {
+		u.settingsWin = u.app.NewWindow("kind-miner — settings")
+		u.settingsWin.SetCloseIntercept(u.hideSettings)
+	}
+	w := u.settingsWin
 	// Wider than it was at 14-point text: the section headings are single
 	// lines that cannot wrap, and at 16 points the longest ran off the edge.
 	w.Resize(fyne.NewSize(720, 620))
 	w.CenterOnScreen()
-	u.settingsWin = w
-	w.SetOnClosed(func() { u.settingsWin = nil })
 
 	f := u.newSettingsForm(cfg)
 
@@ -117,14 +126,22 @@ func (u *uiApp) showSettings() {
 			status.Refresh()
 			return
 		}
-		w.Close()
+		u.hideSettings()
 	})
 	save.Importance = widget.HighImportance
-	cancel := widget.NewButton("Cancel", func() { w.Close() })
+	cancel := widget.NewButton("Cancel", u.hideSettings)
 
 	actions := container.NewHBox(layoutSpacer(), cancel, save)
 	w.SetContent(container.NewBorder(nil, container.NewVBox(status, actions), nil, nil, tabs))
+	u.settingsShown = true
 	w.Show()
+}
+
+// hideSettings puts the settings window away; see showSettings for why it is
+// hidden rather than closed.
+func (u *uiApp) hideSettings() {
+	u.settingsShown = false
+	u.settingsWin.Hide()
 }
 
 func padTab(o fyne.CanvasObject) fyne.CanvasObject {

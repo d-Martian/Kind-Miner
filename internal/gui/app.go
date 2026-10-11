@@ -66,9 +66,12 @@ type uiApp struct {
 	win fyne.Window
 	sup *core.Supervisor
 
-	// settingsWin holds the open settings window so repeat invocations focus the
-	// existing one instead of spawning duplicates. nil when no window is open.
-	settingsWin fyne.Window
+	// settingsWin is the one settings window, made the first time it is
+	// opened and afterwards only hidden, never closed (see showSettings).
+	// settingsShown says whether it is on screen, so a second request focuses
+	// it rather than rebuilding it under the user.
+	settingsWin   fyne.Window
+	settingsShown bool
 
 	// hasTray records whether a system-tray / menu-bar host exists. It drives
 	// close-to-tray vs close-to-quit, and whether a tray icon is registered.

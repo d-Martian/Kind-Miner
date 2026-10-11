@@ -190,13 +190,3 @@ func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "kind-miner: %v\n", err)
 	os.Exit(1)
 }
-
-// isTerminal reports whether stdin is attached to a terminal, distinguishing a
-// shell launch from a desktop (double-click / .desktop) launch.
-func isTerminal() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
-}

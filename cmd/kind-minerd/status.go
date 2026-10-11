@@ -240,8 +240,12 @@ func formatStatus(st daemonStatus) string {
 		}
 		return fmt.Sprintf("%.0f H/s", *p)
 	}
-	out += fmt.Sprintf("  hashrate  %.0f H/s now · %s 30 min · %s 24 h on %d threads\n",
-		st.Hashrate, rate(st.Hashrate30m), rate(st.Hashrate24h), st.Threads)
+	threads := "threads"
+	if st.Threads == 1 {
+		threads = "thread" // a Nodo mining as a guest often runs on one
+	}
+	out += fmt.Sprintf("  hashrate  %.0f H/s now · %s 30 min · %s 24 h on %d %s\n",
+		st.Hashrate, rate(st.Hashrate30m), rate(st.Hashrate24h), st.Threads, threads)
 	if st.Node != "" {
 		via := "direct"
 		if st.ViaTor {
