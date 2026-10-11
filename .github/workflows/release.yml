@@ -406,16 +406,13 @@ jobs:
           chmod +x "$RUNNER_TEMP/xmrig/xmrig"
           go run ./tools/stage-engines -xmrig "$RUNNER_TEMP/xmrig/xmrig" -out build/engines
 
+      # Through the script, not flatpak-builder inline: the script writes the
+      # VERSION file the manifest reads main.version from. Run inline, rc3 to
+      # rc6 shipped saying "kind-miner dev".
       - name: Build + bundle Flatpak
         run: |
-          flatpak-builder --user --force-clean --disable-rofiles-fuse \
-            --default-branch="${GITHUB_REF_NAME}" \
-            --repo=repo build-dir \
-            flatpak/io.github.kind_miner.KindMiner.yml
-          BUNDLE="kind-miner-${GITHUB_REF_NAME}-linux-amd64.flatpak"
-          flatpak build-bundle repo "$BUNDLE" \
-            io.github.kind_miner.KindMiner "${GITHUB_REF_NAME}"
-          sha256sum "$BUNDLE" > "${BUNDLE}.sha256"
+          bash scripts/build-flatpak.sh "${GITHUB_REF_NAME}" \
+            "kind-miner-${GITHUB_REF_NAME}-linux-amd64.flatpak"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

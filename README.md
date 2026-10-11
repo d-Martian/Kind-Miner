@@ -89,7 +89,7 @@ Balanced — and the dead key is dropped the next time the config is written.
 | Requirement | Notes |
 |---|---|
 | **Tor** | Must be running at `127.0.0.1:9050`. Kind-miner will attempt to start it automatically if not running. |
-| **A Monero wallet address** | Any wallet that gives you a standard address (starts with `4`). [Feather](https://featherwallet.org) is recommended — it also runs over Tor. |
+| **A Monero wallet address** | Your wallet's *primary* address: it starts with `4` and is 95 characters long. Many wallets show a subaddress (starting with `8`) first; P2Pool can't pay one, so kind-miner refuses it. [Feather](https://featherwallet.org) is recommended — it also runs over Tor. |
 | Linux, macOS, or Windows | Linux is the primary target; macOS and Windows work but are less tested. |
 
 **To install and start Tor:**
@@ -386,10 +386,12 @@ kind-miner warns at startup when it sees this. Keeping the radio awake costs a l
 
 ## Configuration
 
-Config lives at `~/.config/kind-miner/config.yaml` (Linux/macOS) or `%APPDATA%\kind-miner\config.yaml` (Windows).
+Config lives at `~/.config/kind-miner/config.yaml` on Linux and macOS — or `$XDG_CONFIG_HOME/kind-miner/config.yaml` if you set that variable — and at `%APPDATA%\kind-miner\config.yaml` on Windows. A config already in `~/.config/kind-miner` keeps being used until there is one in the `XDG_CONFIG_HOME` folder, and the Flatpak always uses `~/.config/kind-miner`, so it shares one config with the other builds.
 
 ```yaml
-# Your Monero wallet address. Required.
+# Your wallet's primary address. Required. It starts with 4 and is 95
+# characters long; subaddresses (8…) and integrated addresses are refused,
+# because P2Pool pays in the coinbase, which only a primary address receives.
 wallet: "4..."
 
 # Connection mode: p2pool-remote | p2pool-local | hub

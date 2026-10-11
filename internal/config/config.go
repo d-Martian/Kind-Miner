@@ -258,7 +258,38 @@ func Dir() string {
 		return filepath.Join(dir, "kind-miner")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "kind-miner")
+	_, err := os.Stat("/.flatpak-info")
+	return configDir(home, os.Getenv("XDG_CONFIG_HOME"), err == nil, func(p string) bool {
+		_, err := os.Stat(p)
+		return err == nil
+	})
+}
+
+// configDir is where the config lives on Linux and macOS: XDG_CONFIG_HOME
+// when it is set, as the XDG spec asks, except in two cases that would
+// otherwise lose someone's config.
+//
+// Inside the Flatpak, XDG_CONFIG_HOME is the sandbox's own directory under
+// ~/.var/app. The manifest grants ~/.config/kind-miner instead, so the
+// Flatpak and the host builds — AppImage, .deb, tarball — share one config;
+// following the variable there would show a configured miner the first-run
+// screen.
+//
+// And everywhere, a config already in ~/.config/kind-miner, from before this
+// honoured the variable, is kept until there is one in the new place: moving
+// it is the user's call, and a miner that silently forgets its wallet and
+// hub pairing is worse than one in an unfashionable directory.
+func configDir(home, xdg string, flatpak bool, exists func(string) bool) string {
+	legacy := filepath.Join(home, ".config", "kind-miner")
+	// The spec says a relative XDG_CONFIG_HOME is invalid and to be ignored.
+	if flatpak || xdg == "" || !filepath.IsAbs(xdg) {
+		return legacy
+	}
+	dir := filepath.Join(xdg, "kind-miner")
+	if dir != legacy && !exists(filepath.Join(dir, "config.yaml")) && exists(filepath.Join(legacy, "config.yaml")) {
+		return legacy
+	}
+	return dir
 }
 
 func Path() string {
