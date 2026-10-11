@@ -93,6 +93,10 @@ func TestStatusFileRoundTripAndGoesStale(t *testing.T) {
 			t.Errorf("status summary lacks %q:\n%s", want, out)
 		}
 	}
+	got.Threads = 1
+	if out := formatStatus(got); !strings.Contains(out, "on 1 thread\n") {
+		t.Errorf("one thread is not singular:\n%s", out)
+	}
 }
 
 func TestInit(t *testing.T) {
