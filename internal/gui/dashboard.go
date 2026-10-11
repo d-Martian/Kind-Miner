@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/kind-miner/kind-miner/internal/config"
@@ -40,6 +41,8 @@ type dashboard struct {
 	income *statTile
 	power  *statTile
 	link   *statTile
+	// tiles is the row of stat tiles, kept so the power tile can leave it.
+	tiles *fyne.Container
 
 	hashDetail   *kvList
 	incomeDetail *kvList
@@ -50,9 +53,12 @@ type dashboard struct {
 	totalNow *canvas.Text
 	backoff  *canvas.Text
 
-	pause    *widget.Button
-	mineNow  *widget.Button
-	kindness *widget.RadioGroup
+	pause   *widget.Button
+	mineNow *widget.Button
+	// The legend entries for the two dotted lines, shown only while their
+	// line is drawn.
+	legendCeiling, legendTemp *fyne.Container
+	kindness                  *widget.RadioGroup
 
 	object fyne.CanvasObject
 }
@@ -77,8 +83,9 @@ func (u *uiApp) newDashboard() *dashboard {
 	d.income = newStatTile("Est. XMR / day")
 	d.power = newStatTile("Miner power")
 	d.link = newStatTile("Node · pool")
-	tiles := container.NewGridWithColumns(4,
+	d.tiles = container.NewGridWithColumns(4,
 		d.hash.Object(), d.income.Object(), d.power.Object(), d.link.Object())
+	tiles := d.tiles
 
 	// The design puts this detail in hover tooltips. Fyne 2.5.3 has no tooltip,
 	// and dropping the numbers would lose the part that lets someone check the
@@ -131,11 +138,16 @@ func (u *uiApp) newDashboard() *dashboard {
 	d.backoff = canvas.NewText("", colorMuted)
 	d.backoff.TextSize = textSize(11)
 
+	// The two dotted lines get dotted swatches: a solid one for the ceiling
+	// pointed at the chart's gridlines, and the temperature line was in the
+	// chart with no entry here at all.
+	d.legendCeiling = container.NewHBox(legendDots(withAlpha(colorMuted, 0x80)), legendText("Kindness ceiling"))
+	d.legendTemp = container.NewHBox(legendDots(withAlpha(colorWarn, 0xaa)), legendText("CPU °C"))
 	legend := container.NewBorder(nil, nil,
 		container.NewHBox(
 			legendSwatch(colorMuted), legendText("Everything else"),
 			legendSwatch(colorAccent), legendText("kind-miner"),
-			legendSwatch(withAlpha(colorMuted, 0x80)), legendText("Kindness ceiling"),
+			d.legendCeiling, d.legendTemp,
 		),
 		container.NewHBox(d.totalNow, d.backoff),
 	)
@@ -180,6 +192,44 @@ func (u *uiApp) newDashboard() *dashboard {
 	return d
 }
 
+// showPowerTile keeps the power tile only where the package energy counter
+// can be read. On most Linux desktops it is root's alone, so the tile sat at
+// "—" for good: a headline that never answers is noise, and the details
+// panel still says the counter is unreadable. The other tiles widen into
+// the space rather than leaving a hole.
+func (d *dashboard) showPowerTile(readable bool) {
+	if d.power.Object().Visible() == readable {
+		return
+	}
+	setVisible(d.power.Object(), readable)
+	cols := 3
+	if readable {
+		cols = 4
+	}
+	d.tiles.Layout = layout.NewGridLayoutWithColumns(cols)
+	d.tiles.Refresh()
+}
+
+// skipWaitShown is whether the skip-the-wait button belongs on screen: while
+// the wait for idle is holding mining back, or once skipped, so it can be
+// undone. Anywhere else — Full, which never waits; a user already away — it
+// read as "Mine now" on a machine that was mining.
+func skipWaitShown(override scheduler.Override, waiting bool) bool {
+	return waiting || override == scheduler.OverrideMine
+}
+
+// setVisible shows or hides o, touching it only on a change.
+func setVisible(o fyne.CanvasObject, show bool) {
+	if o.Visible() == show {
+		return
+	}
+	if show {
+		o.Show()
+	} else {
+		o.Hide()
+	}
+}
+
 // detailColumn heads one group of the details panel, so a value can be found
 // without reading all four columns.
 func detailColumn(title string, list *kvList) fyne.CanvasObject {
@@ -212,9 +262,11 @@ func (d *dashboard) refresh() {
 	d.refreshEarnings(history)
 	d.refreshPower(history)
 	d.refreshConnection(cfg)
-	d.refreshChart(history, cfg, preset, paused)
+	d.refreshChart(history, cfg, sched.Ceiling(), paused)
 
 	d.pause.SetText(pauseLabel(override, paused))
+	_, waiting := sched.IdleCountdown()
+	setVisible(d.mineNow, skipWaitShown(override, waiting))
 	if override == scheduler.OverrideMine {
 		d.mineNow.SetText(labelMineAutoShort)
 	} else {
@@ -386,6 +438,7 @@ func (d *dashboard) refreshPower(history []stats.Sample) {
 	otherCPU, _ := stats.Mean(history, time.Minute, stats.OtherCPU)
 
 	minerWatts, minerKnown := monitor.AttributeToMiner(pkg, minerCPU, otherCPU)
+	d.showPowerTile(known)
 	if known && minerKnown {
 		d.power.Set(formatWatts(minerWatts, true), "W")
 	} else {
@@ -504,8 +557,10 @@ func householdLine(workers []hub.Worker) string {
 	return fmt.Sprintf("%d %s · %s", len(workers), noun, formatHashrate(total))
 }
 
-func (d *dashboard) refreshChart(history []stats.Sample, cfg *config.Config, preset kindness.Preset, paused bool) {
-	d.chart.Set(history, preset.Ceiling, cfg.Chart)
+func (d *dashboard) refreshChart(history []stats.Sample, cfg *config.Config, ceiling float64, paused bool) {
+	d.chart.Set(history, ceiling, cfg.Chart)
+	setVisible(d.legendCeiling, cfg.Chart.ShadeHeadroom && ceiling < 1)
+	setVisible(d.legendTemp, cfg.Chart.DrawTemp)
 
 	if latest, ok := stats.Latest(history); ok {
 		setText(d.totalNow, formatPercent(clamp01(latest.Total()))+" total")

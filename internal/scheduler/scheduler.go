@@ -619,15 +619,9 @@ func decide(p policy, c conditions, override Override) (target float64, reason s
 		return 0, ReasonNodeSyncing, true
 	}
 
-	ceiling := p.preset.Ceiling
-	// The CPU being quiet does not mean nobody is here — reading a page barely
-	// registers. Until the user has actually stepped away, hold to the kindest
-	// ceiling so a machine in use never has most of it taken by mining.
-	if c.idleGated {
-		if ghost := kindness.Get(kindness.Ghost).Ceiling; ghost < ceiling {
-			ceiling = ghost
-			reason = ReasonWaitingForIdle
-		}
+	ceiling := effectiveCeiling(p.preset, c.idleGated)
+	if ceiling < p.preset.Ceiling {
+		reason = ReasonWaitingForIdle
 	}
 
 	target = ceiling - c.otherCPU
@@ -794,6 +788,28 @@ func (s *Scheduler) observe(p policy, override Override) conditions {
 		c.nodeSyncing = known && !synced
 	}
 	return c
+}
+
+// effectiveCeiling is the share of the machine mining may take right now. The
+// CPU being quiet does not mean nobody is here — reading a page barely
+// registers — so until the user has actually stepped away the miner is held
+// to the kindest ceiling, and a machine in use never has most of it taken.
+func effectiveCeiling(preset kindness.Preset, idleGated bool) float64 {
+	if idleGated {
+		if ghost := kindness.Get(kindness.Ghost).Ceiling; ghost < preset.Ceiling {
+			return ghost
+		}
+	}
+	return preset.Ceiling
+}
+
+// Ceiling is the ceiling decide is holding the miner to now: the preset's, or
+// Ghost's while the user is still here. The dashboard draws this one, not the
+// preset's: drawing Balanced's 90% while the wait held mining at 52% put the
+// line nowhere near what was actually stopping the miner.
+func (s *Scheduler) Ceiling() float64 {
+	preset := s.Preset()
+	return effectiveCeiling(preset, s.idleGated(s.Override(), preset))
 }
 
 // idleGated reports whether the user still being present should hold the miner

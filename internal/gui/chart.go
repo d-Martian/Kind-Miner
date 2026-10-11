@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/stats"
@@ -181,11 +182,12 @@ func (c *chart) draw(w, h int) image.Image {
 	}
 
 	if opts.DrawTemp {
-		// Temperature shares the axis on a 0–100 °C scale. It is dashed and
-		// faint because it is a different unit borrowing the same space.
+		// Temperature shares the axis on a 0–100 °C scale. It is dashed
+		// because it is a different unit borrowing the same space, and amber
+		// so it is not mistaken for the ceiling, the other dotted line.
 		temp := series(func(s stats.Sample) float64 { return clamp01(s.TempC / 100) })
 		for _, dash := range dashPolyline(temp, 2*scale, 4*scale) {
-			strokePolyline(img, dash, scale, withAlpha(colorMuted, 0xaa))
+			strokePolyline(img, dash, scale, withAlpha(colorWarn, 0xaa))
 		}
 	}
 
@@ -229,6 +231,17 @@ func clamp01(v float64) float64 {
 		return 1
 	}
 	return v
+}
+
+// legendDots is legendSwatch for a dotted line.
+func legendDots(col color.Color) fyne.CanvasObject {
+	dots := container.New(layout.NewCustomPaddedHBoxLayout(2))
+	for i := 0; i < 3; i++ {
+		r := canvas.NewRectangle(col)
+		r.SetMinSize(fyne.NewSize(2, 2))
+		dots.Add(r)
+	}
+	return container.NewCenter(dots)
 }
 
 // legendSwatch is the small coloured line in front of each legend entry.
