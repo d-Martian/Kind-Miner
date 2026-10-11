@@ -387,3 +387,25 @@ func TestThreadCap(t *testing.T) {
 		t.Errorf("ThreadCap(0) = %d, want at least 1", got)
 	}
 }
+
+func TestEffectiveCeiling(t *testing.T) {
+	ghost := kindness.Get(kindness.Ghost)
+	balanced := kindness.Get(kindness.Balanced)
+	cases := []struct {
+		name   string
+		preset kindness.Preset
+		gated  bool
+		want   float64
+	}{
+		{"while you are away, the preset's own ceiling", balanced, false, balanced.Ceiling},
+		{"while you are here, held to Ghost's", balanced, true, ghost.Ceiling},
+		{"Ghost waiting for you is still Ghost", ghost, true, ghost.Ceiling},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := effectiveCeiling(c.preset, c.gated); got != c.want {
+				t.Errorf("effectiveCeiling = %v, want %v", got, c.want)
+			}
+		})
+	}
+}

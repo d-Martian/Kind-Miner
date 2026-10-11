@@ -1,6 +1,9 @@
 package gui
 
 import (
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/test"
 	"github.com/kind-miner/kind-miner/internal/hub"
 	"strings"
 	"testing"
@@ -171,5 +174,48 @@ func TestStatusSummaryExplainsMiningGently(t *testing.T) {
 				t.Errorf("summary = %q\n want %q", text, tt.want)
 			}
 		})
+	}
+}
+
+func TestSkipWaitShown(t *testing.T) {
+	cases := []struct {
+		name     string
+		override scheduler.Override
+		waiting  bool
+		want     bool
+	}{
+		{"while the wait for idle holds mining back", scheduler.OverrideNone, true, true},
+		{"once skipped, so it can be undone", scheduler.OverrideMine, false, true},
+		{"not when there is no wait: Full, or you are away", scheduler.OverrideNone, false, false},
+		{"not while paused", scheduler.OverridePause, false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := skipWaitShown(c.override, c.waiting); got != c.want {
+				t.Errorf("skipWaitShown = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestPowerTileLeavesWhenTheCounterIsUnreadable(t *testing.T) {
+	test.NewApp().Settings().SetTheme(kindTheme{})
+	d := &dashboard{
+		hash: newStatTile("a"), income: newStatTile("b"), power: newStatTile("c"), link: newStatTile("d"),
+	}
+	d.tiles = container.NewGridWithColumns(4, d.hash.Object(), d.income.Object(), d.power.Object(), d.link.Object())
+
+	d.showPowerTile(false)
+	if d.power.Object().Visible() {
+		t.Error("the power tile stays with no readable counter")
+	}
+	d.tiles.Resize(fyne.NewSize(600, 80))
+	if w := d.hash.Object().Size().Width; w < 190 {
+		t.Errorf("the other tiles did not widen into the space: %v wide", w)
+	}
+
+	d.showPowerTile(true)
+	if !d.power.Object().Visible() {
+		t.Error("the power tile does not come back once the counter reads")
 	}
 }

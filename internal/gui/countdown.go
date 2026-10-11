@@ -25,7 +25,7 @@ const (
 	// kindness control and has no room for the tray's fuller wording.
 	labelPause         = "Pause mining"
 	labelResume        = "Resume mining"
-	labelMineNowShort  = "Mine now"
+	labelMineNowShort  = "Skip the wait"
 	labelMineAutoShort = "Wait for idle"
 
 	// labelKeepPaused is the pause button while the scheduler has already
