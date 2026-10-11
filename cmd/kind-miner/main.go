@@ -20,7 +20,7 @@ var version = "dev"
 func main() {
 	flags := flag.NewFlagSet("kind-miner", flag.ExitOnError)
 	showVersion := flags.Bool("version", false, "print version and exit")
-	configPath := flags.String("config", "", "path to config file (default: ~/.config/kind-miner/config.yaml)")
+	configPath := flags.String("config", "", "path to config file (default: ~/.config/kind-miner/config.yaml, or under $XDG_CONFIG_HOME)")
 	noTray := flags.Bool("no-tray", false, "run headless without any GUI (logs to stdout)")
 	headless := flags.Bool("headless", false, "alias for -no-tray")
 	forceGUI := flags.Bool("gui", false, "force the graphical interface even from a terminal")

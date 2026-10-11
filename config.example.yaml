@@ -1,7 +1,12 @@
 # kind-miner configuration
-# Copy to ~/.config/kind-miner/config.yaml and fill in your wallet address.
+# Copy to ~/.config/kind-miner/config.yaml (or $XDG_CONFIG_HOME/kind-miner/
+# if you set it) and fill in your wallet address.
 
-# Your Monero wallet address (required)
+# Your Monero wallet's primary address (required): it starts with 4 and is
+# 95 characters long. Not a subaddress (starts with 8) or an integrated
+# address (106 characters) — P2Pool pays in the coinbase, which only a
+# primary address can receive, so kind-miner refuses them, and checks the
+# address's checksum so a typo is caught here rather than by p2pool.
 wallet: ""
 
 # Connection mode: p2pool-remote | p2pool-local | hub

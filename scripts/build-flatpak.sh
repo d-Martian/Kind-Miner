@@ -19,7 +19,7 @@
 # staged by tools/stage-engines into build/engines (or KM_ENGINES, copied
 # there), and the manifest installs them in /app/lib/kind-miner/engines.
 #
-# Usage: bash scripts/build-flatpak.sh [version]
+# Usage: bash scripts/build-flatpak.sh [version] [output.flatpak]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +30,7 @@ APP_ID="io.github.kind_miner.KindMiner"
 MANIFEST="flatpak/${APP_ID}.yml"
 VERSION="${1:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
 ARCH="$(uname -m)"
-OUTPUT="dist/kind-miner-${VERSION}-${ARCH}.flatpak"
+OUTPUT="${2:-dist/kind-miner-${VERSION}-${ARCH}.flatpak}"
 
 # Deterministic clock for any timestamped packaging step (matches the Makefile).
 : "${SOURCE_DATE_EPOCH:=$(git log -1 --format=%ct 2>/dev/null || echo 0)}"
@@ -79,7 +79,7 @@ flatpak-builder \
     "${BUILD_DIR}" \
     "${MANIFEST}"
 
-mkdir -p dist
+mkdir -p "$(dirname "${OUTPUT}")"
 flatpak build-bundle \
     --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
     "${REPO_DIR}" \

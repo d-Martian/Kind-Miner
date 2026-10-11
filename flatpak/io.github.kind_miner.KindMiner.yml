@@ -19,10 +19,10 @@ finish-args:
   - --device=dri
   # D-Bus session bus — Fyne's system tray uses godbus for the status notifier
   - --socket=session-bus
-  # Config: config.Dir() hardcodes ~/.config/kind-miner on Linux (it does not
-  # consult XDG_CONFIG_HOME), so this grant is what lets the sandboxed app see
-  # the same config as host builds (AppImage, go run). Do not remove it without
-  # also changing config.Dir().
+  # Config: inside the Flatpak, config.Dir() uses ~/.config/kind-miner, not
+  # the sandbox's own XDG_CONFIG_HOME, and this grant is what lets it see the
+  # same config as host builds (AppImage, .deb, go run). Do not remove it
+  # without also changing config.configDir().
   - --filesystem=xdg-config/kind-miner:create
   # The engines (xmrig/p2pool/tor) ship in /app/lib/kind-miner/engines, and
   # p2pool's state needs no grant: autoinstall.BinDir() follows XDG_DATA_HOME,

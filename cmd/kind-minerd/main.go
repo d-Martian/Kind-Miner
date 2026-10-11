@@ -52,7 +52,8 @@ commands:
   version             print the version
 
 common flags:
-  --config PATH       config file (default: ~/.config/kind-miner/config.yaml)
+  --config PATH       config file (default: ~/.config/kind-miner/config.yaml,
+                      or under $XDG_CONFIG_HOME)
 `
 
 func main() {

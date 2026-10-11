@@ -398,3 +398,50 @@ func TestHubPortsDefault(t *testing.T) {
 		t.Errorf("HubPorts() = %d, %d", s, a)
 	}
 }
+
+func TestConfigDir(t *testing.T) {
+	const home = "/home/a"
+	cases := []struct {
+		name     string
+		xdg      string
+		flatpak  bool
+		existing []string // config files already on disk
+		want     string
+	}{
+		{"no XDG_CONFIG_HOME", "", false, nil, "/home/a/.config/kind-miner"},
+		{"XDG_CONFIG_HOME is honoured", "/home/a/cfg", false, nil, "/home/a/cfg/kind-miner"},
+		{"XDG_CONFIG_HOME set to the default", "/home/a/.config", false, nil, "/home/a/.config/kind-miner"},
+		{"a relative XDG_CONFIG_HOME is ignored, as the spec says", "cfg", false, nil, "/home/a/.config/kind-miner"},
+		{
+			// The sandbox's own XDG_CONFIG_HOME would hide the shared config.
+			"the Flatpak keeps the directory it is granted",
+			"/home/a/.var/app/io.github.kind_miner.KindMiner/config", true, nil,
+			"/home/a/.config/kind-miner",
+		},
+		{
+			"a config from before is kept until there is a new one",
+			"/home/a/cfg", false, []string{"/home/a/.config/kind-miner/config.yaml"},
+			"/home/a/.config/kind-miner",
+		},
+		{
+			"once there is a config in the new place, it wins",
+			"/home/a/cfg", false, []string{"/home/a/.config/kind-miner/config.yaml", "/home/a/cfg/kind-miner/config.yaml"},
+			"/home/a/cfg/kind-miner",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			exists := func(p string) bool {
+				for _, e := range c.existing {
+					if e == p {
+						return true
+					}
+				}
+				return false
+			}
+			if got := configDir(home, c.xdg, c.flatpak, exists); got != c.want {
+				t.Errorf("configDir = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
