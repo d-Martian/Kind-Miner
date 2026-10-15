@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
 
 // Relay makes an onion node look like a node on the loopback interface.
@@ -30,6 +31,10 @@ type Relay struct {
 
 	listeners []net.Listener
 	wg        sync.WaitGroup
+	// ctx ends with Close, and every dial through Tor derives from it, so
+	// closing never waits out a circuit that is still forming.
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	mu      sync.Mutex
 	conns   map[net.Conn]struct{}
@@ -65,10 +70,12 @@ func StartRelay(remote Node, index int) (*Relay, error) {
 
 func startRelay(remote Node, host string, dial dialFunc) (*Relay, error) {
 	r := &Relay{remote: remote, dial: dial, conns: make(map[net.Conn]struct{})}
+	r.ctx, r.cancel = context.WithCancel(context.Background())
 	rpc, zmq, err := listenPair(host, remote.RPCPort, remote.ZMQPort)
 	if err != nil {
 		fallback, ferr := listenPairAnyPort("127.0.0.1")
 		if ferr != nil {
+			r.cancel()
 			return nil, fmt.Errorf("relay for %s: %v; fallback: %w", remote.Addr(), err, ferr)
 		}
 		log.Printf("tor relay: cannot listen on %s (%v); using 127.0.0.1 on free ports", host, err)
@@ -80,8 +87,8 @@ func startRelay(remote Node, host string, dial dialFunc) (*Relay, error) {
 		RPCPort: rpc.Addr().(*net.TCPAddr).Port,
 		ZMQPort: zmq.Addr().(*net.TCPAddr).Port,
 	}
-	r.serve(rpc, remote.RPCPort)
-	r.serve(zmq, remote.ZMQPort)
+	r.serve(rpc, remote.RPCPort, r.forward)
+	r.serve(zmq, remote.ZMQPort, r.forwardZMQ)
 	log.Printf("tor relay: %s → %s (RPC), %s → ZMQ %d",
 		r.local.Addr(), remote.Addr(), net.JoinHostPort(r.local.Host, strconv.Itoa(r.local.ZMQPort)), remote.ZMQPort)
 	return r, nil
@@ -108,7 +115,7 @@ func listenPairAnyPort(host string) ([2]net.Listener, error) {
 // Local is the loopback node p2pool should follow instead of the onion.
 func (r *Relay) Local() Node { return r.local }
 
-func (r *Relay) serve(l net.Listener, remotePort int) {
+func (r *Relay) serve(l net.Listener, remotePort int, forward func(net.Conn, string)) {
 	target := net.JoinHostPort(r.remote.Host, strconv.Itoa(remotePort))
 	r.wg.Add(1)
 	go func() {
@@ -121,7 +128,7 @@ func (r *Relay) serve(l net.Listener, remotePort int) {
 			r.wg.Add(1)
 			go func() {
 				defer r.wg.Done()
-				r.forward(c, target)
+				forward(c, target)
 			}()
 		}
 	}()
@@ -137,7 +144,7 @@ func (r *Relay) forward(local net.Conn, target string) {
 	}
 	defer r.untrack(local)
 
-	ctx, cancel := context.WithTimeout(context.Background(), relayDialTimeout)
+	ctx, cancel := context.WithTimeout(r.ctx, relayDialTimeout)
 	remote, err := r.dial(ctx, "tcp", target)
 	cancel()
 	r.noteDial(err)
@@ -151,11 +158,95 @@ func (r *Relay) forward(local net.Conn, target string) {
 		return
 	}
 	defer r.untrack(remote)
+	splice(local, remote)
+}
 
-	// Copy both ways; when either side finishes, close both so the other copy
-	// unblocks. There is deliberately no idle timeout: a ZMQ subscription is
-	// quiet for minutes between blocks, and cutting it would lose the next
-	// block notification.
+// localHandshakeTimeout bounds p2pool's half of a ZMQ handshake, which runs
+// over loopback in milliseconds; it only stops a stuck client holding a
+// connection open.
+const localHandshakeTimeout = 10 * time.Second
+
+// forwardZMQ carries one ZMQ connection, handshaking with each side itself
+// (see zmtp.go): with p2pool at once, inside the one second p2pool allows,
+// and with the node through Tor, however long that takes. Until the node's
+// side is ready, what p2pool sends — its subscriptions — waits in the socket.
+func (r *Relay) forwardZMQ(local net.Conn, target string) {
+	if !r.track(local) {
+		local.Close()
+		return
+	}
+	defer r.untrack(local)
+
+	type dialed struct {
+		conn net.Conn
+		err  error
+	}
+	node := make(chan dialed, 1)
+	ctx, cancel := context.WithTimeout(r.ctx, relayDialTimeout)
+	defer cancel()
+	go func() {
+		remote, err := r.dial(ctx, "tcp", target)
+		if err == nil && !r.track(remote) {
+			// Tracked from the start, so Close cuts a handshake still
+			// waiting on Tor instead of waiting out the dial timeout.
+			remote.Close()
+			remote, err = nil, errRelayClosed
+		}
+		if err == nil {
+			// Giving up on the local side cancels ctx; that has to reach a
+			// read already blocked on the node.
+			stop := context.AfterFunc(ctx, func() { remote.SetDeadline(time.Now()) })
+			if d, ok := ctx.Deadline(); ok {
+				remote.SetDeadline(d)
+			}
+			err = zmtpHandshake(remote, "SUB")
+			stop()
+			if err != nil {
+				r.untrack(remote)
+				remote.Close()
+				remote = nil
+			} else {
+				remote.SetDeadline(time.Time{})
+			}
+		}
+		node <- dialed{remote, err}
+	}()
+
+	local.SetDeadline(time.Now().Add(localHandshakeTimeout))
+	err := zmtpHandshake(local, "PUB")
+	local.SetDeadline(time.Time{})
+	if err != nil {
+		// Not p2pool, or it gave up, or the relay is closing: nothing to
+		// carry. Stop the node's side rather than wait for it.
+		local.Close()
+		cancel()
+		if d := <-node; d.conn != nil {
+			r.untrack(d.conn)
+			d.conn.Close()
+		}
+		return
+	}
+
+	d := <-node
+	if !errors.Is(d.err, errRelayClosed) {
+		r.noteDial(d.err)
+	}
+	if d.err != nil {
+		local.Close() // p2pool reconnects, as it would to a node that went away
+		return
+	}
+	defer r.untrack(d.conn)
+	splice(local, d.conn)
+}
+
+// errRelayClosed is a connection the relay refused because it is closing.
+var errRelayClosed = errors.New("tor relay: closed")
+
+// splice copies both ways; when either side finishes, it closes both so the
+// other copy unblocks. There is deliberately no idle timeout: a ZMQ
+// subscription is quiet for minutes between blocks, and cutting it would
+// lose the next block notification.
+func splice(local, remote net.Conn) {
 	done := make(chan struct{}, 2)
 	pipe := func(dst, src net.Conn) {
 		_, _ = io.Copy(dst, src)
@@ -210,6 +301,7 @@ func (r *Relay) Close() error {
 		return nil
 	}
 	r.closed = true
+	r.cancel()
 	var errs []error
 	for _, l := range r.listeners {
 		errs = append(errs, l.Close())

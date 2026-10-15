@@ -110,14 +110,55 @@ func TestTorDialerIsolatesAndKeepsOnionNamesForTor(t *testing.T) {
 // for Tor, on the address the first relay would really use.
 func startTestRelay(t *testing.T, upstream string, dial dialFunc) *Relay {
 	t.Helper()
-	host, port, _ := net.SplitHostPort(upstream)
-	p, _ := strconv.Atoi(port)
-	r, err := startRelay(Node{Host: host, RPCPort: p, ZMQPort: p}, RelayHost(0), dial)
+	return startTestRelayPair(t, upstream, upstream, dial)
+}
+
+// startTestRelayPair relays an RPC and a ZMQ upstream, both on 127.0.0.1.
+func startTestRelayPair(t *testing.T, rpcUp, zmqUp string, dial dialFunc) *Relay {
+	t.Helper()
+	host, rp, _ := net.SplitHostPort(rpcUp)
+	_, zp, _ := net.SplitHostPort(zmqUp)
+	rpc, _ := strconv.Atoi(rp)
+	zmq, _ := strconv.Atoi(zp)
+	r, err := startRelay(Node{Host: host, RPCPort: rpc, ZMQPort: zmq}, RelayHost(0), dial)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { r.Close() })
 	return r
+}
+
+// zmtpEcho is a ZMQ publisher, as monerod is, that echoes what it is sent
+// once the handshake is done.
+func zmtpEcho(t *testing.T) string {
+	return serveOnce(t, func(c net.Conn) {
+		if zmtpHandshake(c, "PUB") == nil {
+			io.Copy(c, c)
+		}
+	})
+}
+
+// zmtpRoundTrip subscribes through the relay as p2pool does — with its one
+// second for the handshake — and checks a message comes back.
+func zmtpRoundTrip(t *testing.T, addr string) {
+	t.Helper()
+	c, err := net.DialTimeout("tcp", addr, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(time.Second))
+	if err := zmtpHandshake(c, "SUB"); err != nil {
+		t.Fatalf("handshake through the relay: %v", err)
+	}
+	c.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := c.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(c, buf); err != nil || string(buf) != "ping" {
+		t.Fatalf("got %q, %v through the relay", buf, err)
+	}
 }
 
 func roundTrip(t *testing.T, addr string) {
@@ -139,14 +180,78 @@ func roundTrip(t *testing.T, addr string) {
 
 func TestRelayCarriesRPCAndZMQ(t *testing.T) {
 	echo := serveOnce(t, func(c net.Conn) { io.Copy(c, c) })
-	r := startTestRelay(t, echo, directDial)
+	r := startTestRelayPair(t, echo, zmtpEcho(t), directDial)
 	l := r.Local()
 	roundTrip(t, net.JoinHostPort(l.Host, strconv.Itoa(l.RPCPort)))
-	roundTrip(t, net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)))
+	zmtpRoundTrip(t, net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)))
+}
+
+// The failure this exists for: Tor puts the node a second and a half away,
+// and p2pool gives the whole handshake one second.
+func TestRelayHandshakesWithP2PoolBeforeTorReachesTheNode(t *testing.T) {
+	up := zmtpEcho(t)
+	slowTor := func(ctx context.Context, network, _ string) (net.Conn, error) {
+		select {
+		case <-time.After(1500 * time.Millisecond):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		return directDial(ctx, network, up)
+	}
+	r := startTestRelayPair(t, up, up, slowTor)
+	l := r.Local()
+	zmtpRoundTrip(t, net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)))
+}
+
+func TestRelayClosesP2PoolsSideWhenTheNodeIsNotZMQ(t *testing.T) {
+	http := serveOnce(t, func(c net.Conn) {
+		io.ReadFull(c, make([]byte, zmtpGreetingLen))
+		c.Write([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"))
+	})
+	r := startTestRelayPair(t, http, http, directDial)
+	l := r.Local()
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := zmtpHandshake(c, "SUB"); err != nil {
+		t.Fatalf("p2pool's handshake should not wait on the node: %v", err)
+	}
+	// p2pool must see a closed connection it will retry, not a hang.
+	if _, err := c.Read(make([]byte, 1)); err != io.EOF {
+		t.Errorf("read = %v, want EOF once the node turns out not to be ZMQ", err)
+	}
+}
+
+func TestRelayCloseDoesNotWaitForTor(t *testing.T) {
+	stuck := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		<-ctx.Done() // a circuit that never forms
+		return nil, ctx.Err()
+	}
+	r := startTestRelayPair(t, "127.0.0.1:1", "127.0.0.1:2", stuck)
+	l := r.Local()
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(time.Second))
+	if err := zmtpHandshake(c, "SUB"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { r.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close waited on a Tor dial that will not finish")
+	}
 }
 
 func TestRelayFallsBackWhenItsAddressCannotBeBound(t *testing.T) {
-	echo := serveOnce(t, func(c net.Conn) { io.Copy(c, c) })
+	echo := zmtpEcho(t)
 	// TEST-NET-1 is never configured locally, like 127.0.0.2 on macOS.
 	r, err := startRelay(Node{Host: "x.onion", RPCPort: 18089, ZMQPort: 18083}, "192.0.2.1",
 		func(ctx context.Context, network, _ string) (net.Conn, error) { return directDial(ctx, network, echo) })
@@ -158,7 +263,7 @@ func TestRelayFallsBackWhenItsAddressCannotBeBound(t *testing.T) {
 	if l.Host != "127.0.0.1" || l.RPCPort == l.ZMQPort {
 		t.Fatalf("fallback = %+v, want 127.0.0.1 on two distinct free ports", l)
 	}
-	roundTrip(t, net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)))
+	zmtpRoundTrip(t, net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)))
 }
 
 func TestRelayDropsTheLocalSideWhenTorCannotReachTheNode(t *testing.T) {
@@ -180,7 +285,11 @@ func TestRelayDropsTheLocalSideWhenTorCannotReachTheNode(t *testing.T) {
 
 func TestRelayCloseEndsLiveStreams(t *testing.T) {
 	// A ZMQ subscription: the upstream holds the stream open and says nothing.
-	quiet := serveOnce(t, func(c net.Conn) { io.Copy(io.Discard, c) })
+	quiet := serveOnce(t, func(c net.Conn) {
+		if zmtpHandshake(c, "PUB") == nil {
+			io.Copy(io.Discard, c)
+		}
+	})
 	r := startTestRelay(t, quiet, directDial)
 	l := r.Local()
 	c, err := net.DialTimeout("tcp", net.JoinHostPort(l.Host, strconv.Itoa(l.ZMQPort)), time.Second)
@@ -188,7 +297,12 @@ func TestRelayCloseEndsLiveStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	time.Sleep(50 * time.Millisecond) // let the relay dial upstream
+	c.SetDeadline(time.Now().Add(time.Second))
+	if err := zmtpHandshake(c, "SUB"); err != nil {
+		t.Fatal(err)
+	}
+	c.SetDeadline(time.Time{})
+	time.Sleep(50 * time.Millisecond) // let the relay finish with the node
 
 	done := make(chan struct{})
 	go func() { r.Close(); close(done) }()

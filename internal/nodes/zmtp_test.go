@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net"
@@ -103,6 +104,32 @@ func TestProbeZMTP(t *testing.T) {
 			}
 			if time.Since(start) > 2*time.Second {
 				t.Errorf("probe took %s; the timeout must bound it", time.Since(start))
+			}
+		})
+	}
+}
+
+func TestReadReady(t *testing.T) {
+	ready := zmtpReady("PUB")
+	long := append([]byte{0x06, 0, 0, 0, 0, 0, 0, 0, byte(len(ready) - 2)}, ready[2:]...)
+	errorCmd := []byte{0x04, 9, 5, 'E', 'R', 'R', 'O', 'R', 2, 'n', 'o'}
+	cases := []struct {
+		name string
+		in   []byte
+		ok   bool
+	}{
+		{"READY in a short frame", ready, true},
+		{"READY in a long frame", long, true},
+		{"the peer refusing with ERROR", errorCmd, false},
+		{"a message before the handshake finished", []byte{0x00, 1, 'x'}, false},
+		{"a command claiming to be huge", []byte{0x06, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, false},
+		{"a connection that ends mid-command", ready[:4], false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := readReady(bytes.NewReader(c.in))
+			if (err == nil) != c.ok {
+				t.Errorf("readReady = %v, want ok=%v", err, c.ok)
 			}
 		})
 	}
