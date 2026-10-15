@@ -71,8 +71,12 @@ func main() {
 	name := fs.String("name", "", "device name for a plain-xmrig config (pair)")
 	host := fs.String("host", "", "address devices reach this hub at (pair; default: this machine's LAN address)")
 	_ = fs.Parse(args)
-	if p := configFor(*configPath, os.Getenv("CREDENTIALS_DIRECTORY"), os.Getenv("STATE_DIRECTORY"), os.Getuid(), exists); p != "" {
+	p := configFor(*configPath, os.Getenv("CREDENTIALS_DIRECTORY"), os.Getenv("STATE_DIRECTORY"), os.Getuid(), exists)
+	if p != "" {
 		config.SetPath(p)
+	} else if wantsSudo(cmd, os.Getuid(), serviceActive) {
+		fmt.Fprintf(os.Stderr, "kind-minerd: the service's config can be read only by root. Run:\n\n  sudo kind-minerd %s\n", strings.Join(os.Args[1:], " "))
+		os.Exit(1)
 	}
 
 	var err error
@@ -242,6 +246,24 @@ func runInit(w io.Writer, address string, force, noHub bool, env initEnv) error 
 	}
 	fmt.Fprintln(w)
 	return env.pairing(w)
+}
+
+// wantsSudo reports whether a command run by a user should stop and ask for
+// sudo instead of falling back to that user's own config. While the service
+// runs, its config is in /etc/kind-miner or its private state directory, and
+// a user can see neither, so pair, doctor and init would answer about — or
+// write — a ~/.config/kind-miner the service never reads. pair said "this
+// machine is not serving the hub yet" on a Nodo serving two machines, and
+// init without sudo left exactly such a stray file behind. status needs no
+// root: it reads the status file the service publishes for everyone.
+// active is only asked when the answer could depend on it.
+func wantsSudo(cmd string, uid int, active func() bool) bool {
+	switch cmd {
+	case "pair", "doctor", "init":
+	default:
+		return false
+	}
+	return uid != 0 && active()
 }
 
 // serviceActive reports whether the system service is running.
