@@ -257,3 +257,29 @@ func TestPushable(t *testing.T) {
 		}
 	}
 }
+
+func TestWantsSudo(t *testing.T) {
+	active := func() bool { return true }
+	inactive := func() bool { return false }
+	cases := []struct {
+		name   string
+		cmd    string
+		uid    int
+		active func() bool
+		want   bool
+	}{
+		{"pair by a user, the service running", "pair", 1000, active, true},
+		{"doctor by a user, the service running", "doctor", 1000, active, true},
+		{"init by a user, the service running: it would write a stray config", "init", 1000, active, true},
+		{"status needs no root: the status file is public", "status", 1000, active, false},
+		{"root already reads the service's config", "pair", 0, active, false},
+		{"no service: a user's own daemon keeps its own config", "pair", 1000, inactive, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := wantsSudo(c.cmd, c.uid, c.active); got != c.want {
+				t.Errorf("wantsSudo = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
