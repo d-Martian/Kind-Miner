@@ -639,10 +639,9 @@ func (s *Supervisor) ensureTor(emit func(Step)) {
 			dataDir := filepath.Join(autoinstall.BinDir(), "tor-data")
 			t := engine.NewTor(torBin, dataDir, torSOCKSPort)
 			log.Println("No Tor detected — starting a managed Tor process…")
-			if err := t.Start(90 * time.Second); err != nil {
+			if err := s.startManagedTor(t, 90*time.Second); err != nil {
 				log.Printf("managed Tor unavailable (%v); trying the system Tor service…", err)
 			} else {
-				s.tor = t
 				log.Println("Tor ready.")
 				return
 			}
@@ -651,6 +650,20 @@ func (s *Supervisor) ensureTor(emit func(Step)) {
 	if nodes.EnsureTor() {
 		log.Println("System Tor service is running.")
 	}
+}
+
+// startManagedTor launches t as kind-miner's own Tor. t belongs to the
+// Supervisor from launch, not from readiness. A Tor still bootstrapping when
+// the wait runs out keeps going, which is worth keeping: on a slow first
+// consensus download it is often moments from done, and node selection still
+// has retries left to use it. When t was only recorded once ready, a Tor that
+// missed the deadline belonged to nobody. Shutdown did not stop it, and
+// neither did the switch to a local node that retires our Tor.
+func (s *Supervisor) startManagedTor(t *engine.Tor, timeout time.Duration) error {
+	s.mu.Lock()
+	s.tor = t
+	s.mu.Unlock()
+	return t.Start(timeout)
 }
 
 // torNeeded reports whether the active configuration will connect to a .onion
