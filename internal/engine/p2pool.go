@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -216,10 +217,7 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 		p.mu.Lock()
 		last := p.lastLine
 		p.mu.Unlock()
-		if last != "" {
-			return fmt.Errorf("p2pool exited before becoming ready; last output: %s", last)
-		}
-		return fmt.Errorf("p2pool exited before becoming ready and produced no output")
+		return earlyExitError(last)
 	case <-time.After(timeout):
 		return fmt.Errorf("p2pool did not become ready within %s; check node connectivity", timeout)
 	}
@@ -344,8 +342,8 @@ func (p *P2Pool) readOutput(r io.Reader, readyCh chan<- struct{}, exitCh chan<- 
 		line := scanner.Text()
 		log.Printf("[p2pool] %s", line)
 		p.mu.Lock()
-		if strings.TrimSpace(line) != "" {
-			p.lastLine = line
+		if msg := lastWords(line); msg != "" {
+			p.lastLine = msg
 		}
 		p.mu.Unlock()
 		if height, atomic, ok := PayoutFromLog(line); ok {
@@ -365,6 +363,39 @@ func (p *P2Pool) readOutput(r io.Reader, readyCh chan<- struct{}, exitCh chan<- 
 		}
 	}
 	close(exitCh)
+}
+
+// p2poolStamp is the UTC timestamp at the start of p2pool's console lines.
+var p2poolStamp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\s+`)
+
+// lastWords returns line as it should be quoted if p2pool dies next, or ""
+// for a line that says nothing about why. p2pool signs off every exit, clean
+// or fatal, with "Log stopped". Quoting the literal last line once showed a
+// user exactly that and hid the EADDRINUSE printed just before it. The
+// timestamp is dropped too: it is UTC, and next to the user's own clock it
+// reads as hours off.
+func lastWords(line string) string {
+	msg := p2poolStamp.ReplaceAllString(strings.TrimSpace(line), "")
+	if msg == "Log stopped" {
+		return ""
+	}
+	return msg
+}
+
+// earlyExitError is the error for a p2pool that died before becoming ready,
+// quoting its last words.
+func earlyExitError(last string) error {
+	switch {
+	case last == "":
+		return errors.New("p2pool exited before becoming ready and produced no output")
+	case strings.Contains(last, "EADDRINUSE"):
+		// In practice the port's holder is a p2pool left over from an earlier
+		// start, which nothing in p2pool's own message would point the user to.
+		return fmt.Errorf("p2pool exited before becoming ready; last output: %s. "+
+			"Something else holds that port, usually a p2pool still running from "+
+			"an earlier start. Stop it, then retry", last)
+	}
+	return fmt.Errorf("p2pool exited before becoming ready; last output: %s", last)
 }
 
 // chainFlag returns the p2pool argument that selects a sidechain. The main
