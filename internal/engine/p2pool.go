@@ -169,6 +169,7 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = os.Environ()
+	dieWithUs(cmd)
 	if p.workDir != "" {
 		// Best effort: p2pool works from any writable cwd, so fall back to
 		// inheriting ours rather than failing (e.g. a read-only install prefix).

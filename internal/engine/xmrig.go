@@ -192,6 +192,9 @@ func launchProcess(name string, args []string) (*exec.Cmd, io.Reader, context.Ca
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = os.Environ()
+	// Survives systemd-run's exec into the miner: only a set-user-ID or
+	// capability-carrying binary clears it, and systemd-run is neither.
+	dieWithUs(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
