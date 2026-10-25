@@ -2,12 +2,18 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/kind-miner/kind-miner/internal/engine"
 	"github.com/kind-miner/kind-miner/internal/nodes"
 	"github.com/kind-miner/kind-miner/internal/nodo"
 	"github.com/kind-miner/kind-miner/internal/stats"
@@ -206,4 +212,49 @@ func TestSnoozeFile(t *testing.T) {
 	if paused, _ := loadSnooze(path, now); paused {
 		t.Error("a corrupt file paused mining")
 	}
+}
+
+func TestManagedTorThatMissesItsDeadlineIsStillStopped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake tor is a shell script")
+	}
+	// A Tor that never finishes bootstrapping, as on a network that blocks it.
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
+	bin := filepath.Join(dir, "tor")
+	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nexec sleep 60\n", pidFile)
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(config.Defaults())
+	if err := s.startManagedTor(engine.NewTor(bin, filepath.Join(dir, "data"), 0), 200*time.Millisecond); err == nil {
+		t.Fatal("startManagedTor succeeded; the fake tor never bootstraps")
+	}
+	pid := readPID(t, pidFile)
+	if !alive(pid) {
+		t.Fatal("tor was stopped at the deadline; it should keep bootstrapping")
+	}
+	s.Shutdown()
+	if alive(pid) {
+		t.Error("Shutdown left behind the Tor that missed its deadline")
+	}
+}
+
+func readPID(t *testing.T, path string) int {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if b, err := os.ReadFile(path); err == nil {
+			if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
+				return pid
+			}
+		}
+	}
+	t.Fatalf("the fake tor never wrote %s", path)
+	return 0
+}
+
+func alive(pid int) bool {
+	p, err := os.FindProcess(pid)
+	return err == nil && p.Signal(syscall.Signal(0)) == nil
 }

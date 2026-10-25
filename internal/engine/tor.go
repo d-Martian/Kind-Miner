@@ -127,6 +127,7 @@ func (t *Tor) Start(timeout time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = torEnv(bin)
+	dieWithUs(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

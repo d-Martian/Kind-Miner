@@ -178,7 +178,7 @@ func (u *uiApp) startStartup() {
 }
 
 func (u *uiApp) runStartup() {
-	err := u.sup.Start(func(st core.Step) {
+	err := startOrTearDown(u.sup, func(st core.Step) {
 		// Only the text changes between steps, so the window is left alone —
 		// re-resizing on every step would undo a resize the user just made.
 		u.win.SetContent(u.progressScreen(st))
@@ -191,6 +191,30 @@ func (u *uiApp) runStartup() {
 	u.setScreen(u.dashboardScreen(), windowSize)
 	u.startRefresh()
 	u.tuckIntoTray()
+}
+
+// bringUp is the part of core.Supervisor that startup drives.
+type bringUp interface {
+	Start(progress func(core.Step)) error
+	Shutdown()
+}
+
+// startOrTearDown starts sup and, if that fails, stops whatever it got as far
+// as launching, so the error screen's Retry starts from nothing.
+//
+// Start leaves a partial launch running for its caller to clean up, and Retry
+// calls Start again. Without the teardown, a Retry after p2pool timed out
+// waiting for a slow Tor replaced that still-syncing p2pool, and the relay
+// feeding it, with new ones and lost track of the old pair. The orphan became
+// ready minutes later and kept its ports. Every start after that, including
+// ones from a later kind-miner, died on EADDRINUSE until the user found the
+// orphan and killed it.
+func startOrTearDown(sup bringUp, progress func(core.Step)) error {
+	err := sup.Start(progress)
+	if err != nil {
+		sup.Shutdown()
+	}
+	return err
 }
 
 // tuckIntoTray ends first-run setup the way the rest of kind-miner's life goes:

@@ -62,6 +62,53 @@ func TestP2PoolStartFailsFastOnExit(t *testing.T) {
 	}
 }
 
+func TestP2PoolStartExplainsATakenPort(t *testing.T) {
+	// p2pool's exact last words when a p2pool orphaned by an earlier start
+	// still held the peer port.
+	bin := fakeP2Pool(t, `
+echo "P2Pool can't continue execution: panic at /p2pool/src/tcp_server.cpp:254"
+echo "2026-10-21 22:02:28.7905 TCPServer failed to listen on tcp server socket 0.0.0.0:37890, error EADDRINUSE"
+echo "2026-10-21 22:02:28.7905 Log stopped"
+exit 1`)
+	p := NewP2Pool(P2PoolOptions{BinPath: bin, Wallet: "wallet", NodeHost: "127.0.0.1", RPCPort: 18081, ZMQPort: 18083, Chain: "nano", StratumPort: 3333})
+	defer p.Stop()
+
+	err := p.Start(30 * time.Second)
+	if err == nil {
+		t.Fatal("Start succeeded; want early-exit error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "failed to listen on tcp server socket 0.0.0.0:37890, error EADDRINUSE") {
+		t.Errorf("error = %q; want the line that says why p2pool died", msg)
+	}
+	if strings.Contains(msg, "Log stopped") || strings.Contains(msg, "22:02:28") {
+		t.Errorf("error = %q; want neither the sign-off nor the UTC timestamp", msg)
+	}
+	if !strings.Contains(msg, "still running from an earlier start") {
+		t.Errorf("error = %q; want it to name the likely holder of the port", msg)
+	}
+}
+
+func TestP2PoolLastWords(t *testing.T) {
+	for _, tc := range []struct{ name, line, want string }{
+		{"a timestamped line loses its UTC stamp",
+			"2026-10-21 22:02:28.7905 TCPServer failed to listen on tcp server socket 0.0.0.0:37890, error EADDRINUSE",
+			"TCPServer failed to listen on tcp server socket 0.0.0.0:37890, error EADDRINUSE"},
+		{"the sign-off on every exit says nothing about why",
+			"2026-10-21 22:02:28.7905 Log stopped", ""},
+		{"an unstamped line is kept as it is",
+			"P2Pool can't continue execution: panic at /p2pool/src/tcp_server.cpp:254",
+			"P2Pool can't continue execution: panic at /p2pool/src/tcp_server.cpp:254"},
+		{"a blank line is nothing", "   ", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := lastWords(tc.line); got != tc.want {
+				t.Errorf("lastWords(%q) = %q; want %q", tc.line, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestP2PoolWorkDir(t *testing.T) {
 	// p2pool writes p2pool.cache/log to its cwd; verify Start runs it in the
 	// configured work dir, creating the dir if needed.

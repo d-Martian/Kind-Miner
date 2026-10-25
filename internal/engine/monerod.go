@@ -57,6 +57,7 @@ func (m *Monerod) Start(timeout time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = os.Environ()
+	dieWithUs(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
