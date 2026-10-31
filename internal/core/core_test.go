@@ -14,6 +14,7 @@ import (
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/nodes"
 	"github.com/kind-miner/kind-miner/internal/nodo"
 	"github.com/kind-miner/kind-miner/internal/stats"
@@ -289,6 +290,33 @@ func TestShutdownEndsEveryWatchOnce(t *testing.T) {
 		if *watches[name] != nil {
 			t.Errorf("the %s watch's stop channel was kept after it was closed", name)
 		}
+	}
+}
+
+// A Nodo's RPC login opens the Nodo's own monerod. On a Nodo mining in
+// another mode p2pool follows someone else's node, and the login must not go
+// with it.
+func TestP2PoolSignsInOnlyToTheNodosOwnNode(t *testing.T) {
+	const login = "nodo:secret"
+	cases := []struct {
+		name    string
+		onNodo  nodo.Node
+		profile bool
+		want    string
+	}{
+		{"the Nodo profile signs in to the Nodo's own node", nodo.Node{RPCLogin: login}, true, login},
+		{"a Nodo following another node keeps its login to itself", nodo.Node{RPCLogin: login}, false, ""},
+		{"an ordinary machine has no login to give", nodo.Node{}, false, ""},
+	}
+	remote := nodes.Node{Host: "127.0.0.1", RPCPort: 41000, ZMQPort: 41001}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := New(config.Defaults())
+			opts := s.p2poolOptions(remote, "", c.onNodo, c.profile, hub.Identity{})
+			if opts.RPCLogin != c.want {
+				t.Errorf("RPCLogin = %q, want %q", opts.RPCLogin, c.want)
+			}
+		})
 	}
 }
 

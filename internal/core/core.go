@@ -334,8 +334,13 @@ func (s *Supervisor) p2poolOptions(follow nodes.Node, socks5Proxy string, onNodo
 	// (the ~450 MB p2pool.cache would live in RAM and vanish on exit).
 	workDir := filepath.Join(filepath.Dir(autoinstall.BinDir()), "p2pool")
 	statsDir := filepath.Join(workDir, "api")
+	// A Nodo's RPC login opens its own monerod, which p2pool follows only in
+	// the profile. A Nodo mining in another mode follows a node someone else
+	// may run, and handing p2pool the login there would offer it to them.
+	var rpcLogin string
 	if profile {
 		statsDir = nodoStatsDir(statsDir)
+		rpcLogin = onNodo.RPCLogin
 	}
 	opts := engine.P2PoolOptions{
 		BinPath:   s.bin.p2pool,
@@ -343,7 +348,7 @@ func (s *Supervisor) p2poolOptions(follow nodes.Node, socks5Proxy string, onNodo
 		NodeHost:  follow.Host,
 		RPCPort:   follow.RPCPort,
 		ZMQPort:   follow.ZMQPort,
-		RPCLogin:  onNodo.RPCLogin,
+		RPCLogin:  rpcLogin,
 		NoRandomX: profile,
 		// Everywhere else p2pool verifies from the RandomX cache and leaves
 		// the 2 GB dataset — and the huge pages — to the miner.
