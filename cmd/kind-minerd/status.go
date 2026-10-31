@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kind-miner/kind-miner/internal/core"
@@ -261,18 +262,12 @@ func formatStatus(st daemonStatus) string {
 	if st.EnginesWarning != "" {
 		out += fmt.Sprintf("  warning   %s\n", st.EnginesWarning)
 	}
-	if st.AdvisorySerial != 0 || len(st.AdvisoryNotes) > 0 {
-		line := "  advisory  "
-		if st.AdvisorySerial != 0 {
-			line += fmt.Sprintf("serial %d", st.AdvisorySerial)
-		}
-		for i, n := range st.AdvisoryNotes {
-			if i > 0 || st.AdvisorySerial != 0 {
-				line += " · "
-			}
-			line += n
-		}
-		out += line + "\n"
+	var advisory []string
+	if st.AdvisorySerial != 0 {
+		advisory = append(advisory, fmt.Sprintf("serial %d", st.AdvisorySerial))
+	}
+	if advisory = append(advisory, st.AdvisoryNotes...); len(advisory) > 0 {
+		out += "  advisory  " + strings.Join(advisory, " · ") + "\n"
 	}
 	switch {
 	case st.HubPort != 0:
