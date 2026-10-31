@@ -58,14 +58,10 @@ type settingsForm struct {
 	fillMiner     *widget.Check
 	chartWindow   *widget.RadioGroup
 
-	// Values as the window opened, so Save can tell the user which changes need
-	// a restart. Comparing against cfg after writing to it would always say no.
-	walletAtOpen string
-	modeAtOpen   string
-	chainAtOpen  string
-	nodeAtOpen   string
-	hubAtOpen    string
-	workerAtOpen string
+	// opened is the config as the window opened, so Save can tell the user
+	// which changes need a restart. Comparing against cfg after writing to it
+	// would always say no.
+	opened config.Config
 }
 
 // showSettings opens the settings window, or focuses it if already open.
@@ -149,7 +145,7 @@ func padTab(o fyne.CanvasObject) fyne.CanvasObject {
 }
 
 func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
-	f := &settingsForm{}
+	f := &settingsForm{opened: *cfg}
 
 	f.wallet = widget.NewEntry()
 	f.wallet.SetText(cfg.Wallet)
@@ -232,13 +228,6 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 	f.chartWindow = widget.NewRadioGroup(chartWindowLabels(), nil)
 	f.chartWindow.Horizontal = true
 	f.chartWindow.Selected = chartWindowLabel(cfg.Chart.WindowSeconds)
-
-	f.walletAtOpen = cfg.Wallet
-	f.modeAtOpen = string(cfg.Mode)
-	f.chainAtOpen = cfg.P2PoolChain
-	f.nodeAtOpen = cfg.RemoteNode
-	f.hubAtOpen = cfg.HubCode
-	f.workerAtOpen = cfg.WorkerName
 
 	return f
 }
@@ -397,7 +386,7 @@ func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
 
 	// The hub first: if it refuses the new wallet, nothing is saved here
 	// either, and the reason is on screen.
-	if next.Mode == config.ModeHub && next.HubOwnerToken != "" && next.Wallet != "" && next.Wallet != f.walletAtOpen {
+	if next.Mode == config.ModeHub && next.HubOwnerToken != "" && next.Wallet != "" && next.Wallet != f.opened.Wallet {
 		if err := pushWallet(next.HubCode, next.HubOwnerToken, next.Wallet); err != nil {
 			return "The hub's wallet was not changed: " + err.Error()
 		}
@@ -504,13 +493,14 @@ func (f *settingsForm) read(cfg *config.Config) (config.Config, string) {
 func (f *settingsForm) needsRestart(cfg *config.Config) bool {
 	// On a desktop mining to a hub the wallet is the hub's, and a change
 	// reached it on Save; nothing here restarts for it.
-	walletChanged := cfg.Wallet != f.walletAtOpen && cfg.Mode != config.ModeHub
+	was := f.opened
+	walletChanged := cfg.Wallet != was.Wallet && cfg.Mode != config.ModeHub
 	return walletChanged ||
-		string(cfg.Mode) != f.modeAtOpen ||
-		cfg.P2PoolChain != f.chainAtOpen ||
-		cfg.RemoteNode != f.nodeAtOpen ||
-		cfg.HubCode != f.hubAtOpen ||
-		cfg.WorkerName != f.workerAtOpen
+		cfg.Mode != was.Mode ||
+		cfg.P2PoolChain != was.P2PoolChain ||
+		cfg.RemoteNode != was.RemoteNode ||
+		cfg.HubCode != was.HubCode ||
+		cfg.WorkerName != was.WorkerName
 }
 
 // ---- helpers ----

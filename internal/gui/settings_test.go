@@ -74,6 +74,36 @@ func TestRejectedSettingsLeaveTheConfigAlone(t *testing.T) {
 	}
 }
 
+// Save tells the user whether a change waits for a restart, so it has to be
+// right in both directions: a false "restart" teaches people to ignore it.
+func TestSettingsSayWhichChangesNeedARestart(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(c *config.Config)
+		want   bool
+	}{
+		{"nothing changed", func(*config.Config) {}, false},
+		{"kindness takes effect at once", func(c *config.Config) { c.Kindness = kindness.Full }, false},
+		{"the chart takes effect at once", func(c *config.Config) { c.Chart.DrawTemp = !c.Chart.DrawTemp }, false},
+		{"the wallet", func(c *config.Config) { c.Wallet = otherWallet }, true},
+		{"the mode", func(c *config.Config) { c.Mode = config.ModeP2PoolLocal }, true},
+		{"the sidechain", func(c *config.Config) { c.P2PoolChain = config.ChainMain }, true},
+		{"the node", func(c *config.Config) { c.RemoteNode = "my-node.lan:18089" }, true},
+		{"the hub", func(c *config.Config) { c.HubCode = "km1-other" }, true},
+		{"the name on the hub", func(c *config.Config) { c.WorkerName = "garage" }, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, cfg, f := newSettingsTest(t)
+			saved := *cfg
+			c.change(&saved)
+			if got := f.needsRestart(&saved); got != c.want {
+				t.Errorf("needsRestart = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
 func TestAcceptedSettingsAreAppliedAndSaved(t *testing.T) {
 	u, cfg, f := newSettingsTest(t)
 	f.kindness.Selected = kindness.Get(kindness.Full).Option()
