@@ -17,7 +17,7 @@ func systemTrayAvailable() bool {
 		return false
 	}
 	for _, name := range []string{
-		"org.kde.StatusNotifierWatcher",        // de-facto standard; GNOME AppIndicator provides it
+		"org.kde.StatusNotifierWatcher",         // de-facto standard; GNOME AppIndicator provides it
 		"org.freedesktop.StatusNotifierWatcher", // spec name
 	} {
 		var hasOwner bool
