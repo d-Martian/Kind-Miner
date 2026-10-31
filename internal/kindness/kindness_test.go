@@ -1,6 +1,9 @@
 package kindness
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The presets are the product's one user-facing control, so their shape is
 // worth pinning down: they must be ordered, bounded, and asymmetric.
@@ -71,8 +74,19 @@ func TestValidAndParseLevel(t *testing.T) {
 	if Valid("nonsense") {
 		t.Error("Valid(\"nonsense\") = true")
 	}
-	if _, err := ParseLevel("nonsense"); err == nil {
-		t.Error("ParseLevel(\"nonsense\") returned no error")
+	_, err := ParseLevel("nonsense")
+	if err == nil {
+		t.Fatal("ParseLevel(\"nonsense\") returned no error")
+	}
+	// The message is what someone who mistyped a hand-edited config reads, so
+	// it has to name every level there is, including any added later.
+	for _, l := range Order {
+		if !strings.Contains(err.Error(), string(l)) {
+			t.Errorf("ParseLevel's error %q does not offer %q", err, l)
+		}
+	}
+	if want := `kindness must be one of ghost, polite, balanced, full; got "nonsense"`; err.Error() != want {
+		t.Errorf("error = %q, want %q", err, want)
 	}
 }
 

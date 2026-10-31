@@ -412,8 +412,10 @@ func (c *Config) Validate() error {
 	// Empty is what a config written before kindness existed looks like after
 	// migration has been skipped (e.g. a struct built by hand in a test), so it
 	// is accepted and read as the default rather than rejected.
-	if c.Kindness != "" && !kindness.Valid(c.Kindness) {
-		return fmt.Errorf("kindness must be one of ghost, polite, balanced, full; got %q", c.Kindness)
+	if c.Kindness != "" {
+		if _, err := kindness.ParseLevel(string(c.Kindness)); err != nil {
+			return err
+		}
 	}
 	// Checked here rather than left to node selection: an unparseable address
 	// is not transient, and without this guard it surfaces only after the
