@@ -381,87 +381,110 @@ func (f *settingsForm) advancedTab() fyne.CanvasObject {
 
 // ---- applying ----
 
-// apply validates the form and writes it to cfg. It returns an error message
+// apply saves the form and puts it into effect. It returns an error message
 // for display, or "" on success.
 //
-// Order matters: nothing is written to cfg until every field has parsed, so a
-// rejected form leaves the running configuration exactly as it was.
+// cfg is the Supervisor's own, so nothing reaches it until the whole form has
+// been checked, the hub has taken any new wallet and the file is written.
+// Anything a rejected form left in cfg would be saved by the next change made
+// anywhere else — a kindness change on the dashboard — and the launch after
+// that would stop at "edit the config file".
 func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
-	// A machine mining to a hub is paid through the hub owner's wallet; its
-	// own address field may be blank.
-	hubbed := config.Mode(f.mode.Selected) == config.ModeHub
-	if !(hubbed && strings.TrimSpace(f.wallet.Text) == "") {
-		if msg := ValidateAddress(f.wallet.Text); msg != "" {
-			return msg
-		}
-	}
-	if hubbed {
-		if _, err := hub.ParseCode(f.hubCode.Text); err != nil {
-			return "Pairing code: " + err.Error()
-		}
-	}
-	tempVal, err := strconv.ParseFloat(strings.TrimSpace(f.tempLimit.Text), 64)
-	if err != nil {
-		return "Temperature limit must be a number"
-	}
-	threadsVal, err := strconv.Atoi(strings.TrimSpace(f.threads.Text))
-	if err != nil || threadsVal < 0 {
-		return "Maximum threads must be 0 or more"
-	}
-	idleVal, err := strconv.Atoi(strings.TrimSpace(f.idleAfter.Text))
-	if err != nil || idleVal < 0 {
-		return "Full kindness after idle must be 0 or more seconds"
-	}
-	level, ok := kindness.ByOption(f.kindness.Selected)
-	if !ok {
-		return "Pick a kindness preset"
+	next, msg := f.read(cfg)
+	if msg != "" {
+		return msg
 	}
 
 	// The hub first: if it refuses the new wallet, nothing is saved here
 	// either, and the reason is on screen.
-	wallet := strings.TrimSpace(f.wallet.Text)
-	owner := f.ownerTokenFor(f.hubCode.Text)
-	if hubbed && owner != "" && wallet != "" && wallet != f.walletAtOpen {
-		if err := pushWallet(f.hubCode.Text, owner, wallet); err != nil {
+	if next.Mode == config.ModeHub && next.HubOwnerToken != "" && next.Wallet != "" && next.Wallet != f.walletAtOpen {
+		if err := pushWallet(next.HubCode, next.HubOwnerToken, next.Wallet); err != nil {
 			return "The hub's wallet was not changed: " + err.Error()
 		}
 	}
 
 	// Register with the OS before saving, so a stored preference never claims a
 	// login entry the system refused to create.
-	if f.startup.Checked != cfg.RunAtStartup {
-		if err := SetAutostart(f.startup.Checked); err != nil {
+	if next.RunAtStartup != cfg.RunAtStartup {
+		if err := SetAutostart(next.RunAtStartup); err != nil {
 			return "Could not change the startup setting: " + err.Error()
 		}
 	}
 
-	cfg.Wallet = wallet
-	cfg.HubOwnerToken = owner
-	cfg.Mode = config.Mode(f.mode.Selected)
-	cfg.P2PoolChain = f.chain.Selected
-	cfg.RemoteNode = strings.TrimSpace(f.nodeAddr.Text)
-	cfg.HubCode = strings.TrimSpace(f.hubCode.Text)
-	cfg.WorkerName = strings.TrimSpace(f.worker.Text)
-	cfg.Kindness = level
-	cfg.PauseOnBattery = f.battery.Checked
-	cfg.ThermalGovernor = f.thermal.Checked
-	cfg.MineOnlyWhenLocked = f.onlyLocked.Checked
-	cfg.RunAtStartup = f.startup.Checked
-	cfg.TempLimitCelsius = tempVal
-	cfg.MaxThreads = threadsVal
-	cfg.IdleFullAfterSeconds = idleVal
+	if err := next.Save(); err != nil {
+		return err.Error()
+	}
+	*cfg = next
+
+	if s := u.sup.Scheduler(); s != nil {
+		s.UpdateRuntime(cfg)
+	}
+	u.updateDashboard()
+	return ""
+}
+
+// read returns cfg as the form would leave it, checked whole: every field
+// parsed and the result passing Validate. It returns a message for display
+// instead when any of it does not hold. It changes nothing.
+func (f *settingsForm) read(cfg *config.Config) (config.Config, string) {
+	// A machine mining to a hub is paid through the hub owner's wallet; its
+	// own address field may be blank.
+	hubbed := config.Mode(f.mode.Selected) == config.ModeHub
+	if !(hubbed && strings.TrimSpace(f.wallet.Text) == "") {
+		if msg := ValidateAddress(f.wallet.Text); msg != "" {
+			return config.Config{}, msg
+		}
+	}
+	if hubbed {
+		if _, err := hub.ParseCode(f.hubCode.Text); err != nil {
+			return config.Config{}, "Pairing code: " + err.Error()
+		}
+	}
+	tempVal, err := strconv.ParseFloat(strings.TrimSpace(f.tempLimit.Text), 64)
+	if err != nil {
+		return config.Config{}, "Temperature limit must be a number"
+	}
+	threadsVal, err := strconv.Atoi(strings.TrimSpace(f.threads.Text))
+	if err != nil || threadsVal < 0 {
+		return config.Config{}, "Maximum threads must be 0 or more"
+	}
+	idleVal, err := strconv.Atoi(strings.TrimSpace(f.idleAfter.Text))
+	if err != nil || idleVal < 0 {
+		return config.Config{}, "Full kindness after idle must be 0 or more seconds"
+	}
+	level, ok := kindness.ByOption(f.kindness.Selected)
+	if !ok {
+		return config.Config{}, "Pick a kindness preset"
+	}
+
+	next := *cfg
+	next.Wallet = strings.TrimSpace(f.wallet.Text)
+	next.HubOwnerToken = f.ownerTokenFor(f.hubCode.Text)
+	next.Mode = config.Mode(f.mode.Selected)
+	next.P2PoolChain = f.chain.Selected
+	next.RemoteNode = strings.TrimSpace(f.nodeAddr.Text)
+	next.HubCode = strings.TrimSpace(f.hubCode.Text)
+	next.WorkerName = strings.TrimSpace(f.worker.Text)
+	next.Kindness = level
+	next.PauseOnBattery = f.battery.Checked
+	next.ThermalGovernor = f.thermal.Checked
+	next.MineOnlyWhenLocked = f.onlyLocked.Checked
+	next.RunAtStartup = f.startup.Checked
+	next.TempLimitCelsius = tempVal
+	next.MaxThreads = threadsVal
+	next.IdleFullAfterSeconds = idleVal
 
 	if f.bundled.Selected == binariesOwn {
-		cfg.XMRigBinPath = strings.TrimSpace(f.xmrigPath.Text)
-		cfg.P2PoolBinPath = strings.TrimSpace(f.p2poolPath.Text)
+		next.XMRigBinPath = strings.TrimSpace(f.xmrigPath.Text)
+		next.P2PoolBinPath = strings.TrimSpace(f.p2poolPath.Text)
 	} else {
 		// Clearing the paths hands resolution back to autoinstall, which finds
 		// the verified bundled copies.
-		cfg.XMRigBinPath = ""
-		cfg.P2PoolBinPath = ""
+		next.XMRigBinPath = ""
+		next.P2PoolBinPath = ""
 	}
 
-	cfg.Chart = config.ChartOptions{
+	next.Chart = config.ChartOptions{
 		ShadeHeadroom: f.shadeHeadroom.Checked,
 		MarkBackoff:   f.markBackoff.Checked,
 		DrawTemp:      f.drawTemp.Checked,
@@ -469,18 +492,10 @@ func (f *settingsForm) apply(u *uiApp, cfg *config.Config) string {
 		WindowSeconds: chartWindowSeconds(f.chartWindow.Selected),
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return err.Error()
+	if err := next.Validate(); err != nil {
+		return config.Config{}, err.Error()
 	}
-	if err := cfg.Save(); err != nil {
-		return err.Error()
-	}
-
-	if s := u.sup.Scheduler(); s != nil {
-		s.UpdateRuntime(cfg)
-	}
-	u.updateDashboard()
-	return ""
+	return next, ""
 }
 
 // needsRestart reports whether the saved change only takes effect once the
