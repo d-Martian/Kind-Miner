@@ -158,6 +158,10 @@ func (s *Supervisor) Payouts() *stats.Payouts { return s.payouts }
 // nil) is invoked as each Step begins. Start blocks until mining has begun or
 // an error occurs; it returns the first error without tearing down what it had
 // already started — call Shutdown to clean up.
+//
+// Each step needs the one before it: the node before the p2pool that follows
+// it, p2pool before the miner that connects to it, and the miner before the
+// scheduler that throttles it. Shutdown undoes them in reverse.
 func (s *Supervisor) Start(progress func(Step)) error {
 	emit := func(st Step) {
 		if progress != nil {
@@ -173,136 +177,193 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	if err := s.resolveEngines(exe, needP2Pool, emit); err != nil {
 		return err
 	}
+	pairing, hubID, err := s.householdRole()
+	if err != nil {
+		return err
+	}
+	if err := s.startMonerod(profile, emit); err != nil {
+		return err
+	}
+	if needP2Pool {
+		if err := s.startP2Pool(onNodo, profile, hubID, emit); err != nil {
+			return err
+		}
+	}
+	emit(StepStartXMRig)
+	if err := s.startMiner(pairing, emit); err != nil {
+		return err
+	}
+	s.startScheduler()
 
+	s.mu.Lock()
+	s.started = time.Now()
+	s.mu.Unlock()
+
+	emit(StepReady)
+	return nil
+}
+
+// householdRole reads this machine's place in a household: pairing is the hub
+// it mines to in hub mode, and id its own identity when it serves as a hub.
+// Each is the zero value otherwise.
+func (s *Supervisor) householdRole() (pairing hub.Pairing, id hub.Identity, err error) {
 	// A machine paired with a hub runs xmrig alone; everything else is the hub's.
-	var pairing hub.Pairing
-	var err error
 	if s.cfg.Mode == config.ModeHub {
 		if pairing, err = hub.ParseCode(s.cfg.HubCode); err != nil {
-			return fmt.Errorf("hub_code: %w", err)
+			return hub.Pairing{}, hub.Identity{}, fmt.Errorf("hub_code: %w", err)
 		}
 		s.mu.Lock()
 		s.nodeAddr = pairing.StratumAddr()
 		s.mu.Unlock()
 	}
-	var hubID hub.Identity
 	if hubServing(s.cfg) {
-		if hubID, err = hub.Ensure(HubDir()); err != nil {
-			return fmt.Errorf("setting up the household hub: %w", err)
+		if id, err = hub.Ensure(HubDir()); err != nil {
+			return hub.Pairing{}, hub.Identity{}, fmt.Errorf("setting up the household hub: %w", err)
 		}
 	}
+	return pairing, id, nil
+}
 
-	// Start optional managed subprocesses.
-	// A Nodo's monerod belongs to Nodo: it is already running, a second one
-	// would fight it for the port and the database.
-	if profile && s.cfg.ManageMonerod {
+// startMonerod starts the monerod kind-miner manages, in local mode with
+// manage_monerod on. A Nodo's monerod belongs to Nodo: it is already running,
+// and a second one would fight it for the port and the database.
+func (s *Supervisor) startMonerod(profile bool, emit func(Step)) error {
+	if !s.cfg.ManageMonerod {
+		return nil
+	}
+	if profile {
 		log.Println("Nodo detected: leaving monerod to Nodo (ignoring manage_monerod)")
-	} else if s.cfg.Mode == config.ModeP2PoolLocal && s.cfg.ManageMonerod {
-		emit(StepStartMonerod)
-		s.monerod = engine.NewMonerod(s.cfg.MonerodPath)
-		log.Println("Starting monerod (this may take a while for initial sync)…")
-		if err := s.monerod.Start(5 * time.Minute); err != nil {
-			return err
+		return nil
+	}
+	if s.cfg.Mode != config.ModeP2PoolLocal {
+		return nil
+	}
+	emit(StepStartMonerod)
+	s.monerod = engine.NewMonerod(s.cfg.MonerodPath)
+	log.Println("Starting monerod (this may take a while for initial sync)…")
+	return s.monerod.Start(5 * time.Minute)
+}
+
+// startP2Pool chooses the node p2pool follows, starts p2pool on it, and then
+// what runs beside it: the household hub when this machine is one, the watch
+// for a node on this machine, and on a Nodo the watch on its settings.
+func (s *Supervisor) startP2Pool(onNodo nodo.Node, profile bool, hubID hub.Identity, emit func(Step)) error {
+	node, err := s.chooseNode(onNodo, profile, emit)
+	if err != nil {
+		return err
+	}
+	log.Printf("Using monerod node: %s", node.Addr())
+	follow, socks5Proxy, err := s.reachNode(node)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.nodeAddr = node.Addr()
+	s.viaTor = socks5Proxy != ""
+	s.mu.Unlock()
+
+	emit(StepStartP2Pool)
+	s.p2pool = engine.NewP2Pool(s.p2poolOptions(follow, socks5Proxy, onNodo, profile, hubID))
+	if err := s.payouts.Load(payoutsPath()); err != nil {
+		log.Printf("payouts: starting afresh (%v)", err)
+	}
+	s.p2pool.SetPayoutHandler(func(height, atomic uint64) {
+		recordPayout(s.payouts, payoutsPath(), height, atomic, time.Now())
+	})
+	log.Println("Starting p2pool (syncing sidechain…)")
+	if err := s.p2pool.Start(3 * time.Minute); err != nil {
+		return err
+	}
+	log.Println("p2pool ready.")
+	if hubServing(s.cfg) {
+		s.startHubAPI(hubID)
+		if s.cfg.Hub.Onion {
+			s.startHubOnion()
 		}
 	}
-
-	if s.cfg.ManageP2Pool && s.cfg.Mode != config.ModeHub {
-		// Looked for before Tor: a usable node on this machine means Tor is
-		// not needed at all.
-		s.findLocalNode(profile)
-		s.ensureTor(emit)
-		emit(StepSelectNode)
-		var node nodes.Node
-		switch {
-		case profile:
-			node = nodoNode(onNodo)
-		case s.localNode != nil:
-			node = *s.localNode
-		default:
-			var err error
-			if node, err = resolveNode(s.cfg); err != nil {
-				return err
-			}
-		}
-		log.Printf("Using monerod node: %s", node.Addr())
-
-		// follow is what p2pool is pointed at: the node itself, or for an onion
-		// node the loopback relay standing in for it.
-		follow := node
-		var socks5Proxy string
-		if routesOverTor(node) {
-			// p2pool's --socks5 keeps its peer traffic on Tor, but it cannot carry
-			// ZMQ, so the node itself is reached through the relay.
-			socks5Proxy = "127.0.0.1:9050"
-			relay, err := nodes.StartRelay(node, 0)
-			if err != nil {
-				return fmt.Errorf("starting the Tor relay for %s: %w", node.Addr(), err)
-			}
-			s.relay = relay
-			follow = relay.Local()
-			log.Printf("Routing p2pool through Tor (%s), node via relay %s", socks5Proxy, follow.Addr())
-		}
-
-		s.mu.Lock()
-		s.nodeAddr = node.Addr()
-		s.viaTor = socks5Proxy != ""
-		s.mu.Unlock()
-
-		emit(StepStartP2Pool)
-		// Keep p2pool's cache/log/peer files in a persistent data dir instead of
-		// whatever cwd we inherited — in a Flatpak that cwd is a throwaway tmpfs
-		// (the ~450 MB p2pool.cache would live in RAM and vanish on exit).
-		p2poolWorkDir := filepath.Join(filepath.Dir(autoinstall.BinDir()), "p2pool")
-		statsDir := filepath.Join(p2poolWorkDir, "api")
-		if profile {
-			statsDir = nodoStatsDir(statsDir)
-		}
-		opts := engine.P2PoolOptions{
-			BinPath:   s.bin.p2pool,
-			Wallet:    s.cfg.Wallet,
-			NodeHost:  follow.Host,
-			RPCPort:   follow.RPCPort,
-			ZMQPort:   follow.ZMQPort,
-			RPCLogin:  onNodo.RPCLogin,
-			NoRandomX: profile,
-			// Everywhere else p2pool verifies from the RandomX cache and leaves
-			// the 2 GB dataset — and the huge pages — to the miner.
-			LightMode:   true,
-			Chain:       s.cfg.P2PoolChain,
-			StratumPort: s.stratumPort(),
-			SOCKS5Proxy: socks5Proxy,
-			WorkDir:     p2poolWorkDir,
-			// Statistics feed the reward estimate in the tray.
-			DataAPIDir: statsDir,
-		}
-		if hubServing(s.cfg) {
-			opts.TLSCert, opts.TLSKey = hubID.CertPath, hubID.KeyPath
-		}
-		s.p2pool = engine.NewP2Pool(opts)
-		if err := s.payouts.Load(payoutsPath()); err != nil {
-			log.Printf("payouts: starting afresh (%v)", err)
-		}
-		s.p2pool.SetPayoutHandler(func(height, atomic uint64) {
-			recordPayout(s.payouts, payoutsPath(), height, atomic, time.Now())
-		})
-		log.Println("Starting p2pool (syncing sidechain…)")
-		if err := s.p2pool.Start(3 * time.Minute); err != nil {
-			return err
-		}
-		log.Println("p2pool ready.")
-		if hubServing(s.cfg) {
-			s.startHubAPI(hubID)
-			if s.cfg.Hub.Onion {
-				s.startHubOnion()
-			}
-		}
-		s.startLocalWatch(profile)
-		if profile {
-			s.watchNodo(onNodo)
-		}
+	s.startLocalWatch(profile)
+	if profile {
+		s.watchNodo(onNodo)
 	}
+	return nil
+}
 
-	emit(StepStartXMRig)
+// chooseNode picks the monerod p2pool follows: the Nodo's own in the Nodo
+// profile, else a usable node on this machine, else the configured or
+// automatic remote node. Tor is brought up on the way if that may need it.
+func (s *Supervisor) chooseNode(onNodo nodo.Node, profile bool, emit func(Step)) (nodes.Node, error) {
+	// Looked for before Tor: a usable node on this machine means Tor is
+	// not needed at all.
+	s.findLocalNode(profile)
+	s.ensureTor(emit)
+	emit(StepSelectNode)
+	switch {
+	case profile:
+		return nodoNode(onNodo), nil
+	case s.localNode != nil:
+		return *s.localNode, nil
+	}
+	return resolveNode(s.cfg)
+}
+
+// reachNode returns what p2pool is pointed at for node, and the SOCKS5 proxy
+// its peer traffic takes ("" for none). That is the node itself, or for an
+// onion node the loopback relay standing in for it.
+func (s *Supervisor) reachNode(node nodes.Node) (follow nodes.Node, socks5Proxy string, err error) {
+	if !routesOverTor(node) {
+		return node, "", nil
+	}
+	// p2pool's --socks5 keeps its peer traffic on Tor, but it cannot carry
+	// ZMQ, so the node itself is reached through the relay.
+	socks5Proxy = "127.0.0.1:9050"
+	relay, err := nodes.StartRelay(node, 0)
+	if err != nil {
+		return nodes.Node{}, "", fmt.Errorf("starting the Tor relay for %s: %w", node.Addr(), err)
+	}
+	s.relay = relay
+	follow = relay.Local()
+	log.Printf("Routing p2pool through Tor (%s), node via relay %s", socks5Proxy, follow.Addr())
+	return follow, socks5Proxy, nil
+}
+
+// p2poolOptions is how our p2pool runs: following follow, with its peer
+// traffic through socks5Proxy when that is set.
+func (s *Supervisor) p2poolOptions(follow nodes.Node, socks5Proxy string, onNodo nodo.Node, profile bool, hubID hub.Identity) engine.P2PoolOptions {
+	// Keep p2pool's cache/log/peer files in a persistent data dir instead of
+	// whatever cwd we inherited — in a Flatpak that cwd is a throwaway tmpfs
+	// (the ~450 MB p2pool.cache would live in RAM and vanish on exit).
+	workDir := filepath.Join(filepath.Dir(autoinstall.BinDir()), "p2pool")
+	statsDir := filepath.Join(workDir, "api")
+	if profile {
+		statsDir = nodoStatsDir(statsDir)
+	}
+	opts := engine.P2PoolOptions{
+		BinPath:   s.bin.p2pool,
+		Wallet:    s.cfg.Wallet,
+		NodeHost:  follow.Host,
+		RPCPort:   follow.RPCPort,
+		ZMQPort:   follow.ZMQPort,
+		RPCLogin:  onNodo.RPCLogin,
+		NoRandomX: profile,
+		// Everywhere else p2pool verifies from the RandomX cache and leaves
+		// the 2 GB dataset — and the huge pages — to the miner.
+		LightMode:   true,
+		Chain:       s.cfg.P2PoolChain,
+		StratumPort: s.stratumPort(),
+		SOCKS5Proxy: socks5Proxy,
+		WorkDir:     workDir,
+		// Statistics feed the reward estimate in the tray.
+		DataAPIDir: statsDir,
+	}
+	if hubServing(s.cfg) {
+		opts.TLSCert, opts.TLSKey = hubID.CertPath, hubID.KeyPath
+	}
+	return opts
+}
+
+// startMiner starts xmrig on the small thread layout, pointed at the
+// household hub in hub mode and at a p2pool on this machine otherwise.
+func (s *Supervisor) startMiner(pairing hub.Pairing, emit func(Step)) error {
 	// xmrig runs at a fixed thread count and is throttled by duty-cycling, so
 	// this is the ceiling of raw capacity. It has to come from the same function
 	// the scheduler uses, or the two disagree about the full-tilt share a duty
@@ -346,10 +407,13 @@ func (s *Supervisor) Start(progress func(Step)) error {
 			mode, gib(available, ok), gib(total, ok))
 		s.xmrig.SetRandomXMode(mode)
 	}
-	if err := s.xmrig.Start(); err != nil {
-		return err
-	}
+	return s.xmrig.Start()
+}
 
+// startScheduler starts the scheduler on the running miner, and what runs
+// beside it for as long as the miner does: the ledger's periodic save, the
+// sidechain health check when p2pool is ours, and the advisory.
+func (s *Supervisor) startScheduler() {
 	s.sched = scheduler.New(s.cfg, s.xmrig)
 	restoreLedger(s.sched.Ledger(), ledgerPath())
 	keepPauseAcrossRestarts(s.sched, snoozePath())
@@ -362,13 +426,6 @@ func (s *Supervisor) Start(progress func(Step)) error {
 	}
 	s.advisoryStop = make(chan struct{})
 	go s.watchAdvisory(s.advisoryStop)
-
-	s.mu.Lock()
-	s.started = time.Now()
-	s.mu.Unlock()
-
-	emit(StepReady)
-	return nil
 }
 
 // Uptime returns how long mining has been running. ok is false before Start
@@ -486,21 +543,12 @@ func (s *Supervisor) Shutdown() {
 	// underneath us, then the miner itself, and only then p2pool — stopping the
 	// pool first would leave xmrig hashing against a dead stratum for as long as
 	// p2pool takes to write its ~450 MB cache out.
-	if s.islandStop != nil {
-		close(s.islandStop)
-		s.islandStop = nil
-	}
-	if s.advisoryStop != nil {
-		close(s.advisoryStop)
-		s.advisoryStop = nil
-	}
+	endWatch(&s.islandStop)
+	endWatch(&s.advisoryStop)
 	if s.sched != nil {
 		s.sched.Stop()
 		// After the scheduler, so its last tick is in the record.
-		if s.ledgerStop != nil {
-			close(s.ledgerStop)
-			s.ledgerStop = nil
-		}
+		endWatch(&s.ledgerStop)
 		if err := s.sched.Ledger().Save(ledgerPath()); err != nil {
 			log.Printf("hashrate history: could not save: %v", err)
 		}
@@ -512,18 +560,9 @@ func (s *Supervisor) Shutdown() {
 		s.xmrig.Close()
 	}
 	s.mu.Lock()
-	if s.nodoStop != nil {
-		close(s.nodoStop)
-		s.nodoStop = nil
-	}
-	if s.localWatchStop != nil {
-		close(s.localWatchStop)
-		s.localWatchStop = nil
-	}
-	if s.hhStop != nil {
-		close(s.hhStop)
-		s.hhStop = nil
-	}
+	endWatch(&s.nodoStop)
+	endWatch(&s.localWatchStop)
+	endWatch(&s.hhStop)
 	hubAPI, hubBeacon, hubTor := s.hubAPI, s.hubBeacon, s.hubTor
 	s.hubAPI, s.hubBeacon, s.hubTor = nil, nil, nil
 	s.mu.Unlock()
@@ -558,6 +597,16 @@ func (s *Supervisor) Shutdown() {
 	}
 	if tor != nil {
 		tor.Stop()
+	}
+}
+
+// endWatch stops the watch whose stop channel *stop is, if it is running, and
+// clears it, so a Shutdown after a failed Start — or a second Shutdown —
+// neither closes a channel twice nor waits on one that was never made.
+func endWatch(stop *chan struct{}) {
+	if *stop != nil {
+		close(*stop)
+		*stop = nil
 	}
 }
 

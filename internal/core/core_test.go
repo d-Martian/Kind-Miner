@@ -258,3 +258,44 @@ func alive(pid int) bool {
 	p, err := os.FindProcess(pid)
 	return err == nil && p.Signal(syscall.Signal(0)) == nil
 }
+
+// Shutdown is also what cleans up after a Start that failed part-way, and the
+// front-ends may call it again on their way out, so every watch it ends must
+// be ended exactly once however many times it runs.
+func TestShutdownEndsEveryWatchOnce(t *testing.T) {
+	s := New(config.Defaults())
+	watches := map[string]*chan struct{}{
+		"sidechain health": &s.islandStop,
+		"advisory":         &s.advisoryStop,
+		"Nodo settings":    &s.nodoStop,
+		"local node":       &s.localWatchStop,
+		"household":        &s.hhStop,
+	}
+	running := map[string]chan struct{}{}
+	for name, w := range watches {
+		*w = make(chan struct{})
+		running[name] = *w
+	}
+
+	s.Shutdown()
+	s.Shutdown() // closing any of them twice would panic
+
+	for name, stop := range running {
+		select {
+		case <-stop:
+		default:
+			t.Errorf("the %s watch was not told to stop", name)
+		}
+		if *watches[name] != nil {
+			t.Errorf("the %s watch's stop channel was kept after it was closed", name)
+		}
+	}
+}
+
+func TestEndWatchWithNothingRunning(t *testing.T) {
+	var stop chan struct{}
+	endWatch(&stop) // must not panic on a watch that never started
+	if stop != nil {
+		t.Error("endWatch made a channel")
+	}
+}
