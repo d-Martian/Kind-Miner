@@ -54,21 +54,9 @@ func (m *Monerod) Start(timeout time.Duration) error {
 		"--log-level", "0",
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = os.Environ()
-	dieWithUs(cmd)
-
-	stdout, err := cmd.StdoutPipe()
+	cmd, stdout, cancel, err := launch("monerod", bin, args, nil)
 	if err != nil {
-		cancel()
 		return err
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return fmt.Errorf("starting monerod: %w", err)
 	}
 
 	m.cmd = cmd

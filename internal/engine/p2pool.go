@@ -166,32 +166,21 @@ func (p *P2Pool) Start(timeout time.Duration) error {
 		args = append(args, "--loglevel", "0")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = os.Environ()
-	dieWithUs(cmd)
+	var dir string
 	if p.workDir != "" {
 		// Best effort: p2pool works from any writable cwd, so fall back to
 		// inheriting ours rather than failing (e.g. a read-only install prefix).
 		if err := os.MkdirAll(p.workDir, 0o755); err == nil {
-			cmd.Dir = p.workDir
+			dir = p.workDir
 		} else {
 			log.Printf("p2pool work dir %s unavailable (%v); using current directory", p.workDir, err)
 		}
 	}
 
-	stdout, err := cmd.StdoutPipe()
+	cmd, stdout, cancel, err := launch("p2pool", bin, args, func(c *exec.Cmd) { c.Dir = dir })
 	if err != nil {
-		cancel()
 		p.mu.Unlock()
 		return err
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		p.mu.Unlock()
-		return fmt.Errorf("starting p2pool: %w", err)
 	}
 
 	p.cmd = cmd

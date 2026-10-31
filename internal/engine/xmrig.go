@@ -140,7 +140,7 @@ func (x *XMRig) start() error {
 		}
 	}
 	name, args, scoped := launchCommand(bin, x.buildArgs())
-	cmd, stdout, cancel, err := launchProcess(name, args)
+	cmd, stdout, cancel, err := launch("xmrig", name, args, nil)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (x *XMRig) start() error {
 			cancel()
 			_ = cmd.Wait()
 			scoped = false
-			if cmd, stdout, cancel, err = launchProcess(bin, x.buildArgs()); err != nil {
+			if cmd, stdout, cancel, err = launch("xmrig", bin, x.buildArgs(), nil); err != nil {
 				return err
 			}
 		}
@@ -186,29 +186,6 @@ func (x *XMRig) start() error {
 // normally takes tens of milliseconds; a user manager that has not answered
 // in seconds is not going to.
 const scopeExecTimeout = 10 * time.Second
-
-// launchProcess starts name with its output piped for readOutput.
-func launchProcess(name string, args []string) (*exec.Cmd, io.Reader, context.CancelFunc, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = os.Environ()
-	// Survives systemd-run's exec into the miner: only a set-user-ID or
-	// capability-carrying binary clears it, and systemd-run is neither.
-	dieWithUs(cmd)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		return nil, nil, nil, err
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return nil, nil, nil, fmt.Errorf("starting xmrig: %w", err)
-	}
-	return cmd, stdout, cancel, nil
-}
 
 // SetDuty sets the fraction of time the miner may run, in [0,1]. It takes
 // effect within one dutyPeriod without restarting the process. Values outside
