@@ -161,7 +161,7 @@ jobs:
       - name: Make the vendored source tarball
         run: |
           bash scripts/vendor-tarball.sh "${GITHUB_REF_NAME}"
-          mv dist/kind-miner-*-vendored-src.tar.gz dist/source/
+          mv dist/kind-miner-*-vendored-src.tar.gz dist/kind-miner-*-vendored-src.tar.gz.sha256 dist/source/
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -170,6 +170,7 @@ jobs:
           files: |
             dist/source/*.tar.gz
             dist/source/*.tar.xz
+            dist/source/*.sha256
             dist/source/SHA256SUMS-source
 
   # ---------------------------------------------------------------------------
