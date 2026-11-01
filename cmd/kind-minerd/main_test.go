@@ -283,3 +283,31 @@ func TestWantsSudo(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusAdvisoryLine(t *testing.T) {
+	cases := []struct {
+		name   string
+		serial int64
+		notes  []string
+		want   string // "" for no advisory line at all
+	}{
+		{"no advisory says nothing", 0, nil, ""},
+		{"a serial alone", 7, nil, "  advisory  serial 7\n"},
+		{"notes alone", 0, []string{"fork at 3,500,000", "update soon"}, "  advisory  fork at 3,500,000 · update soon\n"},
+		{"a serial and its notes", 7, []string{"fork at 3,500,000"}, "  advisory  serial 7 · fork at 3,500,000\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out := formatStatus(daemonStatus{State: "mining", AdvisorySerial: c.serial, AdvisoryNotes: c.notes})
+			if c.want == "" {
+				if strings.Contains(out, "advisory") {
+					t.Errorf("status has an advisory line:\n%s", out)
+				}
+				return
+			}
+			if !strings.Contains(out, c.want) {
+				t.Errorf("status lacks %q:\n%s", c.want, out)
+			}
+		})
+	}
+}

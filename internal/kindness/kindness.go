@@ -20,7 +20,10 @@
 // simply is not there while they work.
 package kindness
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Level is the stable identifier for a preset. It is what gets written to the
 // config file, so the strings are part of the on-disk format.
@@ -179,7 +182,12 @@ func ByOption(option string) (Level, bool) {
 func ParseLevel(s string) (Level, error) {
 	l := Level(s)
 	if !Valid(l) {
-		return "", fmt.Errorf("kindness must be one of ghost, polite, balanced, full; got %q", s)
+		// From Order, so a preset added there is offered here too.
+		names := make([]string, len(Order))
+		for i, o := range Order {
+			names[i] = string(o)
+		}
+		return "", fmt.Errorf("kindness must be one of %s; got %q", strings.Join(names, ", "), s)
 	}
 	return Canonical(l), nil
 }

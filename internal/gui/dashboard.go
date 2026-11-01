@@ -65,32 +65,56 @@ type dashboard struct {
 
 func (u *uiApp) newDashboard() *dashboard {
 	d := &dashboard{u: u}
+	header := d.newHeader()
+	tiles := d.newTiles()
+	details := d.newDetails()
+	plot := d.newPlot()
+	footer := d.newFooter()
 
+	body := container.NewBorder(
+		container.NewVBox(header, tiles),
+		container.NewVBox(details, footer),
+		nil, nil,
+		plot,
+	)
+	d.object = container.NewPadded(body)
+	return d
+}
+
+// newHeader is the top row: the status pill, then uptime and Settings.
+func (d *dashboard) newHeader() fyne.CanvasObject {
 	d.pill = newStatusPill()
 	d.uptime = canvas.NewText("", colorMuted)
 	d.uptime.TextSize = textSize(11)
 	d.uptime.TextStyle = fyne.TextStyle{Monospace: true}
 
-	settings := widget.NewButton("Settings", u.onSettings)
+	settings := widget.NewButton("Settings", d.u.onSettings)
 	settings.Importance = widget.LowImportance
 
-	header := container.NewBorder(nil, nil,
+	return container.NewBorder(nil, nil,
 		d.pill.Object(),
 		container.NewHBox(d.uptime, settings),
 	)
+}
 
+// newTiles is the row of four headline figures.
+func (d *dashboard) newTiles() fyne.CanvasObject {
 	d.hash = newStatTile("Hashrate · 5s avg")
 	d.income = newStatTile("Est. XMR / day")
 	d.power = newStatTile("Miner power")
 	d.link = newStatTile("Node · pool")
 	d.tiles = container.NewGridWithColumns(4,
 		d.hash.Object(), d.income.Object(), d.power.Object(), d.link.Object())
-	tiles := d.tiles
+	return d.tiles
+}
 
-	// The design puts this detail in hover tooltips. Fyne 2.5.3 has no tooltip,
-	// and dropping the numbers would lose the part that lets someone check the
-	// headline figures — so they live in an accordion under the tiles instead,
-	// one section per tile.
+// newDetails is the figures behind each tile.
+//
+// The design puts this detail in hover tooltips. Fyne 2.5.3 has no tooltip,
+// and dropping the numbers would lose the part that lets someone check the
+// headline figures — so they live in an accordion under the tiles instead,
+// one section per tile.
+func (d *dashboard) newDetails() fyne.CanvasObject {
 	d.hashDetail = newKVList().
 		Add("60s average", emDash).
 		Add("30 min", emDash).
@@ -123,14 +147,17 @@ func (u *uiApp) newDashboard() *dashboard {
 	// content's minimum width, and Fyne sizes the window to that. Four columns
 	// of key/value rows set a floor well past the window's own default, so the
 	// dashboard opened wider than it was designed for however it was resized.
-	details := widget.NewAccordion(widget.NewAccordionItem("Details",
+	return widget.NewAccordion(widget.NewAccordionItem("Details",
 		container.NewGridWithColumns(2,
 			detailColumn("Hashrate", d.hashDetail),
 			detailColumn("Earnings", d.incomeDetail),
 			detailColumn("Power", d.powerDetail),
 			detailColumn("Connection", d.linkDetail),
 		)))
+}
 
+// newPlot is the chart under its legend.
+func (d *dashboard) newPlot() fyne.CanvasObject {
 	d.chart = newChart()
 	d.totalNow = canvas.NewText("", colorMuted)
 	d.totalNow.TextSize = textSize(11)
@@ -152,8 +179,12 @@ func (u *uiApp) newDashboard() *dashboard {
 		container.NewHBox(d.totalNow, d.backoff),
 	)
 
-	plot := container.NewBorder(legend, nil, nil, nil, d.chart.Object())
+	return container.NewBorder(legend, nil, nil, nil, d.chart.Object())
+}
 
+// newFooter is the controls: the kindness presets, then pause and mine-now.
+func (d *dashboard) newFooter() fyne.CanvasObject {
+	u := d.u
 	// Short labels here: the tray has the room for the fuller wording.
 	d.pause = widget.NewButton(labelPause, u.onToggle)
 	d.mineNow = widget.NewButton(labelMineNowShort, u.onMineNowToggle)
@@ -177,19 +208,10 @@ func (u *uiApp) newDashboard() *dashboard {
 	// Two rows, not one: at the body text size people can read, the buttons
 	// and the four presets no longer fit side by side in the window, and
 	// squeezed together they drew over each other.
-	footer := container.NewVBox(
+	return container.NewVBox(
 		container.NewHBox(sectionLabel("Kindness"), d.kindness),
 		left,
 	)
-
-	body := container.NewBorder(
-		container.NewVBox(header, tiles),
-		container.NewVBox(details, footer),
-		nil, nil,
-		plot,
-	)
-	d.object = container.NewPadded(body)
-	return d
 }
 
 // showPowerTile keeps the power tile only where the package energy counter

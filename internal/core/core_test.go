@@ -14,6 +14,7 @@ import (
 
 	"github.com/kind-miner/kind-miner/internal/config"
 	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/kind-miner/kind-miner/internal/hub"
 	"github.com/kind-miner/kind-miner/internal/nodes"
 	"github.com/kind-miner/kind-miner/internal/nodo"
 	"github.com/kind-miner/kind-miner/internal/stats"
@@ -257,4 +258,72 @@ func readPID(t *testing.T, path string) int {
 func alive(pid int) bool {
 	p, err := os.FindProcess(pid)
 	return err == nil && p.Signal(syscall.Signal(0)) == nil
+}
+
+// Shutdown is also what cleans up after a Start that failed part-way, and the
+// front-ends may call it again on their way out, so every watch it ends must
+// be ended exactly once however many times it runs.
+func TestShutdownEndsEveryWatchOnce(t *testing.T) {
+	s := New(config.Defaults())
+	watches := map[string]*chan struct{}{
+		"sidechain health": &s.islandStop,
+		"advisory":         &s.advisoryStop,
+		"Nodo settings":    &s.nodoStop,
+		"local node":       &s.localWatchStop,
+		"household":        &s.hhStop,
+	}
+	running := map[string]chan struct{}{}
+	for name, w := range watches {
+		*w = make(chan struct{})
+		running[name] = *w
+	}
+
+	s.Shutdown()
+	s.Shutdown() // closing any of them twice would panic
+
+	for name, stop := range running {
+		select {
+		case <-stop:
+		default:
+			t.Errorf("the %s watch was not told to stop", name)
+		}
+		if *watches[name] != nil {
+			t.Errorf("the %s watch's stop channel was kept after it was closed", name)
+		}
+	}
+}
+
+// A Nodo's RPC login opens the Nodo's own monerod. On a Nodo mining in
+// another mode p2pool follows someone else's node, and the login must not go
+// with it.
+func TestP2PoolSignsInOnlyToTheNodosOwnNode(t *testing.T) {
+	const login = "nodo:secret"
+	cases := []struct {
+		name    string
+		onNodo  nodo.Node
+		profile bool
+		want    string
+	}{
+		{"the Nodo profile signs in to the Nodo's own node", nodo.Node{RPCLogin: login}, true, login},
+		{"a Nodo following another node keeps its login to itself", nodo.Node{RPCLogin: login}, false, ""},
+		{"an ordinary machine has no login to give", nodo.Node{}, false, ""},
+	}
+	remote := nodes.Node{Host: "127.0.0.1", RPCPort: 41000, ZMQPort: 41001}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := New(config.Defaults())
+			opts := s.p2poolOptions(remote, "", c.onNodo, c.profile, hub.Identity{})
+			if opts.RPCLogin != c.want {
+				t.Errorf("RPCLogin = %q, want %q", opts.RPCLogin, c.want)
+			}
+		})
+	}
+}
+
+func TestEndWatchWithNothingRunning(t *testing.T) {
+	var stop chan struct{}
+	endWatch(&stop) // must not panic on a watch that never started
+	if stop != nil {
+		t.Error("endWatch made a channel")
+	}
 }

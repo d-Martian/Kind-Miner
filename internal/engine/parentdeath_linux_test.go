@@ -18,9 +18,12 @@ func TestEnginesDieWithKindMiner(t *testing.T) {
 	if os.Getenv("KM_TEST_DYING_PARENT") == "1" {
 		// The stand-in for kind-miner: start a child the way every engine
 		// does, say which, and die without stopping it, as a crash would.
-		cmd := exec.Command("sleep", "60")
-		dieWithUs(cmd)
-		if err := cmd.Start(); err != nil {
+		// The adjustment replaces the attributes outright, as one that set
+		// anything else there would, and must not cost the signal.
+		cmd, _, _, err := launch("sleep", "sleep", []string{"60"}, func(c *exec.Cmd) {
+			c.SysProcAttr = &syscall.SysProcAttr{}
+		})
+		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
 		}

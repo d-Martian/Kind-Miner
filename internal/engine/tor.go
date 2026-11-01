@@ -124,23 +124,10 @@ func (t *Tor) Start(timeout time.Duration) error {
 
 	args := []string{"--defaults-torrc", emptyDefaults, "-f", torrc}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = torEnv(bin)
-	dieWithUs(cmd)
-
-	stdout, err := cmd.StdoutPipe()
+	cmd, stdout, cancel, err := launch("tor", bin, args, func(c *exec.Cmd) { c.Env = torEnv(bin) })
 	if err != nil {
-		cancel()
 		t.mu.Unlock()
 		return err
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		t.mu.Unlock()
-		return fmt.Errorf("starting tor: %w", err)
 	}
 
 	t.cmd = cmd
