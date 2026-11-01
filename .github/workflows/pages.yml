@@ -25,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag for the apt repository (defaults to the latest release)
+        description: Release tag for the apt repository (defaults to the newest published release, pre-releases included)
         required: false
 
 permissions:
@@ -62,6 +62,15 @@ jobs:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           mkdir debs
+          # With no tag, gh asks for /releases/latest, which is never a
+          # pre-release, and every release so far is one. A deploy from an
+          # advisory push would find no .debs and replace the whole site
+          # without the apt repository every Nodo upgrades from. Publishing
+          # deploys a release's .debs whether it is a pre-release or not, so
+          # the newest published one is what the repository already holds.
+          if [ -z "$TAG" ]; then
+            TAG="$(gh release list --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          fi
           if gh release download ${TAG:+"$TAG"} --pattern 'kind-minerd_*.deb' --pattern 'kind-minerd_*.deb.sha256' --pattern 'kind-miner_*.deb' --pattern 'kind-miner_*.deb.sha256' --dir debs; then
             (cd debs && sha256sum -c ./*.sha256)
             echo "apt=true" >> "$GITHUB_OUTPUT"
