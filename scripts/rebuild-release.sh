@@ -30,7 +30,8 @@
 # file with NAME's own PGP key, one of those in rebuilders/NAME.asc (for the
 # maintainer, a link to dMartian.pub) whose secret half is in this machine's
 # gpg: the co-signature, someone with a machine that is not GitHub's
-# vouching for those bytes. --upload attaches both to the release.
+# vouching for those bytes. --upload attaches both to the release. Both
+# look for that key before rebuilding anything, and stop if it cannot sign.
 #
 # The key need not be on the machine that rebuilds. Rebuild without --sign
 # on the Nodo, copy its SHA256SUMS.rebuilt-NAME-arm64 to the machine that has
@@ -73,18 +74,40 @@ done
 [[ $SIGN == 0 ]] || command -v gpg >/dev/null || { echo "--sign needs gpg" >&2; exit 1; }
 [[ $UPLOAD == 0 ]] || command -v gh >/dev/null || { echo "--upload needs gh" >&2; exit 1; }
 
-# sign FILE: the co-signature, then, if asked, the upload.
-sign() {
-	local sums="$1" keys="$ROOT/rebuilders/${WHO}.asc" fpr="" f
+# signing_key: set FPR to the first of NAME's keys this machine can sign
+# with, or say why there is none and stop. It runs before the rebuild, not
+# after: a rebuild takes twenty minutes, and a key that was never going to
+# sign should not cost them.
+signing_key() {
+	local keys="$ROOT/rebuilders/${WHO}.asc" fprs f err
 	[[ -f "$keys" ]] || { echo "no key for ${WHO}: add their PGP public key as ${keys}" >&2; exit 1; }
-	# The first of NAME's keys this machine can sign with.
-	for f in $(gpg --batch --with-colons --import-options show-only --import "$keys" 2>/dev/null |
-		awk -F: '$1 == "pub" { want = 1 } $1 == "fpr" && want { print $10; want = 0 }'); do
-		if gpg --batch --list-secret-keys "$f" >/dev/null 2>&1; then fpr="$f"; break; fi
+	# Ask gpg whether it can read its keyring at all before trusting its answer
+	# about any one key. A gpg that cannot open the keyring fails every lookup
+	# just as a missing key does. Signing rc9 hit exactly that: a lock left by a
+	# gpg that died, whose PID a reboot gave to a kernel thread, so gpg waited
+	# on it and gave up. The script said "no secret half" and sent the hunt to
+	# a key that was there all along.
+	if ! err="$(gpg --batch --list-secret-keys 2>&1 >/dev/null)"; then
+		echo "gpg cannot read this machine's keyring, so this cannot sign. gpg said:" >&2
+		printf '%s\n' "$err" | sed 's/^/  /' >&2
+		exit 1
+	fi
+	fprs="$(gpg --batch --with-colons --import-options show-only --import "$keys" 2>/dev/null |
+		awk -F: '$1 == "pub" { want = 1 } $1 == "fpr" && want { print $10; want = 0 }')" || true
+	[[ -n "$fprs" ]] || { echo "gpg found no public key in ${keys}" >&2; exit 1; }
+	for f in $fprs; do
+		if gpg --batch --list-secret-keys "$f" >/dev/null 2>&1; then FPR="$f"; return; fi
 	done
-	[[ -n "$fpr" ]] || { echo "none of the keys in ${keys} has its secret half in this machine's gpg" >&2; exit 1; }
-	gpg --batch --yes --local-user "$fpr" --armor --detach-sign --output "$sums.asc" "$sums"
-	echo "signed $(basename "$sums") as ${WHO} (${fpr})" >&2
+	echo "none of the keys in ${keys} has its secret half in this machine's gpg" >&2
+	exit 1
+}
+
+# sign FILE: the co-signature, with the key signing_key found, then, if
+# asked, the upload.
+sign() {
+	local sums="$1"
+	gpg --batch --yes --local-user "$FPR" --armor --detach-sign --output "$sums.asc" "$sums"
+	echo "signed $(basename "$sums") as ${WHO} (${FPR})" >&2
 	if [[ $UPLOAD == 1 ]]; then
 		gh release upload "$TAG" -R "$REPO" "$sums" "$sums.asc" --clobber
 	fi
@@ -95,6 +118,10 @@ if [[ -n "$SIGN_FILE" ]]; then
 	SHA256SUMS.rebuilt-"$WHO"-amd64 | SHA256SUMS.rebuilt-"$WHO"-arm64) ;;
 	*) echo "$SIGN_FILE is not a SHA256SUMS.rebuilt-${WHO}-ARCH file (pass --as to sign as someone else)" >&2; exit 2 ;;
 	esac
+fi
+FPR=""
+[[ $SIGN == 0 ]] || signing_key
+if [[ -n "$SIGN_FILE" ]]; then
 	sign "$SIGN_FILE"
 	exit 0
 fi
