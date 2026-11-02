@@ -51,7 +51,10 @@ mkdir -p "${OUTDIR}"
 # no pax atime/ctime headers, and gzip without its mtime byte. The recipe lives
 # in scripts/package.sh so this script, the Makefile, and CI share one copy.
 bash "$(dirname "$0")/package.sh" tar "${OUTPUT}" "${STAGE}" "${PREFIX}"
-bash "$(dirname "$0")/package.sh" sha256 "${OUTPUT}"
+# From inside OUTDIR, so the checksum names the file bare, like every other
+# release asset's: written from here it named dist/…, and sha256sum -c on a
+# downloaded copy looked for it there.
+(cd "${OUTDIR}" && bash "${SCRIPT_DIR}/package.sh" sha256 "$(basename "${OUTPUT}")")
 
 echo ""
 echo "✓ ${OUTPUT}"

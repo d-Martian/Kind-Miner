@@ -9,8 +9,27 @@ permissions:
   contents: write   # needed to create the GitHub Release and upload assets
 
 jobs:
+  # The draft every job below uploads to, created once, first, with its
+  # notes. Left to the upload steps, the first job to finish created it, and
+  # only that call writes notes: for rc9 it was the GPL source job, whose
+  # step never asked for them, and the release published with none.
+  draft:
+    name: Draft release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Create the draft with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        # A re-run finds the draft already there, and uploads into it.
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+              --generate-notes --title "$GITHUB_REF_NAME"
+
   build:
     name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: draft
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -102,7 +121,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true                  # review before publishing
-          generate_release_notes: true # auto-fills from commit messages
           files: |
             ${{ env.ASSET }}
             ${{ env.CHECKSUM }}
@@ -115,6 +133,7 @@ jobs:
   # ---------------------------------------------------------------------------
   linux-gui:
     name: linux/amd64 (pinned container)
+    needs: draft
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -145,6 +164,7 @@ jobs:
   # ---------------------------------------------------------------------------
   sources:
     name: GPL source for the bundled engines
+    needs: draft
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -161,7 +181,7 @@ jobs:
       - name: Make the vendored source tarball
         run: |
           bash scripts/vendor-tarball.sh "${GITHUB_REF_NAME}"
-          mv dist/kind-miner-*-vendored-src.tar.gz dist/source/
+          mv dist/kind-miner-*-vendored-src.tar.gz dist/kind-miner-*-vendored-src.tar.gz.sha256 dist/source/
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -170,6 +190,7 @@ jobs:
           files: |
             dist/source/*.tar.gz
             dist/source/*.tar.xz
+            dist/source/*.sha256
             dist/source/SHA256SUMS-source
 
   # ---------------------------------------------------------------------------
@@ -212,7 +233,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deb:
     name: kind-minerd ${{ matrix.arch }} .deb
-    needs: xmrig
+    needs: [draft, xmrig]
     strategy:
       fail-fast: false
       matrix:
@@ -265,7 +286,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deb-desktop:
     name: kind-miner amd64 desktop .deb
-    needs: xmrig
+    needs: [draft, xmrig]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -310,7 +331,7 @@ jobs:
   # ---------------------------------------------------------------------------
   appimage:
     name: linux/amd64 AppImage
-    needs: xmrig
+    needs: [draft, xmrig]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -358,14 +379,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          generate_release_notes: true
           files: |
             *.AppImage
             *.AppImage.sha256
 
   flatpak:
     name: linux/amd64 Flatpak
-    needs: xmrig
+    needs: [draft, xmrig]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -418,7 +438,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          generate_release_notes: true
           files: |
             *.flatpak
             *.flatpak.sha256
