@@ -12,7 +12,7 @@ FROM docker.io/library/alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c
 # instead of quietly compiling with a different toolchain. Re-pin (and
 # re-verify the binary hashes) when that happens.
 RUN apk add --no-cache \
-      gcc=14.2.0-r6 g++=14.2.0-r6 musl-dev=1.2.5-r12 binutils=2.44-r3 \
+      gcc=14.2.0-r6 g++=14.2.0-r6 musl-dev=1.2.5-r13 binutils=2.44-r3 \
       make=4.4.1-r3 cmake=3.31.7-r1 linux-headers=6.14.2-r0 \
       autoconf=2.72-r1 automake=1.17-r1 libtool=2.5.4-r1 \
       perl=5.40.4-r0 bash=5.2.37-r0 patch=2.8-r0
