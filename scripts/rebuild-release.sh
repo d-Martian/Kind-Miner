@@ -118,6 +118,9 @@ if [[ -n "$SIGN_FILE" ]]; then
 	SHA256SUMS.rebuilt-"$WHO"-amd64 | SHA256SUMS.rebuilt-"$WHO"-arm64) ;;
 	*) echo "$SIGN_FILE is not a SHA256SUMS.rebuilt-${WHO}-ARCH file (pass --as to sign as someone else)" >&2; exit 2 ;;
 	esac
+	# A signature on an empty list vouches for nothing, yet looks like a
+	# co-signature on the release page.
+	[[ -s "$SIGN_FILE" ]] || { echo "$SIGN_FILE is empty: it reproduced nothing, so there is nothing to sign" >&2; exit 1; }
 fi
 FPR=""
 [[ $SIGN == 0 ]] || signing_key
@@ -132,8 +135,31 @@ case "$(uname -m)" in
 	*) echo "this rebuilder covers x86_64 and aarch64; this is $(uname -m)" >&2; exit 1 ;;
 esac
 for tool in podman git; do command -v "$tool" >/dev/null || { echo "needs $tool" >&2; exit 1; }; done
-[[ -n "$AGAINST" ]] || command -v gh >/dev/null || command -v curl >/dev/null ||
-	{ echo "needs gh or curl to download the release (or --against DIR)" >&2; exit 1; }
+
+# Make sure the release can be seen from here before spending twenty minutes
+# rebuilding it. A draft is visible only to a logged-in maintainer: rc10's
+# arm64 rebuild ran on a Nodo with plain curl while the release was still a
+# draft, found "not in the release" for a file that was there, and left an
+# empty list behind. gh is used only when it can actually see the release
+# (installed but not logged in, it cannot download at all); otherwise curl,
+# which sees what anyone sees.
+FETCH=""
+if [[ -z "$AGAINST" ]]; then
+	if command -v gh >/dev/null && gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+		FETCH=gh
+	elif command -v curl >/dev/null; then
+		curl -fsS -o /dev/null "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" 2>/dev/null || {
+			echo "release ${TAG} cannot be seen from this machine: either it does not exist yet, or it is" >&2
+			echo "still a draft, which only a logged-in maintainer can see. Publish it, run this where gh" >&2
+			echo "is logged in, or pass --against DIR with the release's files copied into DIR." >&2
+			exit 1
+		}
+		FETCH=curl
+	else
+		echo "needs gh or curl to download the release (or --against DIR)" >&2
+		exit 1
+	fi
+fi
 
 WORK="$(mktemp -d)"
 trap 'git -C "$ROOT" worktree remove --force "$WORK/src" >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
@@ -168,7 +194,7 @@ for f in "$OUT"/*; do
 	name="$(basename "$f")"
 	if [[ -n "$AGAINST" ]]; then
 		cp "$AGAINST/$name" "$PUB/" 2>/dev/null || true
-	elif command -v gh >/dev/null; then
+	elif [[ $FETCH == gh ]]; then
 		gh release download "$TAG" -R "$REPO" -p "$name" -D "$PUB" 2>/dev/null || true
 	else
 		curl -fsSL -o "$PUB/$name" "https://github.com/${REPO}/releases/download/${TAG}/${name}" 2>/dev/null || rm -f "$PUB/$name"
@@ -177,13 +203,14 @@ done
 
 SUMS="$ROOT/SHA256SUMS.rebuilt-${WHO}-${ARCH}"
 : > "$SUMS"
+rm -f "$SUMS.asc" # signed an earlier list, never this one
 bad=0
 printf '\n%-52s %s\n' "file" "result" >&2
 for f in "$OUT"/*; do
 	name="$(basename "$f")"
 	mine="$(sha256sum "$f" | cut -d' ' -f1)"
 	if [[ ! -f "$PUB/$name" ]]; then
-		printf '%-52s %s\n' "$name" "not in the release" >&2
+		printf '%-52s %s\n' "$name" "not in ${AGAINST:-the release}" >&2
 		bad=1
 		continue
 	fi
@@ -196,8 +223,15 @@ for f in "$OUT"/*; do
 		bad=1
 	fi
 done
-LC_ALL=C sort -k2 -o "$SUMS" "$SUMS"
 echo >&2
+if [[ ! -s "$SUMS" ]]; then
+	# An empty list is easy to mistake for a finished one and copy off to be
+	# signed, so leave none.
+	rm -f "$SUMS"
+	echo "nothing was reproduced, so no SHA256SUMS.rebuilt-${WHO}-${ARCH} was written" >&2
+	exit 1
+fi
+LC_ALL=C sort -k2 -o "$SUMS" "$SUMS"
 echo "$SUMS" >&2
 
 if [[ $bad == 1 ]]; then
