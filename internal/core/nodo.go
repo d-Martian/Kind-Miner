@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/nodes"
-	"github.com/kind-miner/kind-miner/internal/nodo"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/nodes"
+	"github.com/d-Martian/Kind-Miner/internal/nodo"
 )
 
 // detectNodo looks for a Nodo's configuration and records it, returning its

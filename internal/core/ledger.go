@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // ledgerSaveInterval is how often the per-minute hashrate record is written.

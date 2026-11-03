@@ -12,7 +12,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/config"
 )
 
 // First-run setup: one field and one button.

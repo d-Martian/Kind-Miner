@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/systray"
 
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 // systrayTray drives fyne.io/systray directly, on Linux and the BSDs.

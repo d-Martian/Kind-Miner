@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
 )
 
 // The user's pause outlives the process. kind-miner starts with the computer,

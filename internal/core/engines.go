@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
-	"github.com/kind-miner/kind-miner/internal/engine"
-	"github.com/kind-miner/kind-miner/internal/rollout"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/rollout"
 )
 
 // Every packaged release ships its engines: the AppImage and the Flatpak in

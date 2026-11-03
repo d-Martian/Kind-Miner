@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
 )
 
 const wallet = "4AdUndXHHZ6cfufTMvppY6JwXNouMBzSkbLYfpAV5Usx3skxNgYeYTRj5UzqtReoS44qo9mtmXCqY45DJ852K5Jv2684Rge"

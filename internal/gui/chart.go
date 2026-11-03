@@ -11,8 +11,8 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // The dashboard chart: everything else's CPU against the miner's, with the

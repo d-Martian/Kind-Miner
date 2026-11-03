@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 type fakePressure struct{ pressured, known bool }

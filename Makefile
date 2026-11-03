@@ -1,5 +1,5 @@
 BINARY   := kind-miner
-MODULE   := github.com/kind-miner/kind-miner
+MODULE   := github.com/d-Martian/Kind-Miner
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 # Commit time — a deterministic clock for any timestamped packaging step.

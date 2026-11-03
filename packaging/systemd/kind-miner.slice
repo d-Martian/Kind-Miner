@@ -10,7 +10,7 @@
 
 [Unit]
 Description=kind-miner: mining that yields to everything else
-Documentation=https://github.com/kind-miner/kind-miner
+Documentation=https://github.com/d-Martian/Kind-Miner
 Before=slices.target
 
 [Slice]

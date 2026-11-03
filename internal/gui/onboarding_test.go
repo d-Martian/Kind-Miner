@@ -6,8 +6,8 @@ import (
 
 	"fyne.io/fyne/v2/test"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 // First-run setup asks one question and discloses one more. Everything else it

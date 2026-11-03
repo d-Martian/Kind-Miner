@@ -7,7 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 // fyneTray renders through Fyne's own tray, used where kind-miner cannot run

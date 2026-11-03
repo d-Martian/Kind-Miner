@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/engine"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // rates are the three hashrates the tray quotes. "now" is the headline figure

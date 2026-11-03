@@ -31,12 +31,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/core"
-	"github.com/kind-miner/kind-miner/internal/hub"
-	"github.com/kind-miner/kind-miner/internal/instance"
-	"github.com/kind-miner/kind-miner/internal/nodo"
-	"github.com/kind-miner/kind-miner/internal/rollout"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/core"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/instance"
+	"github.com/d-Martian/Kind-Miner/internal/nodo"
+	"github.com/d-Martian/Kind-Miner/internal/rollout"
 )
 
 var version = "dev"

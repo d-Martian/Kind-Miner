@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
 )
 
 func TestHubServing(t *testing.T) {

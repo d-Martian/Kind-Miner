@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/hub"
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 var testHubCode = hub.Pairing{Host: "192.168.8.192", StratumPort: 18087, APIPort: 18088,

@@ -14,12 +14,12 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/kind-miner/kind-miner/internal/autostart"
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/core"
-	"github.com/kind-miner/kind-miner/internal/instance"
-	"github.com/kind-miner/kind-miner/internal/kindness"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/autostart"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/core"
+	"github.com/d-Martian/Kind-Miner/internal/instance"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
 )
 
 const appID = instance.AppID

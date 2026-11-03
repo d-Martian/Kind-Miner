@@ -12,14 +12,14 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/core"
-	"github.com/kind-miner/kind-miner/internal/engine"
-	"github.com/kind-miner/kind-miner/internal/hub"
-	"github.com/kind-miner/kind-miner/internal/kindness"
-	"github.com/kind-miner/kind-miner/internal/monitor"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/core"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // The dashboard: what the miner is doing, what it has earned, and — the part

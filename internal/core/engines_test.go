@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/config"
 )
 
 // bundle lays out a packaged build the way the AppImage and Flatpak do:
