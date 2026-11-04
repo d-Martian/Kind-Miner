@@ -17,15 +17,17 @@ wallet: ""
 #
 #   p2pool-local   Runs p2pool locally, connects to your own monerod node.
 #                  Fully trustless and private. Requires ~180 GB disk space.
-#                  On a Nodo this is detected automatically: p2pool follows
-#                  the Nodo's own monerod with the ports and RPC login set in
-#                  Nodo's UI, skips its own RandomX dataset (--no-randomx),
-#                  and restarts itself when those settings change there.
+#                  On a Monero Nodo (https://moneronodo.com/) this is
+#                  detected automatically: p2pool follows the Nodo's own
+#                  monerod with the ports and RPC login set in Nodo's UI,
+#                  skips its own RandomX dataset (--no-randomx), and
+#                  restarts itself when those settings change there.
 #                  Kind Miner only reads Nodo's config; it never writes to it.
 #
-#   hub            Runs only XMRig, mining to a household hub — another
-#                  machine in the house (usually a Nodo) running kind-minerd
-#                  with hub.serve on. Set hub_code below. The hub pays its
+#   hub            Runs only XMRig, sending its work to a hub: kind-minerd
+#                  on another computer on your network (usually a Nodo)
+#                  with hub.serve on, running P2Pool for every computer that
+#                  mines to it. Set hub_code below. The hub pays its
 #                  owner's wallet; wallet above may be left blank.
 #
 # The old "pool" mode (XMRig straight to a Stratum pool) has been removed: it
@@ -40,7 +42,7 @@ mode: p2pool-remote
 # Remote monerod RPC URL (used when mode: p2pool-remote).
 # Leave blank to choose automatically: a synced monerod on this machine if
 # there is one (RPC on 127.0.0.1:18081, ZMQ on 18083 — start monerod with
-# --zmq-pub tcp://127.0.0.1:18083), otherwise the kind-miner Nodo over Tor —
+# --zmq-pub tcp://127.0.0.1:18083), otherwise kind-miner's default node over Tor —
 # switching to the local node, without a restart, once it is ready.
 # Only .onion nodes go through Tor; any other node here is reached directly,
 # because Tor would slow every block template for no privacy gain.
@@ -180,7 +182,7 @@ temp_limit_celsius: 95
 # Takes effect on restart.
 mine_on_nodo: false
 
-# --- Household hub ---
+# --- Hub ---
 
 # hub mode: the code `kind-minerd pair` prints on the hub, or that Settings →
 # Connection → Find a hub filled in when this desktop set the hub up. It carries the
@@ -193,9 +195,10 @@ worker_name: ""
 # hub_owner_token appears only on the desktop that set the hub up, and lets it
 # change the wallet the hub pays. Keep it to yourself.
 
-# Serve p2pool to the rest of the house: stratum over TLS on stratum_port and
-# the household statistics on api_port, both on every interface. Off by
-# default. Needs manage_p2pool; one hub pays one wallet — this config's.
+# Serve p2pool to other computers on the network: stratum over TLS on
+# stratum_port and the hub's statistics on api_port, both on every
+# interface. Off by default. Needs manage_p2pool; one hub pays one
+# wallet — this config's.
 # Needs a restart; then run `kind-minerd pair` for the code.
 #
 # onion also publishes both ports as a Tor onion service, from a Tor of the

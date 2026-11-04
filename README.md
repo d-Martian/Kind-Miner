@@ -23,7 +23,7 @@ Monero is one of the last coins where CPU mining is meaningful. RandomX was desi
 
 [P2Pool](https://p2pool.io) changed the economics. Before P2Pool, solo mining was a lottery with months between wins; pools required accounts and took fees. P2Pool is a sidechain on top of Monero: your miner works on the P2Pool sharechain, and when any P2Pool miner finds a Monero block, every participant gets a proportional payout **directly from the coinbase output**. There is no pool wallet. No payout threshold. No operator who knows your address. Your coins arrive in your wallet exactly like solo-mined coins — they just arrive more often.
 
-Kind-miner connects your machine to this infrastructure over Tor. The node doesn't see your IP. The sidechain pays you directly. Nobody in the pipeline knows who you are.
+By default kind-miner follows a Monero node run as a Tor hidden service, and sends P2Pool's own traffic over Tor as well, so neither that node nor other P2Pool nodes see your IP. Point it at your own node instead and it connects directly, which is faster. Either way the sidechain pays you directly, and nobody in between holds your coins.
 
 ---
 
@@ -43,7 +43,7 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 - **Gives memory back.** When the machine starts thrashing — sustained memory stalls, or free memory below a small margin — the miner is stopped outright, not just paused, so its ~2 GB returns at once. It starts again only after ten calm minutes with room to spare.
 - **Works without a tray.** Stock GNOME has no system tray. There, closing the window keeps kind-miner mining in the background (inside a Flatpak it asks the desktop for permission first), and opening kind-miner again from your apps brings the running window back, with a Quit button in it. On every desktop, launching it a second time shows the one already running instead of starting a second miner.
 - **Snooze from the tray.** Pause for an hour, until tomorrow morning (06:00), or until you resume — and a snooze ends by itself. A pause survives a restart, so a reboot never brings the miner back early.
-- **Tor-native.** Routes through a Tor hidden service by default. Your IP is not visible to the node operator.
+- **Tor for onion nodes.** The default node is a Tor hidden service, and with it P2Pool's traffic goes over Tor too, so neither the node nor other P2Pool nodes see your IP. A node on your own network, or any other address that isn't `.onion`, is reached directly: faster, but that node and P2Pool's peers then see your IP.
 - **Zero-setup dependencies.** The AppImage, the Flatpak and the .deb ship their engines — XMRig built from source with kind-miner's patches, the pinned P2Pool, and (on the desktop) Tor — so nothing is downloaded when you first run it: no request to GitHub before Tor is up, nothing for antivirus to block. A bare binary with nothing beside it downloads the same pinned, SHA256-verified builds instead. You need: a Monero wallet address.
 - **Graphical or terminal.** Double-click for a full window — four-step setup, live dashboard, and a tabbed settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.
 - **Single native binary.** No installer, no runtime, no Python, no Electron. `./kind-miner` and you're done.
@@ -63,7 +63,7 @@ Then pick the install that fits the machine:
 | Your machine | Install | Updates |
 |---|---|---|
 | A Debian, Ubuntu or Mint desktop (x86-64) | [apt](#debian-ubuntu-and-mint-apt): `kind-miner` | automatic, weekly |
-| A box with no screen — a Nodo, a home server — on Debian or Ubuntu (x86-64 or arm64) | [apt](#debian-ubuntu-and-mint-apt): `kind-minerd` | automatic, weekly |
+| A box with no screen — a [Monero Nodo](https://moneronodo.com/), a home server — on Debian or Ubuntu (x86-64 or arm64) | [apt](#debian-ubuntu-and-mint-apt): `kind-minerd` | automatic, weekly |
 | Any other Linux desktop (x86-64) | [AppImage or Flatpak](#other-linux-desktops-appimage-or-flatpak) | download each new release |
 | macOS or Windows | [an archive](#macos-windows-or-a-bare-linux-binary) | download each new release |
 
@@ -102,17 +102,19 @@ sudo apt install ./$DEB tor
 Then open **kind-miner** from your applications menu and carry on at
 [First run](#first-run).
 
-**The headless service**, downloaded over Tor (`torsocks` comes with `tor`):
+**The headless service:**
 
 ```sh
-sudo apt update && sudo apt install tor
+sudo apt update
 VERSION=0.2.0-rc10
 DEB=kind-minerd_${VERSION}_$(dpkg --print-architecture).deb
-torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
-torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
 sha256sum -c $DEB.sha256        # go on only if this prints "OK"
 sudo apt install ./$DEB
 ```
+
+apt installs `tor` along with it.
 
 The service starts at once and waits to be set up: see
 [Headless: kind-minerd](#headless-kind-minerd).
@@ -321,9 +323,9 @@ either way:
 
 - **From a desktop.** On a machine running kind-miner, open **Settings →
   Connection → Find a hub**. It finds the box on your network and sets it up
-  as the household hub, paying the address on the Payout tab, and switches
+  as a hub, paying the address on the Payout tab, and switches
   the desktop to mine through it. See
-  [One hub for the house](#one-hub-for-the-house).
+  [One hub for several computers](#one-hub-for-several-computers).
 - **Over SSH.** On the box, run `sudo kind-minerd init --address 4…`. It
   writes the service's config with the hub on, restarts the service, and
   prints the pairing code for your other machines. Add `--no-hub` to have it
@@ -381,7 +383,7 @@ copy (the file in `/etc` stays root-only), and is first to go if memory runs
 out.
 
 Skip `init` and the service waits to be set up from a desktop instead: see
-[One hub for the house](#one-hub-for-the-house).
+[One hub for several computers](#one-hub-for-several-computers).
 
 ### The advisory
 
@@ -408,10 +410,10 @@ their complete source beside the binaries:
   the shipped binary offline, bit for bit.
 - `p2pool_source-v<version>.tar.xz` — p2pool's own source release, unchanged.
 
-### One hub for the house
+### One hub for several computers
 
-A Nodo already follows the chain; it can run p2pool once for every machine in
-the house, and the desktops then run only the miner.
+A Nodo already follows the chain, so it can run P2Pool once for every computer
+that mines to it, and those computers then run only the miner.
 
 **From the desktop.** Start `kind-minerd` on the Nodo with no config. On a
 desktop, open **Settings → Connection → Find a hub**: it finds the Nodo on the
@@ -438,15 +440,15 @@ reads. Later, `sudo kind-minerd pair` prints the code again, and
 xmrig.
 
 The pairing code starts `km1-`. On a desktop, open **Settings →
-Connection**, choose mode `hub` and paste it — this is also how the rest of
-the house pairs with a hub set up from a desktop, using the code in that
+Connection**, choose mode `hub` and paste it — this is also how other
+computers pair with a hub set up from a desktop, using the code in that
 desktop's settings: that machine now runs xmrig
-alone, and its dashboard and tray show the household's shares, payouts and
-devices. For a box running plain xmrig, `--name` prints the `pools` block for
+alone, and its dashboard and tray show the hub's shares, payouts and
+computers. For a box running plain xmrig, `--name` prints the `pools` block for
 its `config.json`; its `user` is the name it shows under in `kind-minerd
 status`.
 
-Stratum is served over TLS on port 18087 and the household statistics on
+Stratum is served over TLS on port 18087 and the hub's statistics on
 18088 (TCP; UDP 18088 answers the desktop's search), with a self-signed
 certificate made once on the hub. Devices trust it by
 the fingerprint in the code, not by any authority: a machine on your network
@@ -533,7 +535,7 @@ wallet: "4..."
 mode: p2pool-remote
 
 # p2pool-remote: which monerod node p2pool connects to.
-# Leave blank to choose automatically: a synced local monerod with ZMQ, else the kind-miner Nodo over Tor.
+# Leave blank to choose automatically: a synced local monerod with ZMQ, else the default node over Tor.
 remote_node: ""
 
 # P2Pool sidechain: "nano" (the default; its 18-hour window keeps even a
@@ -573,7 +575,7 @@ mine_on_nodo: false
 hub_code: ""
 worker_name: ""
 
-# Be the household hub (headless boxes): serve p2pool on the LAN over TLS.
+# Be a hub (headless boxes): serve p2pool on the LAN over TLS.
 hub:
   serve: false
   stratum_port: 18087
@@ -606,12 +608,12 @@ kind-miner only rewrites the keys it owns, so anything you add by hand is kept.
 ### `p2pool-remote` (default)
 
 ```
-XMRig → p2pool (local) ──Tor──→ monerod Nodo (.onion) → Monero network
+XMRig → p2pool (local) ──Tor──→ default node (.onion) → Monero network
 ```
 
-P2Pool runs on your machine. It connects to the kind-miner Nodo — a dedicated Monero full node running as a Tor hidden service, with ZMQ enabled for p2pool. Your IP is not exposed to the node. Payouts arrive directly in your wallet from the P2Pool sharechain. No fee.
+P2Pool runs on your machine. By default it follows kind-miner's [default node](#the-default-node) — a Monero full node running as a Tor hidden service, with ZMQ enabled for p2pool — so the node never sees your IP. Payouts arrive directly in your wallet from the P2Pool sharechain. No fee.
 
-**A node on this machine comes first.** With no `remote_node` set, kind-miner looks for a monerod already running here before anything else. If it is synced and publishes ZMQ (`monerod --zmq-pub tcp://127.0.0.1:18083`), p2pool uses it directly and Tor is never started. If it is still syncing, has no ZMQ, or wants an RPC login, the log says which and what to change, and mining uses the Nodo in the meantime. kind-miner keeps checking once a minute and moves p2pool onto the local node, off Tor, as soon as it is ready — or if you start one later — without a restart.
+**A node on this machine comes first.** With no `remote_node` set, kind-miner looks for a monerod already running here before anything else. If it is synced and publishes ZMQ (`monerod --zmq-pub tcp://127.0.0.1:18083`), p2pool uses it directly and Tor is never started. If it is still syncing, has no ZMQ, or wants an RPC login, the log says which and what to change, and mining uses the default node in the meantime. kind-miner keeps checking once a minute and moves p2pool onto the local node, off Tor, as soon as it is ready — or if you start one later — without a restart.
 
 **Tor only for onions.** A `remote_node` on your LAN or the open internet is reached directly; only a `.onion` address goes through Tor, which kind-miner starts for you when it is needed.
 
@@ -628,10 +630,10 @@ Set `manage_monerod: true` to have kind-miner start and stop `monerod` for you.
 ### `hub`
 
 ```
-XMRig ──TLS, LAN──→ p2pool on the household hub → the hub's monerod
+XMRig ──TLS, LAN──→ p2pool on the hub → the hub's monerod
 ```
 
-Only XMRig runs here; the hub (see [One hub for the house](#one-hub-for-the-house)) does the rest, and pays its owner's wallet. No Tor, because nothing leaves the LAN from this machine.
+Only XMRig runs here; the hub (see [One hub for several computers](#one-hub-for-several-computers)) does the rest, and pays its owner's wallet. No Tor, because nothing leaves the LAN from this machine.
 
 ### No `pool` mode
 
@@ -725,10 +727,10 @@ shown.
 |---|---|
 | **Monero** | Transaction amounts, sender, receiver hidden by default via RingCT + stealth addresses. No transaction graph. Coins are fungible. |
 | **P2Pool** | The pool operator does not exist. Payouts come from the Monero protocol directly. No operator knows your wallet address or hashrate contribution. |
-| **Tor** | The node operator does not see your IP. Your mining activity is not linkable to your network location. |
-| **kind-miner** | No telemetry, no analytics, no update pings, no account, no registration. The binary talks to one place: the node, over Tor. |
+| **Tor** | With a `.onion` node (the default), the node operator and other P2Pool nodes do not see your IP, so your mining is not linkable to your network location. A node at any other address is reached directly, and it and P2Pool's peers do see your IP. |
+| **kind-miner** | No telemetry, no analytics, no account, no registration. Besides the node and P2Pool's peers, it fetches one thing: the signed advisory, once a day, over Tor, and not at all when Tor isn't running. A bare binary with no engines beside it also downloads its pinned engines once, on first run. The macOS, Windows and plain Linux archives download upstream XMRig, which keeps its 1% minimum donation and makes that connection to XMRig's pool directly; the .deb, AppImage and Flatpak ship XMRig built without it. |
 
-If you use `p2pool-remote` (the default), the only party who sees anything about you is P2Pool's public sharechain — which shows that *someone* with *some* hashrate submitted a share. Your wallet address appears in the coinbase output of blocks you help find, exactly as it would if you solo-mined.
+If you use `p2pool-remote` with the default `.onion` node, the only party who sees anything about you is P2Pool's public sharechain — which shows that *someone* with *some* hashrate submitted a share. Your wallet address appears in the coinbase output of blocks you help find, exactly as it would if you solo-mined.
 
 ---
 
@@ -760,9 +762,9 @@ go test ./...
 
 ---
 
-## The Nodo
+## The default node
 
-The default remote node is a dedicated Monero full node (the "Nodo") running as a Tor hidden service:
+With no `remote_node` set and no node on this machine, kind-miner follows one Monero full node, run for this project as a Tor hidden service:
 
 ```
 44yfclfdry66bbpyolux6xmfkcapage7khfk5sax7xmmylwwmjaqukad.onion

@@ -37,7 +37,7 @@ func (n Node) onion() bool {
 }
 
 // communityNodes lists the p2pool-compatible monerod nodes used by kind-miner.
-// The Nodo is the only entry: it is the primary backbone of this project and
+// The default node is the only entry: it is run for this project, and is
 // confirmed to expose ZMQ on port 18083 via its Tor hidden service.
 // Most public monerod nodes do NOT expose ZMQ and are therefore unusable for
 // p2pool — we don't list nodes we can't verify.
@@ -178,11 +178,11 @@ func SelectBest(customAddr string) (Node, error) {
 				"or run your own: mode: p2pool-local.")
 	}
 
-	// Prefer the Nodo (TorOnly) when Tor is available; otherwise pick fastest.
+	// Prefer the default node (TorOnly) when Tor is available; otherwise pick fastest.
 	sort.Slice(winners, func(i, j int) bool {
 		ni, nj := winners[i].node, winners[j].node
 		if ni.TorOnly != nj.TorOnly {
-			return ni.TorOnly // Tor/Nodo first
+			return ni.TorOnly // the onion default node first
 		}
 		return winners[i].latency < winners[j].latency
 	})
@@ -197,7 +197,7 @@ func SelectBest(customAddr string) (Node, error) {
 // firewalled, and waiting longer only delays trying the next one.
 //
 // The RPC check once had a fixed 15 s of its own. A just-started Tor needed
-// longer than that for its first circuit to the kind-miner Nodo, so a node
+// longer than that for its first circuit to the default node, so a node
 // that was up failed the probe, and selection sat out a 30 s retry on a
 // perfectly good node.
 const (

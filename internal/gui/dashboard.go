@@ -554,7 +554,7 @@ func (d *dashboard) refreshHub() {
 	if !ok {
 		return
 	}
-	d.linkDetail.Set("Household", householdLine(h.Workers))
+	d.linkDetail.Set("Mining to the hub", householdLine(h.Workers))
 	d.linkDetail.Set("P2Pool chain", h.Chain)
 	if !h.StatsOK {
 		return

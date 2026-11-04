@@ -85,10 +85,35 @@ const (
 	WiFiPowerSaveOff = "Off"
 )
 
+// The connection settings. Two claims here were wrong and have to stay out:
+// that the remote node is always reached over Tor (only a .onion one is; a
+// node on the user's own network is reached directly), and that "remote"
+// means someone else's node — the user may run the remote node themselves,
+// on a Nodo across the room.
+const (
+	connectionModeNote = "p2pool-remote follows a Monero node on another computer, so nothing else needs installing here. p2pool-local follows a Monero node on this computer: new blocks reach P2Pool without crossing a network, which can perform better, but the node needs about 180 GB of disk for the blockchain. hub runs only the miner here and sends its work to a hub."
+	remoteNodeNote     = "Any Monero node with ZMQ enabled, as host:port. A .onion address is reached over Tor, so the node never sees your IP address; any other address, such as a node on your own network, is reached directly, which is faster. Left blank, it uses a node on this computer if there is one, and otherwise kind-miner's default node, over Tor."
+)
+
 // hubModeNote explains the hub mode in the connection settings. It says whose
-// wallet is paid, because that is the thing a household member pairing their
-// laptop most needs to know before they do it.
-const hubModeNote = "Choose mode \"hub\" to mine to another machine in the house — usually a Nodo running kind-minerd. Find a hub sets up a new one to pay the address on the Payout tab; for one already set up, paste the code its owner has here, or that kind-minerd pair prints on it. This computer then runs only the miner, and the hub pays its owner's wallet."
+// wallet is paid, because that is the thing someone pairing their laptop most
+// needs to know before they do it, and it says what a hub is, because "mine to
+// another machine" did not.
+const hubModeNote = "In hub mode this computer runs only the miner and sends its work to a hub: kind-minerd on another computer on your network, such as a Nodo, running P2Pool for every computer that mines to it. The hub pays its own wallet, not this computer's Payout address. Find a hub looks for one on this network, and can set a new one up to pay the address on the Payout tab. To join a hub that is already set up, paste its pairing code, which sudo kind-minerd pair prints on the hub."
+
+// Sidechain advice: how often this computer finds a share, how long each one
+// counts, and so how much of the time one is counting. The last figure is the
+// one that decides whether the chain suits the machine, so it is said in
+// words rather than left as "the payout window", which nobody new can read.
+const (
+	chainMeasuring  = "Still measuring how often this computer finds a share."
+	chainShareEvery = "This computer finds a P2Pool share about every %s, and each share counts toward payouts for %s"
+	chainAlways     = ", so it practically always has one counting when P2Pool finds a block."
+	chainSometimes  = ", so it has one counting %s of the time P2Pool finds a block."
+	chainSuits      = " %s suits this computer."
+	chainMove       = " The %s sidechain has easier shares: this computer would find them more often, and have one counting more of the time."
+	chainSmallest   = " nano already has the easiest shares of the three sidechains."
+)
 
 // Find a hub: the search, and setting a new hub up.
 const (
@@ -106,7 +131,7 @@ const (
 	findHubNotSet  = "not set up yet"
 	// findHubNeedsAddress: setting a hub up is what asks for the address,
 	// once, and the Payout tab is where this desktop already keeps it.
-	findHubNeedsAddress = "Enter your Monero address on the Payout tab first: the hub will pay it for every device in the house."
+	findHubNeedsAddress = "Enter your Monero address on the Payout tab first: the hub pays it for every computer that mines to it."
 	// findHubConfirm names the address and the certificate. This is the one
 	// moment the desktop takes the hub's certificate on trust; from here on
 	// it accepts that certificate only.
