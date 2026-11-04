@@ -11,9 +11,9 @@ Section: net
 Priority: optional
 Homepage: https://github.com/d-Martian/Kind-Miner
 Description: Monero miner for a Nodo or any box with no screen
- kind-minerd mines Monero on P2Pool over Tor using only the CPU nothing else
- wants, and can serve p2pool to every other machine in the house. It is set
- up from the kind-miner desktop app, or over SSH with kind-minerd init.
+ kind-minerd mines Monero on P2Pool using only the CPU nothing else wants,
+ and can serve p2pool to other computers on your network. It is set up from
+ the kind-miner desktop app, or over SSH with kind-minerd init.
  .
  The package ships xmrig and p2pool, upgrades itself weekly from its own
  repository over Tor, and goes back to the previous engines if new ones fail
