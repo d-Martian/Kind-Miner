@@ -6,13 +6,15 @@ import (
 
 	"github.com/d-Martian/Kind-Miner/internal/autostart"
 	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/instance"
 )
 
 // autostartOptions describes kind-miner's login entry. Reusing appID keeps the
 // desktop file, LaunchAgent label, and registry value aligned with the rest of
-// the app's identity.
+// the app's identity; the former IDs' entries are cleared when it is set, so a
+// renamed kind-miner does not start twice at login.
 func autostartOptions() autostart.Options {
-	return autostart.Options{ID: appID, Name: "kind-miner"}
+	return autostart.Options{ID: appID, Name: "kind-miner", Formerly: instance.FormerIDs}
 }
 
 // SetAutostart turns the OS login entry on or off.

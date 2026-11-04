@@ -37,7 +37,7 @@ func main() {
 	// One kind-miner per session: a second one would be a second miner on the
 	// same cores. A second launch instead shows the running one's window —
 	// on a desktop with no tray, the only way back to it.
-	status, release := instance.Claim(gui.AppID, gui.Activate)
+	status, release := instance.Claim(gui.AppID, instance.FormerIDs, gui.Activate)
 	if status == instance.Running {
 		log.Println("kind-miner is already running; showing its window.")
 		return

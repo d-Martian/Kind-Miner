@@ -52,6 +52,9 @@ func disable(o Options) error {
 	return nil
 }
 
+// forget removes another ID's entry, as Disable would.
+func forget(o Options) error { return disable(o) }
+
 func enabled(o Options) (bool, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE)
 	if err != nil {

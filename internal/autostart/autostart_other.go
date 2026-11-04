@@ -7,6 +7,7 @@ import "errors"
 func enable(Options) error          { return errors.ErrUnsupported }
 func disable(Options) error         { return errors.ErrUnsupported }
 func enabled(Options) (bool, error) { return false, errors.ErrUnsupported }
+func forget(Options) error          { return nil }
 
 // Only a Flatpak needs permission to run without a window.
 func requestBackgroundPermission(Options, bool) error { return nil }

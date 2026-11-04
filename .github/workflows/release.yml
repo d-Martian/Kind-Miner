@@ -407,7 +407,7 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub \
             https://flathub.org/repo/flathub.flatpakrepo
           # Derive the runtime version from the manifest so the two can't drift.
-          RTV=$(grep "^runtime-version:" flatpak/io.github.kind_miner.KindMiner.yml \
+          RTV=$(grep "^runtime-version:" flatpak/io.github.d_Martian.KindMiner.yml \
             | sed "s/.*'\(.*\)'.*/\1/")
           flatpak install --user -y flathub \
             "org.freedesktop.Platform//${RTV}" \

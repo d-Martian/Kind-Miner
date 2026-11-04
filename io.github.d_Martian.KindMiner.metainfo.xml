@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.kind_miner.KindMiner</id>
+  <id>io.github.d_Martian.KindMiner</id>
+  <!-- The ID kind-miner shipped under until it moved to its owner's name.
+       Software centres treat the two as one app. -->
+  <replaces>
+    <id>io.github.kind_miner.KindMiner</id>
+  </replaces>
 
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
@@ -31,12 +36,12 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">io.github.kind_miner.KindMiner.desktop</launchable>
+  <launchable type="desktop-id">io.github.d_Martian.KindMiner.desktop</launchable>
 
   <url type="homepage">https://github.com/d-Martian/Kind-Miner</url>
   <url type="bugtracker">https://github.com/d-Martian/Kind-Miner/issues</url>
 
-  <developer id="io.github.kind_miner">
+  <developer id="io.github.d_martian">
     <name>dMartian</name>
   </developer>
 

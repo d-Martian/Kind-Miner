@@ -27,11 +27,25 @@ const (
 // AppID is kind-miner's reverse-DNS identity — the desktop file, the Flatpak
 // ID, and the single-instance bus name. The GUI and kind-minerd claim the same
 // name, so the two never mine side by side.
-const AppID = "io.github.kind_miner.KindMiner"
+const AppID = "io.github.d_Martian.KindMiner"
 
-// Claim tries to become the running instance for appID. activate is called,
-// on some goroutine, each time a later launch asks to be shown. release gives
-// the name up, for shutdown.
-func Claim(appID string, activate func()) (Status, func()) {
-	return claim(appID, activate)
+// FormerIDs are the identities kind-miner went by before AppID, newest first.
+// The first named a GitHub owner that never existed; the code lives under
+// d-Martian, which is what Flathub checks an io.github ID against.
+//
+// They are still claimed alongside AppID, because a rename is exactly when two
+// versions meet: the new Flatpak installs beside the old one rather than over
+// it, and an older kind-minerd keeps claiming the old name until its next
+// upgrade. Claiming only the new name, the two would each think they were
+// alone and mine at the same time.
+var FormerIDs = []string{"io.github.kind_miner.KindMiner"}
+
+// Claim tries to become the running instance for appID and every one of
+// former. activate is called, on some goroutine, each time a later launch asks
+// to be shown — under either name. release gives the names up, for shutdown.
+//
+// It is Running if any of the names is already held: by this version, or by an
+// older one that only knows a former name, which is then asked to show itself.
+func Claim(appID string, former []string, activate func()) (Status, func()) {
+	return claim(append([]string{appID}, former...), activate)
 }

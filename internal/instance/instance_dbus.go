@@ -26,32 +26,52 @@ func (a activator) Activate() *dbus.Error {
 	return nil
 }
 
-func claim(appID string, activate func()) (Status, func()) {
+func claim(ids []string, activate func()) (Status, func()) {
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
 		return Unavailable, func() {}
 	}
-	path := objectPath(appID)
-	if err := conn.Export(activator{activate}, path, appID); err != nil {
-		conn.Close()
-		return Unavailable, func() {}
-	}
-	reply, err := conn.RequestName(appID, dbus.NameFlagDoNotQueue)
-	if err != nil {
-		conn.Close()
-		return Unavailable, func() {}
-	}
-	if reply == dbus.RequestNameReplyPrimaryOwner || reply == dbus.RequestNameReplyAlreadyOwner {
-		return Held, func() {
-			conn.ReleaseName(appID)
+	// Answer under every name, so an older version's launcher, which only
+	// knows a former one, still brings this window forward.
+	for _, id := range ids {
+		if err := conn.Export(activator{activate}, objectPath(id), id); err != nil {
 			conn.Close()
+			return Unavailable, func() {}
 		}
 	}
-	// Someone else is the instance: ask it to come forward.
-	call := conn.Object(appID, path).Call(appID+".Activate", 0)
-	if call.Err != nil {
-		log.Printf("kind-miner is already running but did not answer (%v)", call.Err)
+	var held []string
+	for i, id := range ids {
+		reply, err := conn.RequestName(id, dbus.NameFlagDoNotQueue)
+		if err != nil {
+			if i == 0 {
+				conn.Close()
+				return Unavailable, func() {}
+			}
+			// A former name this process may not own: the current one still
+			// keeps two of this version apart, so carry on without it.
+			log.Printf("instance: could not claim the former name %s (%v)", id, err)
+			continue
+		}
+		if reply == dbus.RequestNameReplyPrimaryOwner || reply == dbus.RequestNameReplyAlreadyOwner {
+			held = append(held, id)
+			continue
+		}
+		// Someone else is the instance, under this name: give back what was
+		// taken and ask it to come forward.
+		for _, h := range held {
+			conn.ReleaseName(h)
+		}
+		call := conn.Object(id, objectPath(id)).Call(id+".Activate", 0)
+		if call.Err != nil {
+			log.Printf("kind-miner is already running but did not answer (%v)", call.Err)
+		}
+		conn.Close()
+		return Running, func() {}
 	}
-	conn.Close()
-	return Running, func() {}
+	return Held, func() {
+		for _, h := range held {
+			conn.ReleaseName(h)
+		}
+		conn.Close()
+	}
 }
