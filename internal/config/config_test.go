@@ -415,7 +415,7 @@ func TestConfigDir(t *testing.T) {
 		{
 			// The sandbox's own XDG_CONFIG_HOME would hide the shared config.
 			"the Flatpak keeps the directory it is granted",
-			"/home/a/.var/app/io.github.kind_miner.KindMiner/config", true, nil,
+			"/home/a/.var/app/io.github.d_Martian.KindMiner/config", true, nil,
 			"/home/a/.config/kind-miner",
 		},
 		{

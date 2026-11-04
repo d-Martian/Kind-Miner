@@ -306,7 +306,7 @@ func runDaemon() error {
 	if os.Getenv("INVOCATION_ID") == "" && serviceActive() {
 		return errors.New("kind-minerd is already running as the system service; see what it is doing with: kind-minerd status")
 	}
-	status, release := instance.Claim(instance.AppID, nil)
+	status, release := instance.Claim(instance.AppID, instance.FormerIDs, nil)
 	if status == instance.Running {
 		return errors.New("kind-miner is already running in this session")
 	}

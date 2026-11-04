@@ -22,7 +22,7 @@ func withTempDir(t *testing.T) string {
 }
 
 func testOptions() Options {
-	return Options{ID: "io.github.kind_miner.KindMiner", Name: "kind-miner", Exec: "/usr/bin/kind-miner"}
+	return Options{ID: "io.github.d_Martian.KindMiner", Name: "kind-miner", Exec: "/usr/bin/kind-miner"}
 }
 
 func TestEnableDisableRoundTrip(t *testing.T) {
@@ -130,5 +130,62 @@ func TestEnabledUnknownInFlatpak(t *testing.T) {
 
 	if _, err := Enabled(testOptions()); err != ErrStateUnknown {
 		t.Errorf("Enabled() error = %v, want ErrStateUnknown", err)
+	}
+}
+
+// After a rename the old login entry is still on disk; left there, it starts
+// a second copy at every login.
+func TestARenamedEntryReplacesTheOldOne(t *testing.T) {
+	dir := withTempDir(t)
+	o := testOptions()
+	o.Formerly = []string{"io.github.kind_miner.KindMiner"}
+	old := filepath.Join(dir, o.Formerly[0]+".desktop")
+	current := filepath.Join(dir, o.ID+".desktop")
+	if err := os.WriteFile(old, []byte("[Desktop Entry]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if on, err := Enabled(o); err != nil || on {
+		t.Fatalf("only the old entry exists, yet Enabled() = %v, %v; want false, so it gets re-registered", on, err)
+	}
+	if err := Enable(o); err != nil {
+		t.Fatalf("Enable() error = %v", err)
+	}
+	if _, err := os.Stat(current); err != nil {
+		t.Errorf("the new entry was not written: %v", err)
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Errorf("the old entry is still there after Enable (stat: %v)", err)
+	}
+
+	if err := os.WriteFile(old, []byte("[Desktop Entry]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Disable(o); err != nil {
+		t.Fatalf("Disable() error = %v", err)
+	}
+	for _, p := range []string{current, old} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s is still there after Disable (stat: %v)", filepath.Base(p), err)
+		}
+	}
+}
+
+// Inside a Flatpak the portal acts only for the calling app, so removing a
+// former ID through it would switch off the current one. It must not try.
+func TestAFlatpakLeavesTheOldEntryAlone(t *testing.T) {
+	dir := withTempDir(t)
+	inFlatpak = func() bool { return true }
+	old := filepath.Join(dir, "io.github.kind_miner.KindMiner.desktop")
+	if err := os.WriteFile(old, []byte("[Desktop Entry]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o := testOptions()
+	o.Formerly = []string{"io.github.kind_miner.KindMiner"}
+	if err := forgetFormer(o); err != nil {
+		t.Fatalf("forgetFormer() error = %v", err)
+	}
+	if _, err := os.Stat(old); err != nil {
+		t.Errorf("the sandbox reached the host's old entry: %v", err)
 	}
 }

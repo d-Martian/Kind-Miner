@@ -30,6 +30,11 @@ type Options struct {
 	Exec string
 	// Args are passed to Exec at login.
 	Args []string
+	// Formerly lists IDs the app registered under before ID. Their entries
+	// are removed whenever this one is set: on macOS and Windows nothing else
+	// stops two copies starting at login, so a leftover entry would be a
+	// second miner every morning.
+	Formerly []string
 }
 
 // resolve fills in defaults that depend on the running process.
@@ -53,7 +58,7 @@ func Enable(o Options) error {
 	if err != nil {
 		return err
 	}
-	return enable(o)
+	return errors.Join(enable(o), forgetFormer(o))
 }
 
 // Disable removes the login registration. Disabling when nothing is registered
@@ -63,7 +68,18 @@ func Disable(o Options) error {
 	if err != nil {
 		return err
 	}
-	return disable(o)
+	return errors.Join(disable(o), forgetFormer(o))
+}
+
+// forgetFormer removes the entries o.Formerly would have left behind.
+func forgetFormer(o Options) error {
+	var errs []error
+	for _, id := range o.Formerly {
+		f := o
+		f.ID, f.Formerly = id, nil
+		errs = append(errs, forget(f))
+	}
+	return errors.Join(errs...)
 }
 
 // Enabled reports whether the app is currently registered to start at login.

@@ -95,6 +95,16 @@ func disable(o Options) error {
 	return nil
 }
 
+// forget removes another ID's entry. Inside a Flatpak it cannot: the host's
+// autostart directory is out of reach, and the portal only acts for the
+// calling app's own ID, so asking it would switch off this app instead.
+func forget(o Options) error {
+	if inFlatpak() {
+		return nil
+	}
+	return disable(o)
+}
+
 func enabled(o Options) (bool, error) {
 	if inFlatpak() {
 		// The background portal can request autostart but has no method to read

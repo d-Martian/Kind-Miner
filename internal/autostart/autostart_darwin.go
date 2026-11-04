@@ -81,6 +81,9 @@ func disable(o Options) error {
 	return nil
 }
 
+// forget removes another ID's entry, as Disable would.
+func forget(o Options) error { return disable(o) }
+
 func enabled(o Options) (bool, error) {
 	path, err := plistPath(o)
 	if err != nil {

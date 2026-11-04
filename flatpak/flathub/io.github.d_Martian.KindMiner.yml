@@ -1,6 +1,6 @@
 # Flathub submission manifest.
 #
-# Differs from ../io.github.kind_miner.KindMiner.yml (the dev/CI manifest,
+# Differs from ../io.github.d_Martian.KindMiner.yml (the dev/CI manifest,
 # which builds the local working tree) only in its source: Flathub builds run
 # offline and from a fixed, hashed artifact, so this consumes the reproducible
 # vendored source tarball produced by scripts/vendor-tarball.sh. The Go modules
@@ -11,7 +11,7 @@
 # release asset, then set `url` + `sha256` below AND bump BUILD_VERSION in the
 # build's -ldflags to the same tag. The tarball is deterministic, so the sha256
 # is stable for a given tag.
-app-id: io.github.kind_miner.KindMiner
+app-id: io.github.d_Martian.KindMiner
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
@@ -74,16 +74,24 @@ modules:
           ./cmd/kind-miner
       # Desktop integration
       - install -Dm644 kind-miner.desktop
-          /app/share/applications/io.github.kind_miner.KindMiner.desktop
-      - sed -i 's/^Icon=.*/Icon=io.github.kind_miner.KindMiner/'
-          /app/share/applications/io.github.kind_miner.KindMiner.desktop
+          /app/share/applications/io.github.d_Martian.KindMiner.desktop
+      - sed -i 's/^Icon=.*/Icon=io.github.d_Martian.KindMiner/'
+          /app/share/applications/io.github.d_Martian.KindMiner.desktop
+      # kind-miner was io.github.kind_miner.KindMiner before it moved to its owner's
+      # name. Flatpak moves the old app's data (~/.var/app/<old id>) across
+      # only when the rename arrives as a repository's end-of-life rebase; a
+      # bundle installed by hand starts afresh, and the sandbox cannot reach
+      # the old directory to copy it either (tested with flatpak 1.18). The
+      # release notes give the one command that carries the data over.
+      - echo 'X-Flatpak-RenamedFrom=io.github.kind_miner.KindMiner.desktop;'
+          >> /app/share/applications/io.github.d_Martian.KindMiner.desktop
       - install -Dm644 assets/icons/app-512.png
-          /app/share/icons/hicolor/512x512/apps/io.github.kind_miner.KindMiner.png
+          /app/share/icons/hicolor/512x512/apps/io.github.d_Martian.KindMiner.png
       - install -Dm644 assets/icons/app-256.png
-          /app/share/icons/hicolor/256x256/apps/io.github.kind_miner.KindMiner.png
+          /app/share/icons/hicolor/256x256/apps/io.github.d_Martian.KindMiner.png
       # AppStream metadata
-      - install -Dm644 io.github.kind_miner.KindMiner.metainfo.xml
-          /app/share/metainfo/io.github.kind_miner.KindMiner.metainfo.xml
+      - install -Dm644 io.github.d_Martian.KindMiner.metainfo.xml
+          /app/share/metainfo/io.github.d_Martian.KindMiner.metainfo.xml
     sources:
       # Reproducible vendored source tarball (see header). strip-components
       # defaults to 1, removing the kind-miner-<version>/ prefix so paths above
