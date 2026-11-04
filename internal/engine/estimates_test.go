@@ -84,8 +84,8 @@ func TestShareIntervalAndPayoutWindow(t *testing.T) {
 }
 
 // Occupancy is the fraction of pool blocks a miner is in line to be paid from.
-// It saturates at 1: once shares arrive faster than the window empties, mining
-// harder shortens the wait for a block rather than widening the share of them.
+// Shares arrive at random, so it approaches 1 only when several land per
+// window; one per window on average is in it about 63% of the time.
 func TestWindowOccupancy(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -93,15 +93,31 @@ func TestWindowOccupancy(t *testing.T) {
 		want  float64
 	}{
 		{
-			name:  "shares faster than the window are continuous presence",
+			// A share every 200s against a 6h window: over a hundred per
+			// window, so all but never out of it.
+			name:  "shares far faster than the window are as good as continuous",
 			stats: P2PoolStats{SidechainDifficulty: 12_000_000, MinerHashrate15m: 60_000, PPLNSWindowSize: 2160},
-			want:  1,
+			want:  1 - math.Exp(-108),
 		},
 		{
-			// A share every 12h against a 6h window: present half the time.
-			name:  "shares slower than the window leave gaps",
+			// The case that read as nonsense: one share per window on
+			// average is not one always in it, since they arrive at random.
+			name:  "a share every window's length is in it about 63% of the time",
+			stats: P2PoolStats{SidechainDifficulty: 129_600_000, MinerHashrate15m: 6000, PPLNSWindowSize: 2160},
+			want:  1 - math.Exp(-1),
+		},
+		{
+			// A share every 12h against a 6h window.
+			name:  "shares slower than the window leave long gaps",
 			stats: P2PoolStats{SidechainDifficulty: 259_200_000, MinerHashrate15m: 6000, PPLNSWindowSize: 2160},
-			want:  0.5,
+			want:  1 - math.Exp(-0.5),
+		},
+		{
+			// nano: 30s blocks, so its 2160-block window is 18h. A share
+			// every 16h17m, the figure the settings window showed.
+			name:  "a share every 16h on nano is in its 18h window two-thirds of the time",
+			stats: P2PoolStats{SidechainDifficulty: 351_420_000, MinerHashrate15m: 6000, PPLNSWindowSize: 2160, BlockTime: 30 * time.Second},
+			want:  1 - math.Exp(-18*3600/58_570.0),
 		},
 	}
 	for _, tt := range tests {
@@ -191,9 +207,10 @@ func TestNanoPayoutWindow(t *testing.T) {
 	if !ok || window != 18*time.Hour {
 		t.Errorf("nano PayoutWindow = %v, want 18h", window)
 	}
-	// A share every 12 hours keeps a nano miner in the window all the time.
-	if occ, _ := nano.WindowOccupancy(); occ != 1 {
-		t.Errorf("nano occupancy = %v, want 1 for a share every 12h in an 18h window", occ)
+	// A share every 12 hours against the 18-hour window: since shares come at
+	// random, one is in the window 1 − e^(−1.5) ≈ 78% of the time, not always.
+	if occ, _ := nano.WindowOccupancy(); math.Abs(occ-(1-math.Exp(-1.5))) > 1e-9 {
+		t.Errorf("nano occupancy = %v, want %v for a share every 12h in an 18h window", occ, 1-math.Exp(-1.5))
 	}
 	if _, change := nano.SuggestedChain("nano"); change {
 		t.Error("suggested leaving nano for a miner it suits")

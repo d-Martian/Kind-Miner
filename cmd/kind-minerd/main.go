@@ -66,7 +66,7 @@ func main() {
 	configPath := fs.String("config", "", "path to config file")
 	address := fs.String("address", "", "Monero payout address (init)")
 	force := fs.Bool("force", false, "overwrite an existing config (init)")
-	noHub := fs.Bool("no-hub", false, "don't serve the household hub (init, for the service)")
+	noHub := fs.Bool("no-hub", false, "don't serve as a hub (init, for the service)")
 	asJSON := fs.Bool("json", false, "machine-readable output (status)")
 	name := fs.String("name", "", "device name for a plain-xmrig config (pair)")
 	host := fs.String("host", "", "address devices reach this hub at (pair; default: this machine's LAN address)")

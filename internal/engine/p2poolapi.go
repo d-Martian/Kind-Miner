@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -315,9 +316,14 @@ func (s P2PoolStats) blockTime() time.Duration {
 // share in the PPLNS payout window — in other words, the share of pool blocks
 // it is in line to be paid from.
 //
-// It saturates at 1: once shares arrive faster than the window empties, the
-// miner is continuously in the window and mining harder shortens the wait for a
-// block rather than increasing the fraction of them that pay.
+// Shares arrive at random, not on a timetable: at a mean interval T they are a
+// Poisson process, so the chance that at least one landed in the last W is
+// 1 − e^(−W/T). It used to be W/T capped at 1, which called a share every 16
+// hours against nano's 18-hour window "continuously" in the window; it is in
+// there about two-thirds of the time. Mining harder still has diminishing
+// returns here, which is the part the old cap had right: past a few shares per
+// window the fraction is near 1, and more hashrate shortens the wait for a
+// block rather than raising the fraction of them that pay.
 func (s P2PoolStats) WindowOccupancy() (float64, bool) {
 	shareEvery, ok := s.ShareInterval()
 	if !ok {
@@ -327,10 +333,7 @@ func (s P2PoolStats) WindowOccupancy() (float64, bool) {
 	if !ok {
 		return 0, false
 	}
-	if shareEvery <= window {
-		return 1, true
-	}
-	return float64(window) / float64(shareEvery), true
+	return 1 - math.Exp(-float64(window)/float64(shareEvery)), true
 }
 
 // SuggestedChain names the sidechain that suits this miner's hashrate, and

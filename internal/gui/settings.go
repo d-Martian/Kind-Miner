@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -34,6 +35,9 @@ type settingsForm struct {
 	hubCode  *widget.Entry
 	worker   *widget.Entry
 	hubNote  *widget.Label
+	// The connection tab's groups, each shown only for the modes that use
+	// it; see showFieldsFor.
+	nodeBox, chainBox, hubBox fyne.CanvasObject
 	// ownerToken is this desktop's say over the hub it set up, for the
 	// pairing code ownerCode; see ownerTokenFor.
 	ownerToken, ownerCode string
@@ -241,17 +245,42 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 func chainAdvice(st engine.P2PoolStats, current string) string {
 	shareEvery, ok := st.ShareInterval()
 	if !ok {
-		return "Still measuring how often this machine lands a share."
+		return chainMeasuring
+	}
+	window, okWindow := st.PayoutWindow()
+	occupancy, okOccupancy := st.WindowOccupancy()
+	if !okWindow || !okOccupancy {
+		return chainMeasuring
+	}
+	text := fmt.Sprintf(chainShareEvery, formatShareEvery(shareEvery), formatETA(window))
+	// formatPercent would round anything from 99.5% up to "100%", a certainty
+	// that random share arrivals never give.
+	if occupancy >= 0.995 {
+		text += chainAlways
+	} else {
+		text += fmt.Sprintf(chainSometimes, formatPercent(occupancy))
 	}
 	suggested, change := st.SuggestedChain(current)
-	if !change {
-		return fmt.Sprintf(
-			"You land a share %s, which keeps you in the payout window continuously. %s suits this machine.",
-			formatETA(shareEvery), current)
+	switch {
+	case change:
+		text += fmt.Sprintf(chainMove, suggested)
+	case current == "nano" && shareEvery > window:
+		// It used to say nano suited the machine here too, whatever the
+		// numbers, because there is no smaller chain to suggest.
+		text += chainSmallest
+	case occupancy >= 0.9:
+		text += fmt.Sprintf(chainSuits, current)
 	}
-	return fmt.Sprintf(
-		"You land a share only %s, so you spend most of the payout window earning nothing. The %s chain would suit this machine better.",
-		formatETA(shareEvery), suggested)
+	return text
+}
+
+// formatShareEvery is formatETA for "about every …", which "under a minute"
+// does not fit.
+func formatShareEvery(d time.Duration) string {
+	if d < time.Minute {
+		return "minute"
+	}
+	return formatETA(d)
 }
 
 // ---- tabs ----
@@ -286,16 +315,9 @@ func (f *settingsForm) connectionTab(u *uiApp) fyne.CanvasObject {
 		}
 	}
 
-	return container.NewVBox(
-		sectionLabel("How to reach the Monero network"),
-		f.mode,
-		note("p2pool-remote follows a node over Tor and needs nothing installed. p2pool-local follows a monerod you run yourself: the private option, and the one we'd pick if you have the disk for it."),
-		sectionLabel("Remote node"),
-		f.nodeAddr,
-		note("Any monerod with ZMQ enabled. Blank uses the kind-miner Nodo, reached as a Tor hidden service so the node operator never sees your IP."),
-		sectionLabel("P2Pool sidechain"),
-		f.chain,
-		suggestion,
+	f.nodeBox = container.NewVBox(sectionLabel("Remote node"), f.nodeAddr, note(remoteNodeNote))
+	f.chainBox = container.NewVBox(sectionLabel("P2Pool sidechain"), f.chain, suggestion)
+	f.hubBox = container.NewVBox(
 		sectionLabel("Mine to a hub"),
 		f.hubNote,
 		widget.NewButton(findHubButton, func() { f.findHub(u.settingsWin) }),
@@ -303,6 +325,29 @@ func (f *settingsForm) connectionTab(u *uiApp) fyne.CanvasObject {
 		sectionLabel("This computer's name on the hub"),
 		f.worker,
 	)
+	f.mode.OnChanged = f.showFieldsFor
+	f.showFieldsFor(f.mode.Selected)
+
+	return container.NewVBox(
+		sectionLabel("How to reach the Monero network"),
+		f.mode,
+		note(connectionModeNote),
+		f.nodeBox,
+		f.chainBox,
+		f.hubBox,
+	)
+}
+
+// showFieldsFor shows the connection settings mode uses and hides the rest.
+// A field for a connection this computer is not making invites filling it in
+// without switching — a pairing code pasted while still on p2pool-remote, a
+// node address typed in hub mode, where the hub picks the node and the
+// sidechain for every computer on it.
+func (f *settingsForm) showFieldsFor(mode string) {
+	m := config.Mode(mode)
+	setVisible(f.nodeBox, m == config.ModeP2PoolRemote)
+	setVisible(f.chainBox, m != config.ModeHub)
+	setVisible(f.hubBox, m == config.ModeHub)
 }
 
 func (f *settingsForm) binariesTab() fyne.CanvasObject {
