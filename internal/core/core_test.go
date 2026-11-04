@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/engine"
-	"github.com/kind-miner/kind-miner/internal/hub"
-	"github.com/kind-miner/kind-miner/internal/nodes"
-	"github.com/kind-miner/kind-miner/internal/nodo"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/nodes"
+	"github.com/d-Martian/Kind-Miner/internal/nodo"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 func TestTorNeeded(t *testing.T) {

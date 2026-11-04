@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/engine"
-	"github.com/kind-miner/kind-miner/internal/kindness"
-	"github.com/kind-miner/kind-miner/internal/monitor"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // State represents the current mining activity level. It is a label for the

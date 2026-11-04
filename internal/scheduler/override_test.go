@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 // The point of "mine now" is that it is still kind: it skips only the wait for

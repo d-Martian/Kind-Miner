@@ -3,7 +3,7 @@ package gui
 import (
 	"fmt"
 
-	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
 )
 
 // Tray status lines and the mine-now menu labels.

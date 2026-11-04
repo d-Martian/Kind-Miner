@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
 )
 
 const (

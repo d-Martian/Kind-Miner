@@ -13,8 +13,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/kind-miner/kind-miner/internal/hub"
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 type Mode string

@@ -9,10 +9,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/core"
-	"github.com/kind-miner/kind-miner/internal/gui"
-	"github.com/kind-miner/kind-miner/internal/instance"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/core"
+	"github.com/d-Martian/Kind-Miner/internal/gui"
+	"github.com/d-Martian/Kind-Miner/internal/instance"
 )
 
 var version = "dev"

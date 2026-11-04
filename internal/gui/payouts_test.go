@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 func TestPayoutLines(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
 )
 
 // Memory is the one resource the duty cycle cannot give back. A suspended

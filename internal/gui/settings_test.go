@@ -11,9 +11,9 @@ import (
 
 	"fyne.io/fyne/v2/test"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/core"
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/core"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 // newSettingsTest is a desktop with a valid config and nothing saved yet,

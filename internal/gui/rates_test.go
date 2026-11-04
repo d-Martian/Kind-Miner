@@ -6,7 +6,7 @@ import (
 
 	"fyne.io/fyne/v2/test"
 
-	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
 )
 
 func TestFormatRates(t *testing.T) {

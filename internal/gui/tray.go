@@ -6,8 +6,8 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/kind-miner/kind-miner/internal/kindness"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
 )
 
 // The tray is computed, then rendered. trayView is everything it shows,

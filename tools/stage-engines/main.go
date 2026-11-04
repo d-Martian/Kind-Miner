@@ -25,7 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
 )
 
 func main() {

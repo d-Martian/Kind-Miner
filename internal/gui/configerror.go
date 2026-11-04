@@ -7,7 +7,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/config"
 )
 
 // RunConfigError shows a standalone window for an unreadable or invalid

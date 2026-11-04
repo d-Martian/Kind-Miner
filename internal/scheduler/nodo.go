@@ -4,8 +4,8 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
 )
 
 // Mining on a Nodo is mining as a guest on a machine with a job. The node —

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"log"
 
-	"github.com/kind-miner/kind-miner/internal/autostart"
-	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/autostart"
+	"github.com/d-Martian/Kind-Miner/internal/config"
 )
 
 // autostartOptions describes kind-miner's login entry. Reusing appID keeps the

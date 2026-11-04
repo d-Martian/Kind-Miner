@@ -8,10 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
-	"github.com/kind-miner/kind-miner/internal/core"
-	"github.com/kind-miner/kind-miner/internal/rollout"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/core"
+	"github.com/d-Martian/Kind-Miner/internal/rollout"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // The .deb lays its engines out beside the daemon: /opt/kind-miner/engines

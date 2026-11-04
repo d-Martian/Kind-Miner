@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/core"
+	"github.com/d-Martian/Kind-Miner/internal/core"
 )
 
 type fakeBringUp struct {

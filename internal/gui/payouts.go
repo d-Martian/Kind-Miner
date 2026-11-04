@@ -7,7 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // payoutsShown is how many payouts the tray lists.

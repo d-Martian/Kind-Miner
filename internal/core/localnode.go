@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/nodes"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/nodes"
 )
 
 // probeLocal is the local-node probe; a variable so tests can stand in for a
