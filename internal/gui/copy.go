@@ -92,7 +92,7 @@ const (
 // on a Nodo across the room.
 const (
 	connectionModeNote = "p2pool-remote follows a Monero node on another computer, so nothing else needs installing here. p2pool-local follows a Monero node on this computer: new blocks reach P2Pool without crossing a network, which can perform better, but the node needs about 180 GB of disk for the blockchain. hub runs only the miner here and sends its work to a hub."
-	remoteNodeNote     = "Any Monero node with ZMQ enabled, as host:port. A .onion address is reached over Tor, so the node never sees your IP address; any other address, such as a node on your own network, is reached directly, which is faster. Left blank, it uses a node on this computer if there is one, and otherwise the kind-miner Nodo over Tor."
+	remoteNodeNote     = "Any Monero node with ZMQ enabled, as host:port. A .onion address is reached over Tor, so the node never sees your IP address; any other address, such as a node on your own network, is reached directly, which is faster. Left blank, it uses a node on this computer if there is one, and otherwise kind-miner's default node, over Tor."
 )
 
 // hubModeNote explains the hub mode in the connection settings. It says whose

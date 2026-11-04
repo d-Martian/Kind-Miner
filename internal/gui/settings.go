@@ -165,7 +165,7 @@ func (u *uiApp) newSettingsForm(cfg *config.Config) *settingsForm {
 	f.chain.SetSelected(normaliseChain(cfg.P2PoolChain))
 
 	f.nodeAddr = widget.NewEntry()
-	f.nodeAddr.SetPlaceHolder("leave blank for the kind-miner Nodo, over Tor")
+	f.nodeAddr.SetPlaceHolder("leave blank for kind-miner's default node, over Tor")
 	f.nodeAddr.SetText(cfg.RemoteNode)
 
 	f.hubCode = widget.NewEntry()

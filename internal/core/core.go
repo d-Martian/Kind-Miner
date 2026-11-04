@@ -637,7 +637,7 @@ func StratumAddr() string {
 // For remote modes it ensures Tor is running before selecting a node, since
 // the primary node is only reachable via .onion. Retries up to 3 times with a
 // 30s delay to handle transient Tor circuit failures or a briefly-rebooting
-// Nodo.
+// node.
 func resolveNode(cfg *config.Config) (nodes.Node, error) {
 	applyAdvisoryNodes()
 	switch cfg.Mode {
