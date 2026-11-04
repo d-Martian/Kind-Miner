@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
 )
 
 // meteorLake155H is this repo's development machine as sysfs describes it:

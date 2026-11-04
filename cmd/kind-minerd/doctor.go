@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/monitor"
-	"github.com/kind-miner/kind-miner/internal/nodes"
-	"github.com/kind-miner/kind-miner/internal/nodo"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/nodes"
+	"github.com/d-Martian/Kind-Miner/internal/nodo"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
 )
 
 // doctor answers "why isn't it mining?" in one sentence. A headless box has

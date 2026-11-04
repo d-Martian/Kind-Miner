@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
 )
 
 func TestStateString(t *testing.T) {

@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/advisory"
+	"github.com/d-Martian/Kind-Miner/internal/advisory"
 )
 
 func main() {

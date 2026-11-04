@@ -3,7 +3,7 @@ package core
 import (
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/config"
 )
 
 func TestHoldsFromTwoSources(t *testing.T) {

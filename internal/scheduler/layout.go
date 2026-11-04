@@ -5,8 +5,8 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
 )
 
 // Layouts are the two sets of cores the miner runs on: a small one while

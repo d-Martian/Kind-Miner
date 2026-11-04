@@ -1,6 +1,6 @@
 package gui
 
-import "github.com/kind-miner/kind-miner/internal/config"
+import "github.com/d-Martian/Kind-Miner/internal/config"
 
 // ValidateAddress checks a Monero payout address — see config.CheckAddress —
 // and returns the matching message from copy.go, or "" if P2Pool can pay it.

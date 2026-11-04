@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/rollout"
+	"github.com/d-Martian/Kind-Miner/internal/rollout"
 )
 
 // pair lays out a packaged pair the way scripts/build-deb.sh does.

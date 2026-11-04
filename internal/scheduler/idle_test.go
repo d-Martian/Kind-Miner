@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/kindness"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // fakeIdle drives the idle gate without a desktop session.

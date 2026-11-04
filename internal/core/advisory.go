@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/advisory"
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
-	"github.com/kind-miner/kind-miner/internal/nodes"
+	"github.com/d-Martian/Kind-Miner/internal/advisory"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/nodes"
 )
 
 // The advisory is checked once a day, through Tor and never around it. Its

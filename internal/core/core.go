@@ -19,15 +19,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/engine"
-	"github.com/kind-miner/kind-miner/internal/hub"
-	"github.com/kind-miner/kind-miner/internal/monitor"
-	"github.com/kind-miner/kind-miner/internal/nodes"
-	"github.com/kind-miner/kind-miner/internal/nodo"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/monitor"
+	"github.com/d-Martian/Kind-Miner/internal/nodes"
+	"github.com/d-Martian/Kind-Miner/internal/nodo"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // stratumPort is the local port p2pool exposes and XMRig connects to.

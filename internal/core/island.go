@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
 )
 
 // An island is p2pool mining a sidechain of its own. It happens when p2pool

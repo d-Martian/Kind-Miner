@@ -3,7 +3,7 @@ package gui
 import (
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
 )
 
 func TestCountdownLabel(t *testing.T) {

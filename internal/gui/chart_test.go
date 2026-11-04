@@ -8,8 +8,8 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/kind-miner/kind-miner/internal/config"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/config"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // The chart is the dashboard's central claim — "the miner is not what is

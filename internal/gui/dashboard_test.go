@@ -4,12 +4,12 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
-	"github.com/kind-miner/kind-miner/internal/hub"
+	"github.com/d-Martian/Kind-Miner/internal/hub"
 	"strings"
 	"testing"
 
-	"github.com/kind-miner/kind-miner/internal/kindness"
-	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/d-Martian/Kind-Miner/internal/kindness"
+	"github.com/d-Martian/Kind-Miner/internal/scheduler"
 )
 
 // The header exists to answer one question — "am I mining?" — and a live run

@@ -1,4 +1,4 @@
-module github.com/kind-miner/kind-miner
+module github.com/d-Martian/Kind-Miner
 
 go 1.25.0
 

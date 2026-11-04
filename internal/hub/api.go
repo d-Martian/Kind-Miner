@@ -19,8 +19,8 @@ import (
 
 	"golang.org/x/net/proxy"
 
-	"github.com/kind-miner/kind-miner/internal/engine"
-	"github.com/kind-miner/kind-miner/internal/stats"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/stats"
 )
 
 // Household is what the hub tells a paired device: the p2pool statistics for

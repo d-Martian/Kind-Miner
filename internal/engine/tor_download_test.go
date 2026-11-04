@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kind-miner/kind-miner/internal/autoinstall"
-	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/d-Martian/Kind-Miner/internal/autoinstall"
+	"github.com/d-Martian/Kind-Miner/internal/engine"
 )
 
 // TestTorDownloadAndBootstrap exercises the full zero-install path: download and

@@ -16,7 +16,7 @@
 
 [Unit]
 Description=kind-miner headless daemon
-Documentation=https://github.com/kind-miner/kind-miner
+Documentation=https://github.com/d-Martian/Kind-Miner
 Wants=network-online.target
 After=network-online.target monerod.service tor.service
 
