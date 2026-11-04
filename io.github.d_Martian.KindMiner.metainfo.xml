@@ -11,28 +11,29 @@
   <project_license>MIT</project_license>
 
   <name>kind-miner</name>
-  <summary>Idle Monero CPU mining for always-on machines</summary>
+  <summary>Mine Monero with the CPU capacity available that you aren't using</summary>
 
   <description>
     <p>
-      kind-miner turns the idle cycles of an always-on desktop into Monero
-      hashrate. There is no account, no pool operator, and no fee — payouts
-      arrive directly in your own wallet via P2Pool's coinbase output.
+      kind-miner mines Monero with the part of your CPU nothing else is using,
+      and steps aside the moment you need it. There is no account, no pool
+      operator and no fee: it mines on P2Pool, which pays straight into your
+      own wallet.
     </p>
     <p>
-      It stays out of your way: every few seconds it measures CPU usage
-      (excluding its own threads) and throttles or suspends mining the moment
-      you start doing real work, resuming automatically when you stop. Mining
-      traffic is routed over Tor by default, so the node operator never sees
-      your IP.
+      Every two seconds it measures how busy the computer is, not counting
+      itself, and gives the miner only what is left under the ceiling you
+      choose. Until you step away from the keyboard it mines gently, and it
+      pauses on battery, for heat and for games. With the default node,
+      mining traffic goes over Tor, so the node never sees your IP address.
     </p>
     <p>Features:</p>
     <ul>
-      <li>Disappears under load via a four-gear scheduler (Full, Reduced, Minimal, Paused)</li>
-      <li>Configurable temperature ceiling and battery awareness</li>
-      <li>Tor-native: routes through Tor by default</li>
-      <li>Zero setup: XMRig and P2Pool are downloaded and SHA256-verified on first run</li>
-      <li>Graphical window that tucks into the system tray, or a terminal-only mode</li>
+      <li>Four kindness presets, from Ghost to Full, changeable from the tray</li>
+      <li>A chart that shows the miner stepping aside for your work</li>
+      <li>Pauses on battery, for heat and for games</li>
+      <li>Ships XMRig, P2Pool and Tor, so nothing is downloaded on first run</li>
+      <li>A window that tucks into the system tray</li>
     </ul>
   </description>
 

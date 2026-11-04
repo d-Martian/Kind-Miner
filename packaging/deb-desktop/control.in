@@ -11,9 +11,9 @@ Section: net
 Priority: optional
 Homepage: https://github.com/d-Martian/Kind-Miner
 Description: Monero miner that uses only the CPU you aren't using
- kind-miner mines Monero on P2Pool over Tor, in the background of a desktop
- you use, and steps aside the moment you need the machine. It has a window
- and a tray icon, and is set up from the window on first run.
+ kind-miner mines Monero on P2Pool in the background of a desktop you use,
+ and steps aside the moment you need the machine. It has a window and a tray
+ icon, and is set up from the window on first run.
  .
  The package ships xmrig, p2pool and Tor, and upgrades itself weekly from
  its own repository over Tor. It cannot be installed beside kind-minerd,

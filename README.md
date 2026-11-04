@@ -2,8 +2,9 @@
 
 # kind-miner
 
-**Idle Monero mining for always-on machines.**  
-No account. No pool operator. No fee. Your coins go directly to your wallet.
+**Mine Monero with the CPU capacity available that you aren't using.**  
+kind-miner steps aside the moment you need your computer, and pays straight
+into your own wallet — no account, no pool operator, no fee.
 
 **[Install](#install)** · **[First run](#first-run)** · [Headless boxes](#headless-kind-minerd) · [Configuration](#configuration) · [Releases](https://github.com/d-Martian/Kind-Miner/releases)
 
@@ -17,9 +18,9 @@ once, and only creeps back after it ends. (Demo data.)*
 
 ## The premise
 
-Your desktop is already on. The CPU is already drawing power. Those cycles are going nowhere — a modern machine at idle burns 60–120 W regardless of whether it's doing useful work or not.
+Most of the time a computer is on, most of its CPU is doing nothing: you are reading, typing, in a call, or away. kind-miner gives that spare capacity to Monero and hands it back the instant anything else wants it — on a laptop you use every day as much as on a server in a cupboard. It is not free: a busy CPU draws more power than an idle one, so whether mining pays depends on what your electricity costs. What it never costs you is a smooth desktop.
 
-Monero is one of the last coins where CPU mining is meaningful. RandomX was designed specifically to resist ASICs and favour commodity hardware. A single desktop at home running kind-miner puts real hashrate onto a network that needs it — and does so in a way that is private by default, trustless from end to end, and completely invisible when you actually need your machine.
+Monero is one of the last coins where CPU mining is meaningful. RandomX was designed specifically to resist ASICs and favour commodity hardware. A single computer running kind-miner puts real hashrate onto a network that needs it — and does so in a way that is private by default, trustless from end to end, and completely invisible when you actually need your machine.
 
 [P2Pool](https://p2pool.io) changed the economics. Before P2Pool, solo mining was a lottery with months between wins; pools required accounts and took fees. P2Pool is a sidechain on top of Monero: your miner works on the P2Pool sharechain, and when any P2Pool miner finds a Monero block, every participant gets a proportional payout **directly from the coinbase output**. There is no pool wallet. No payout threshold. No operator who knows your address. Your coins arrive in your wallet exactly like solo-mined coins — they just arrive more often.
 
