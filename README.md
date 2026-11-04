@@ -301,10 +301,6 @@ re-thread it would spend all its time re-initialising and never actually hash.
 Pausing keeps the dataset warm, gives smooth fractional control the thread count
 cannot, and hands idle cores straight back to your apps the instant it suspends.
 
-Upgrading from a version before kindness existed? Your `throttle_sensitivity`
-is migrated on first load — `high` → Ghost, `medium` → Polite, `low` →
-Balanced — and the dead key is dropped the next time the config is written.
-
 ---
 
 ## Headless: kind-minerd
