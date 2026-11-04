@@ -5,6 +5,14 @@
 **Idle Monero mining for always-on machines.**  
 No account. No pool operator. No fee. Your coins go directly to your wallet.
 
+**[Install](#install)** · **[First run](#first-run)** · [Headless boxes](#headless-kind-minerd) · [Configuration](#configuration) · [Releases](https://github.com/d-Martian/Kind-Miner/releases)
+
+![The kind-miner dashboard: mining at the Polite preset, with a chart of a burst of desktop work where the miner drops out of the way at once and then creeps back](assets/screenshots/dashboard.png)
+
+*The dashboard. The grey line is everything else on the machine, the orange
+line is the miner: when real work starts, the miner gets out of the way at
+once, and only creeps back after it ends. (Demo data.)*
+
 ---
 
 ## The premise
@@ -39,6 +47,221 @@ Kind-miner connects your machine to this infrastructure over Tor. The node doesn
 - **Zero-setup dependencies.** The AppImage, the Flatpak and the .deb ship their engines — XMRig built from source with kind-miner's patches, the pinned P2Pool, and (on the desktop) Tor — so nothing is downloaded when you first run it: no request to GitHub before Tor is up, nothing for antivirus to block. A bare binary with nothing beside it downloads the same pinned, SHA256-verified builds instead. You need: a Monero wallet address.
 - **Graphical or terminal.** Double-click for a full window — four-step setup, live dashboard, and a tabbed settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.
 - **Single native binary.** No installer, no runtime, no Python, no Electron. `./kind-miner` and you're done.
+
+---
+
+## Install
+
+**You need one thing: a Monero wallet address.** It must be your wallet's
+*primary* address — it starts with `4` and is 95 characters long. Many wallets
+show a subaddress (starting with `8`) first; P2Pool can't pay one, so
+kind-miner refuses it. [Feather](https://featherwallet.org) is recommended — it
+also runs over Tor.
+
+Then pick the install that fits the machine:
+
+| Your machine | Install | Updates |
+|---|---|---|
+| A Debian, Ubuntu or Mint desktop (x86-64) | [apt](#debian-ubuntu-and-mint-apt): `kind-miner` | automatic, weekly |
+| A box with no screen — a Nodo, a home server — on Debian or Ubuntu (x86-64 or arm64) | [apt](#debian-ubuntu-and-mint-apt): `kind-minerd` | automatic, weekly |
+| Any other Linux desktop (x86-64) | [AppImage or Flatpak](#other-linux-desktops-appimage-or-flatpak) | download each new release |
+| macOS or Windows | [an archive](#macos-windows-or-a-bare-linux-binary) | download each new release |
+
+Linux is the primary target; macOS and Windows work but are less tested.
+
+Every file is on the [releases page](https://github.com/d-Martian/Kind-Miner/releases),
+newest at the top, each with a `.sha256` beside it to check the download
+against. The commands below name the current release, `0.2.0-rc10`. If the page
+shows a newer one, change `VERSION` to match (without the leading `v`).
+
+### Debian, Ubuntu and Mint: apt
+
+There are two packages; install the one that fits the machine:
+
+- **`kind-miner`** — the desktop app, with a window and a tray icon. amd64.
+- **`kind-minerd`** — the service for a machine with no screen. amd64 and arm64.
+
+They cannot be installed side by side: installing one removes the other, so a
+machine never runs two miners.
+
+You download the first .deb by hand, once. It adds kind-miner's own apt
+repository, and from then on apt keeps it up to date.
+
+**The desktop app:**
+
+```sh
+sudo apt update
+VERSION=0.2.0-rc10
+DEB=kind-miner_${VERSION}_amd64.deb
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
+sha256sum -c $DEB.sha256        # go on only if this prints "OK"
+sudo apt install ./$DEB tor
+```
+
+Then open **kind-miner** from your applications menu and carry on at
+[First run](#first-run).
+
+**The headless service**, downloaded over Tor (`torsocks` comes with `tor`):
+
+```sh
+sudo apt update && sudo apt install tor
+VERSION=0.2.0-rc10
+DEB=kind-minerd_${VERSION}_$(dpkg --print-architecture).deb
+torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
+torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
+sha256sum -c $DEB.sha256        # go on only if this prints "OK"
+sudo apt install ./$DEB
+```
+
+The service starts at once and waits to be set up: see
+[Headless: kind-minerd](#headless-kind-minerd).
+
+Good to know:
+
+- **Keep the `./`.** `apt install ./file.deb` installs that file; without the
+  `./`, apt looks for a package of that name in its repositories and fails.
+- **`-f` matters too.** It makes curl fail on an error rather than save
+  GitHub's error page under the package's name, which apt then rejects as
+  "Invalid archive signature". If `sha256sum` says `FAILED`, delete both files
+  and download them again.
+- **Kept current, over Tor.** The package adds
+  `tor+https://d-martian.github.io/Kind-Miner/apt`, signed with a key it
+  carries, and pins that repository so it can supply `kind-miner` and
+  `kind-minerd` and nothing else — whoever controlled it could not replace a
+  system package. A timer upgrades it weekly on Thursday: the desktop app in
+  the afternoon, or at the next boot if the machine was off; kind-minerd
+  between 03:00 and 06:00, away from Nodo's own Monday 04:00 update. It
+  refreshes only its own repository. A running desktop app keeps its version
+  until it is next opened.
+- **To upgrade now** rather than wait for Thursday:
+  `sudo apt update && sudo apt install kind-miner` (or `kind-minerd`).
+- **Why `tor`.** The repository is reached only over Tor, so upgrades need it.
+  The desktop app uses it too while it runs, and starts its own Tor only when
+  there is none.
+- **Coming from the AppImage?** Your data carries over, since both keep it in
+  `~/.local/share/kind-miner`. Delete the menu entry the AppImage made,
+  `~/.local/share/applications/kind-miner.desktop`, or it shadows the
+  package's.
+- **To remove it:** `sudo apt purge kind-miner` removes the program, the timer
+  and the repository; each user's data stays in their home.
+  `sudo apt purge kind-minerd` removes everything: the program, both pairs of
+  engines, the timer, the config, and the state — p2pool's data, the hub's
+  certificate and tokens, the onion keys.
+
+### Other Linux desktops: AppImage or Flatpak
+
+Both carry XMRig, P2Pool and Tor, so nothing is downloaded when you first run
+them. Neither updates itself: when a new release is out, download it the same
+way.
+
+**AppImage** — one file, nothing to install:
+
+```sh
+VERSION=0.2.0-rc10
+APP=kind-miner-v${VERSION}-linux-x86_64.AppImage
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$APP
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$APP.sha256
+sha256sum -c $APP.sha256
+chmod +x $APP
+./$APP --gui
+```
+
+The first time it runs it adds itself to your applications menu, so after that
+you can start it from there. Keep the file where it is: the menu entry points
+at it.
+
+**Flatpak** — needs `flatpak` installed; the runtime comes from Flathub:
+
+```sh
+VERSION=0.2.0-rc10
+PAK=kind-miner-v${VERSION}-linux-amd64.flatpak
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$PAK
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$PAK.sha256
+sha256sum -c $PAK.sha256
+flatpak install --user $PAK
+```
+
+Then open **kind-miner** from your applications menu, or run
+`flatpak run io.github.kind_miner.KindMiner`. For a later release, install
+its bundle the same way (add `--reinstall` if flatpak says it is already
+installed).
+
+### macOS, Windows, or a bare Linux binary
+
+These archives hold the program alone, with this README and
+`config.example.yaml`. On first run it downloads the pinned XMRig and P2Pool
+and checks their SHA256 before using them.
+
+**Tor is not included**, so install it first: kind-miner starts it for you, but
+it needs the program to be there. (It also uses a Tor already listening on
+`127.0.0.1:9050`.)
+
+| Platform | Archive | Tor |
+|---|---|---|
+| macOS, Apple silicon | `kind-miner-v<VERSION>-darwin-arm64.tar.gz` | `brew install tor` |
+| macOS, Intel | `kind-miner-v<VERSION>-darwin-amd64.tar.gz` | `brew install tor` |
+| Windows | `kind-miner-v<VERSION>-windows-amd64.zip` | `tor.exe` from the [Tor Expert Bundle](https://www.torproject.org/download/tor/), on your `PATH` or in a `bin` folder beside `kind-miner.exe` |
+| Linux (x86-64) | `kind-miner-v<VERSION>-linux-amd64.tar.gz` | `sudo apt install tor`, `sudo dnf install tor` or `sudo pacman -S tor` |
+
+On macOS, for example:
+
+```sh
+VERSION=0.2.0-rc10
+NAME=kind-miner-v${VERSION}-darwin-arm64     # -darwin-amd64 on an Intel Mac
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$NAME.tar.gz
+curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$NAME.tar.gz.sha256
+shasum -a 256 -c $NAME.tar.gz.sha256
+tar xzf $NAME.tar.gz
+$NAME/kind-miner --gui
+```
+
+On Windows, unzip the archive and double-click `kind-miner.exe`.
+
+---
+
+## First run
+
+### In the window
+
+1. Open kind-miner — from the applications menu, or by double-clicking it.
+2. Paste your wallet's primary address.
+3. Under it, a ticked box says it **starts with your computer and mines gently
+   in the background**. Untick it if you'd rather start it yourself.
+4. Press **Start mining**.
+
+<img src="assets/screenshots/onboarding.png" alt="The first-run screen: one field for your Monero payout address, a ticked box to start with your computer, and a Start mining button" width="360" />
+
+That is the whole setup. **More options** lets you use your own Monero node
+instead of ours over Tor; everything else starts from a default — the
+automatic node, the nano sidechain, the bundled engines, the Polite preset,
+and pausing on battery — and all of it can be changed later in Settings.
+
+Once mining has started, the window tucks into the system tray and a
+notification says where it went. On a desktop with no tray, such as stock
+GNOME, closing the window keeps it mining; open kind-miner again from your
+apps to bring the window back. Launching it a second time always shows the
+one already running rather than starting a second miner.
+
+### From a terminal
+
+Launched from a terminal, kind-miner shows a tray icon and logs to stdout, and
+on first run asks for your address in the terminal instead of the window:
+
+```sh
+kind-miner                 # tray icon, logs on stdout; first run is a short text wizard
+kind-miner --gui           # the full window, even from a terminal
+kind-miner --no-tray       # no GUI at all, for servers and SSH (--headless is an alias)
+kind-miner --config PATH   # use a config file somewhere else
+kind-miner --version
+```
+
+(For the AppImage or an unpacked archive, run it by its path, as above.)
+Started with no config and neither a terminal nor a display — as a service,
+say — it writes a config template for you to edit instead: see
+[Configuration](#configuration). For a machine that never has a screen,
+[kind-minerd](#headless-kind-minerd) is the better fit: it is the same miner
+built without the GUI, and the apt package runs it as a service.
 
 ---
 
@@ -84,97 +307,35 @@ Balanced — and the dead key is dropped the next time the config is written.
 
 ---
 
-## Prerequisites
-
-| Requirement | Notes |
-|---|---|
-| **Tor** | Must be running at `127.0.0.1:9050`. Kind-miner will attempt to start it automatically if not running. |
-| **A Monero wallet address** | Your wallet's *primary* address: it starts with `4` and is 95 characters long. Many wallets show a subaddress (starting with `8`) first; P2Pool can't pay one, so kind-miner refuses it. [Feather](https://featherwallet.org) is recommended — it also runs over Tor. |
-| Linux, macOS, or Windows | Linux is the primary target; macOS and Windows work but are less tested. |
-
-**To install and start Tor:**
-```sh
-# Debian / Ubuntu / Mint
-sudo apt install tor
-sudo systemctl enable --now tor
-
-# Fedora / RHEL
-sudo dnf install tor
-sudo systemctl enable --now tor
-
-# Arch
-sudo pacman -S tor
-sudo systemctl enable --now tor
-
-# macOS
-brew install tor && brew services start tor
-```
-
-To confirm Tor is running: `systemctl is-active tor` should print `active`.
-
----
-
-## Quick start
-
-```sh
-# Download the latest release for your platform from:
-# https://github.com/kind-miner/kind-miner/releases
-
-# Make executable (Linux/macOS)
-chmod +x kind-miner
-
-# Double-click the app, or run it from a terminal:
-./kind-miner
-#   • From a desktop (double-click / .desktop): opens the full GUI window.
-#   • From a terminal: shows a system-tray icon and logs to stdout.
-
-# Force the graphical window, even from a terminal:
-./kind-miner --gui
-
-# Headless — no GUI at all, logs to stdout (servers, SSH):
-./kind-miner --no-tray        # --headless is an alias
-```
-
-On first run with no config file, kind-miner asks one thing: where your rewards go. Under the address field, a pre-ticked box says it will start with your computer and mine gently in the background — untick it and it won't. "More options" lets you use your own Monero node instead of ours over Tor. Everything else starts from a default: the automatic node, the nano sidechain, the bundled binaries, the Polite preset, and pausing on battery; all of it is in Settings. Once mining has started, the window tucks into the system tray and a notification says where it went.
-
-Launched from a terminal, kind-miner runs a short text wizard instead, and a headless launch with no display writes a config template for you to edit.
-
-### On Debian or Ubuntu, from apt
-
-The desktop app also comes as a .deb (amd64), which installs it for every
-user and keeps it current through apt:
-
-```sh
-curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-miner_X.Y.Z_amd64.deb
-curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-miner_X.Y.Z_amd64.deb.sha256
-sha256sum -c kind-miner_X.Y.Z_amd64.deb.sha256
-sudo apt install ./kind-miner_X.Y.Z_amd64.deb tor
-```
-
-Then open kind-miner from the applications menu. The package carries the same
-engines as the AppImage, adds the same signed repository over Tor as the
-kind-minerd .deb (below), and a timer upgrades it weekly, on Thursday
-afternoon or at the next boot if the machine was off; a running app keeps
-its version until it is next opened. `tor` is for those upgrades; the app
-uses it too while it runs, and starts its own Tor only when there is none.
-
-- **One or the other.** It cannot be installed beside `kind-minerd`, the
-  service for machines with no screen: installing either removes the other,
-  so a machine never runs two miners.
-- **Coming from the AppImage?** Your data carries over, since both keep it in
-  `~/.local/share/kind-miner`. Delete the menu entry the AppImage made,
-  `~/.local/share/applications/kind-miner.desktop`, or it shadows the
-  package's.
-- `sudo apt purge kind-miner` removes the program, the timer and the
-  repository; each user's data stays in their home.
-
----
-
 ## Headless: kind-minerd
 
 For a box with no screen — a Nodo, a home server — there is `kind-minerd`, the
 same miner without the window. It is a static binary with no graphical
 dependencies (built with `CGO_ENABLED=0`), for x86-64 and arm64.
+
+**Install it** on Debian or Ubuntu [with apt](#debian-ubuntu-and-mint-apt):
+the package runs it as a service and keeps it current. Anywhere else, build it
+with `make build-minerd` (pure Go, so none of the GUI's build dependencies) and
+[run it as a service by hand](#as-a-service-by-hand).
+
+### Set it up
+
+Installed, the service is already running, waiting for a wallet. Give it one
+either way:
+
+- **From a desktop.** On a machine running kind-miner, open **Settings →
+  Connection → Find a hub**. It finds the box on your network and sets it up
+  as the household hub, paying the address on the Payout tab, and switches
+  the desktop to mine through it. See
+  [One hub for the house](#one-hub-for-the-house).
+- **Over SSH.** On the box, run `sudo kind-minerd init --address 4…`. It
+  writes the service's config with the hub on, restarts the service, and
+  prints the pairing code for your other machines. Add `--no-hub` to have it
+  mine on its own instead.
+
+Then `kind-minerd status` says what it is doing.
+
+### Commands
 
 ```sh
 kind-minerd init --address 4…   # write a config for your wallet
@@ -187,6 +348,44 @@ kind-minerd pair                # the code that pairs a device with this hub
 
 Only one kind-miner runs per session: the daemon and the desktop app will not
 mine side by side.
+
+### Updates, and a way back
+
+The apt package upgrades itself weekly from its own repository over Tor (see
+[apt](#debian-ubuntu-and-mint-apt)). Beyond that:
+
+- **The engines come in the package** — xmrig built from source with
+  kind-miner's patches, and the pinned p2pool — so nothing is downloaded at
+  run time, and a Nodo gets an xmrig at all (upstream has no arm64 build).
+- **A way back.** An upgrade keeps the engines it replaced. New engines have
+  15 minutes to show they work — p2pool synced, not on an island, xmrig
+  hashing whenever it is allowed to — and if they do not, kind-minerd goes
+  back to the previous pair, if that one has worked here before, and says so
+  in `kind-minerd status` and `doctor` until a release brings a new pair.
+
+### As a service, by hand
+
+`packaging/systemd/` has a unit for the daemon and a slice to run it in:
+
+```sh
+sudo install -Dm755 kind-minerd /opt/kind-miner/kind-minerd
+sudo install -Dm644 packaging/systemd/kind-miner.slice packaging/systemd/kind-minerd.service -t /etc/systemd/system/
+sudo install -d -m 700 /etc/kind-miner
+sudo kind-minerd init --address 4…   # optional: sets up the service and prints the pairing code
+sudo systemctl daemon-reload
+sudo systemctl enable --now kind-minerd
+kind-minerd status
+```
+
+The slice sits beside `system.slice` with idle CPU weight, so on a Nodo the
+node itself — monerod, the light-wallet server, Tor, Nodo's weekly update —
+always wins any core it wants. The service runs as a throwaway system user with
+idle I/O, can write only `/var/lib/kind-miner`, reads its config as a private
+copy (the file in `/etc` stays root-only), and is first to go if memory runs
+out.
+
+Skip `init` and the service waits to be set up from a desktop instead: see
+[One hub for the house](#one-hub-for-the-house).
 
 ### The advisory
 
@@ -212,66 +411,6 @@ their complete source beside the binaries:
   Unpacked, `KM_XMRIG_SOURCES=upstream scripts/build-xmrig.sh out` rebuilds
   the shipped binary offline, bit for bit.
 - `p2pool_source-v<version>.tar.xz` — p2pool's own source release, unchanged.
-
-### From the .deb
-
-On a Nodo or any Debian box, install the package once from the release, over
-Tor (`torsocks` comes with the `tor` package):
-
-```sh
-torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-minerd_X.Y.Z_arm64.deb
-torsocks curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/vX.Y.Z/kind-minerd_X.Y.Z_arm64.deb.sha256
-sha256sum -c kind-minerd_X.Y.Z_arm64.deb.sha256
-sudo apt install ./kind-minerd_X.Y.Z_arm64.deb
-```
-
-`-f` makes curl fail on an error rather than save GitHub's error page under
-the package's name, which apt then rejects as "Invalid archive signature".
-The package starts at once and waits to be set up from the desktop app (see below).
-From then on it keeps itself current:
-
-- **Its own repository, over Tor.** The package adds
-  `tor+https://d-martian.github.io/Kind-Miner/apt`, signed with a key it
-  carries, and pins that repository so it can supply `kind-minerd` and
-  nothing else — whoever controlled it could not replace a system package.
-- **Weekly.** A timer upgrades it on Thursday between 03:00 and 06:00, away
-  from Nodo's own Monday 04:00 update. It refreshes only its own repository.
-- **The engines come in the package** — xmrig built from source with
-  kind-miner's patches, and the pinned p2pool — so nothing is downloaded at
-  run time, and a Nodo gets an xmrig at all (upstream has no arm64 build).
-- **A way back.** An upgrade keeps the engines it replaced. New engines have
-  15 minutes to show they work — p2pool synced, not on an island, xmrig
-  hashing whenever it is allowed to — and if they do not, kind-minerd goes
-  back to the previous pair, if that one has worked here before, and says so
-  in `kind-minerd status` and `doctor` until a release brings a new pair.
-
-`apt purge kind-minerd` removes everything: the program, both pairs of
-engines, the timer, the config, and the state — p2pool's data, the hub's
-certificate and tokens, the onion keys.
-
-### As a service, by hand
-
-`packaging/systemd/` has a unit for the daemon and a slice to run it in:
-
-```sh
-sudo install -Dm755 kind-minerd /opt/kind-miner/kind-minerd
-sudo install -Dm644 packaging/systemd/kind-miner.slice packaging/systemd/kind-minerd.service -t /etc/systemd/system/
-sudo install -d -m 700 /etc/kind-miner
-sudo kind-minerd init --address 4…   # optional: sets up the service and prints the pairing code
-sudo systemctl daemon-reload
-sudo systemctl enable --now kind-minerd
-kind-minerd status
-```
-
-The slice sits beside `system.slice` with idle CPU weight, so on a Nodo the
-node itself — monerod, the light-wallet server, Tor, Nodo's weekly update —
-always wins any core it wants. The service runs as a throwaway system user with
-idle I/O, can write only `/var/lib/kind-miner`, reads its config as a private
-copy (the file in `/etc` stays root-only), and is first to go if memory runs
-out.
-
-Skip `init` and the service waits to be set up from a desktop instead: see the
-next section.
 
 ### One hub for the house
 
@@ -600,8 +739,8 @@ If you use `p2pool-remote` (the default), the only party who sees anything about
 ## Building from source
 
 ```sh
-git clone https://github.com/kind-miner/kind-miner
-cd kind-miner
+git clone https://github.com/d-Martian/Kind-Miner
+cd Kind-Miner
 go build -o kind-miner ./cmd/kind-miner
 ```
 

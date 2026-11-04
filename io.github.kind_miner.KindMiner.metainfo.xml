@@ -33,8 +33,8 @@
 
   <launchable type="desktop-id">io.github.kind_miner.KindMiner.desktop</launchable>
 
-  <url type="homepage">https://github.com/kind-miner/kind-miner</url>
-  <url type="bugtracker">https://github.com/kind-miner/kind-miner/issues</url>
+  <url type="homepage">https://github.com/d-Martian/Kind-Miner</url>
+  <url type="bugtracker">https://github.com/d-Martian/Kind-Miner/issues</url>
 
   <developer id="io.github.kind_miner">
     <name>dMartian</name>
@@ -49,11 +49,11 @@
   -->
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/dashboard.png</image>
+      <image>https://raw.githubusercontent.com/d-Martian/Kind-Miner/main/assets/screenshots/dashboard.png</image>
       <caption>Watch the miner step aside the moment you need your machine</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/kind-miner/kind-miner/main/assets/screenshots/onboarding.png</image>
+      <image>https://raw.githubusercontent.com/d-Martian/Kind-Miner/main/assets/screenshots/onboarding.png</image>
       <caption>Setup is one question: where your rewards go</caption>
     </screenshot>
   </screenshots>

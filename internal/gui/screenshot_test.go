@@ -11,9 +11,11 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
-	"github.com/d-Martian/Kind-Miner/internal/config"
-	"github.com/d-Martian/Kind-Miner/internal/core"
-	"github.com/d-Martian/Kind-Miner/internal/stats"
+	"github.com/kind-miner/kind-miner/internal/config"
+	"github.com/kind-miner/kind-miner/internal/core"
+	"github.com/kind-miner/kind-miner/internal/engine"
+	"github.com/kind-miner/kind-miner/internal/scheduler"
+	"github.com/kind-miner/kind-miner/internal/stats"
 )
 
 // TestCaptureScreenshots renders the onboarding screens to PNGs for the
@@ -57,11 +59,13 @@ func TestCaptureScreenshots(t *testing.T) {
 			// would show none of what the screen is for.
 			u := &uiApp{sup: core.New(cfg)}
 			content := u.dashboardScreen()
+			history := demoHistory()
 			// The two-minute window, so the burst of work and the recovery
 			// after it both fit in the frame.
 			opts := cfg.Chart
 			opts.WindowSeconds = 120
-			u.dash.chart.Set(demoHistory(), cfg.Preset().Ceiling, opts)
+			u.dash.chart.Set(history, cfg.Preset().Ceiling, opts)
+			demoMining(u.dash, history, cfg)
 			return content
 		}},
 	}
@@ -115,15 +119,50 @@ func demoHistory() []stats.Sample {
 			allowed += (target - allowed) * 0.15
 		}
 		out = append(out, stats.Sample{
-			At:        now.Add(time.Duration(i-n+1) * 2 * time.Second),
-			OtherCPU:  other,
-			MinerCPU:  allowed,
-			Hashrate:  allowed * 9500,
-			TempC:     46 + (other+allowed)*30,
-			BackedOff: prev-allowed > 0.07,
+			At:       now.Add(time.Duration(i-n+1) * 2 * time.Second),
+			OtherCPU: other,
+			MinerCPU: allowed,
+			Hashrate: allowed * 9500,
+			TempC:    46 + (other+allowed)*30,
+			// A laptop-class package: idle floor plus a share for load.
+			Watts:      6 + (other+allowed)*32,
+			WattsKnown: true,
+			BackedOff:  prev-allowed > 0.07,
 		})
 	}
 	return out
+}
+
+// demoMining fills the header and the tiles as a running miner would. With no
+// scheduler or p2pool behind it the dashboard showed "Starting…" over a row
+// of dashes, which is what the README and the store listing then showed: the
+// one image a newcomer sees, telling them nothing about what it does. Every
+// figure goes through the code the live screen uses, from the demo history;
+// only the network's difficulty and reward, which a shot cannot ask p2pool
+// for, are stated here.
+func demoMining(d *dashboard, history []stats.Sample, cfg *config.Config) {
+	text, tint := statusSummary(scheduler.StateFull, "", false, scheduler.OverrideNone, cfg.Preset(),
+		func() (int, bool) { return 0, false }, coreCounts{})
+	d.pill.Set(text, tint)
+	setText(d.uptime, "up "+formatUptime(3*time.Hour+12*time.Minute))
+	setVisible(d.mineNow, skipWaitShown(scheduler.OverrideNone, false))
+
+	hashrate, _ := stats.Mean(history, hashrateWindow, stats.Hashrate)
+	value, unit := hashrateParts(hashrate)
+	d.hash.Set(value, unit)
+
+	// Roughly the network of late 2026: about 5 GH/s, so a difficulty of
+	// 120 s of that, and a 0.6 XMR tail-emission-era block.
+	pool := engine.P2PoolStats{NetworkDifficulty: 600_000_000_000, BlockReward: 600_000_000_000}
+	if mean, ok := stats.Mean(history, time.Minute, stats.Hashrate); ok {
+		if perDay, ok := pool.EstimatedXMRPerDay(mean); ok {
+			d.income.Set(formatXMR(perDay, 5), "")
+		}
+	}
+
+	d.refreshPower(history)
+	d.link.Set("Connected", "")
+	d.link.SetColor(colorOK)
 }
 
 // onboardingPane builds the setup screen in isolation, without a supervisor —
