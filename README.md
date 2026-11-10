@@ -726,12 +726,12 @@ shown.
 
 | Layer | What it protects |
 |---|---|
-| **Monero** | Transaction amounts, sender, receiver hidden by default via RingCT + stealth addresses. No transaction graph. Coins are fungible. |
-| **P2Pool** | The pool operator does not exist. Payouts come from the Monero protocol directly. No operator knows your wallet address or hashrate contribution. |
-| **Tor** | With a `.onion` node (the default), the node operator and other P2Pool nodes do not see your IP, so your mining is not linkable to your network location. A node at any other address is reached directly, and it and P2Pool's peers do see your IP. |
-| **kind-miner** | No telemetry, no analytics, no account, no registration. Besides the node and P2Pool's peers, it fetches one thing: the signed advisory, once a day, over Tor, and not at all when Tor isn't running. A bare binary with no engines beside it also downloads its pinned engines once, on first run. The macOS, Windows and plain Linux archives download upstream XMRig, which keeps its 1% minimum donation and makes that connection to XMRig's pool directly; the .deb, AppImage and Flatpak ship XMRig built without it. |
+| **Monero** | Amounts, sender and receiver are hidden by default (RingCT and stealth addresses). Coins are fungible. |
+| **P2Pool** | There is no pool operator. Payouts come directly from the Monero protocol, and no operator knows your wallet address or hashrate. |
+| **Tor** | With a `.onion` node (the default), the node and other P2Pool nodes do not see your IP. A node at any other address is reached directly, and it and P2Pool's peers do see your IP. |
+| **kind-miner** | No telemetry, analytics, account or registration. Beyond the node and P2Pool's peers it fetches only the signed advisory: once a day, over Tor, and not at all when Tor isn't running. A bare binary also downloads its pinned engines once, on first run. The macOS, Windows and plain Linux archives use upstream XMRig, which keeps its 1% minimum donation and connects to XMRig's pool directly; the .deb, AppImage and Flatpak ship XMRig built without it. |
 
-If you use `p2pool-remote` with the default `.onion` node, the only party who sees anything about you is P2Pool's public sharechain — which shows that *someone* with *some* hashrate submitted a share. Your wallet address appears in the coinbase output of blocks you help find, exactly as it would if you solo-mined.
+With the default `.onion` node, the only public trace is P2Pool's sharechain, which shows that *someone* with *some* hashrate submitted a share. Your wallet address appears in the coinbase of blocks you help find, exactly as in solo mining.
 
 ---
 
@@ -786,13 +786,9 @@ You can substitute any monerod node that has ZMQ enabled by setting `remote_node
 
 Privacy is not a feature. It is the precondition for everything else.
 
-Monero exists because surveillance of financial transactions is a form of control. A currency that leaks who paid whom, and how much, is a tool of that control regardless of who runs the nodes. Monero's default privacy means every user gets the same protection — there is no opt-in anonymity set of suspicious users, just one set of everyone.
+Monero gives every user the same privacy by default. P2Pool removes the pool operator, who would otherwise control which transactions get confirmed. Tor is here because an IP address is metadata, and metadata has a way of becoming evidence.
 
-P2Pool exists because mining centralization is an attack surface. A pool operator who controls the block template controls which transactions get confirmed. P2Pool removes the operator. Kind-miner defaults to P2Pool because that choice costs you nothing and contributes to a network that is harder to censor.
-
-Tor is here because an IP address is metadata, and metadata has a way of becoming evidence.
-
-None of this requires you to be doing anything interesting. The point is that the infrastructure exists and works, and that using it is free. Run the miner, collect some XMR, help keep the network decentralized, and go about your day.
+You don't need something to hide to want privacy. Run the miner, collect some XMR, help keep the network decentralized, and go about your day.
 
 ---
 
