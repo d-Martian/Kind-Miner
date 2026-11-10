@@ -46,11 +46,7 @@ More detail on each of these: [How kind-miner works](docs/how-it-works.md).
 
 ## Install
 
-**You need one thing: a Monero wallet address.** It must be your wallet's
-*primary* address — it starts with `4` and is 95 characters long. Many wallets
-show a subaddress (starting with `8`) first; P2Pool can't pay one, so
-kind-miner refuses it. [Feather](https://featherwallet.org) is recommended — it
-also runs over Tor.
+**You need one thing: a Monero wallet address.** A wallet is a program that holds your Monero and gives you an address to be paid at. If you don't have one yet, [Feather](https://featherwallet.org) is recommended; it also runs over Tor. Use the wallet's *primary* address, which starts with `4` and is 95 characters long. Many wallets show a different kind first, a subaddress starting with `8`. P2Pool can't pay to those, so kind-miner won't accept one.
 
 Then pick the install that fits the machine:
 
@@ -69,8 +65,8 @@ On Linux and macOS you don't need to pick anything from the [releases page](http
 
 There are two packages; install the one that fits the machine:
 
-- **`kind-miner`** — the desktop app, with a window and a tray icon. For ordinary Intel or AMD computers (amd64).
-- **`kind-minerd`** — the same miner with no window, for a machine with no screen, such as a home server. For ordinary Intel or AMD computers (amd64) and ARM-based ones (arm64).
+- **`kind-miner`** — the desktop app, with a window and a tray icon. For x86-64 computers (amd64).
+- **`kind-minerd`** — the same miner with no window, for a machine with no screen, such as a home server. For x86-64 (amd64) and arm64 computers.
 
 They cannot be installed side by side: installing one removes the other, so a
 machine never runs two miners.
