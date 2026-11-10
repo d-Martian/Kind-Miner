@@ -22,3 +22,27 @@ The detail behind the short feature list in the [README](../README.md).
 - **Zero-setup dependencies.** The AppImage, the Flatpak and the .deb ship their engines — XMRig built from source with kind-miner's patches, the pinned P2Pool, and (on the desktop) Tor — so nothing is downloaded when you first run it: no request to GitHub before Tor is up, nothing for antivirus to block. A bare binary with nothing beside it downloads the same pinned, SHA256-verified builds instead. You need: a Monero wallet address.
 - **Graphical or terminal.** Double-click for a full window — four-step setup, live dashboard, and a tabbed settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.
 - **Single native binary.** No installer, no runtime, no Python, no Electron. `./kind-miner` and you're done.
+
+## How kindness is applied
+
+The miner only ever asks for what is left underneath the ceiling, so other work
+always has the rest of the machine reserved:
+
+```
+target  = ceiling − CPU used by everything else
+allowed = allowed + (target − allowed) × (falling ? Fall : Rise)
+duty    = allowed ÷ (miner's full-tilt CPU share)
+```
+
+The asymmetry between `Fall` and `Rise` is the whole idea. A symmetric
+controller oscillates against bursty desktop load and you feel every swing;
+falling fast and rising slowly turns the same load into a miner that simply
+is not there while you work.
+
+The allowance is applied by **duty-cycling** XMRig — suspending and resuming it
+(SIGSTOP/SIGCONT) so it runs for `duty` of each half-second — never by changing
+its thread count. That matters more than it sounds: RandomX spends ~3 seconds
+allocating its dataset on every launch, so a throttler that restarted XMRig to
+re-thread it would spend all its time re-initialising and never actually hash.
+Pausing keeps the dataset warm, gives smooth fractional control the thread count
+cannot, and hands idle cores straight back to your apps the instant it suspends.

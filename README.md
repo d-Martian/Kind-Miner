@@ -250,27 +250,7 @@ it back.
 | **Balanced** | 90% | Shares the machine evenly. Heavy work still wins, but you may feel a short lag. |
 | **Full** | 100% | Every core, straight away — it doesn't wait for you to step away. Still yields to your apps and gives the CPU back slowly. For machines you are not sitting at. |
 
-The miner only ever asks for what is left underneath the ceiling, so other work
-always has the rest of the machine reserved:
-
-```
-target  = ceiling − CPU used by everything else
-allowed = allowed + (target − allowed) × (falling ? Fall : Rise)
-duty    = allowed ÷ (miner's full-tilt CPU share)
-```
-
-The asymmetry between `Fall` and `Rise` is the whole idea. A symmetric
-controller oscillates against bursty desktop load and you feel every swing;
-falling fast and rising slowly turns the same load into a miner that simply
-is not there while you work.
-
-The allowance is applied by **duty-cycling** XMRig — suspending and resuming it
-(SIGSTOP/SIGCONT) so it runs for `duty` of each half-second — never by changing
-its thread count. That matters more than it sounds: RandomX spends ~3 seconds
-allocating its dataset on every launch, so a throttler that restarted XMRig to
-re-thread it would spend all its time re-initialising and never actually hash.
-Pausing keeps the dataset warm, gives smooth fractional control the thread count
-cannot, and hands idle cores straight back to your apps the instant it suspends.
+The formula behind the presets, and how the limit is applied: [How kind-miner works](docs/how-it-works.md#how-kindness-is-applied).
 
 ---
 
