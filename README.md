@@ -237,10 +237,10 @@ Kindness is the one thing kind-miner asks you to understand. It is one setting w
 
 | Preset | Ceiling | What it feels like |
 |---|---|---|
-| **Ghost** | 52% | Only genuinely idle cycles. You will never notice it; payouts are slow. |
+| **Ghost** | 52% | Uses only power your computer would otherwise leave idle. You will never notice it; payouts are slow. |
 | **Polite** | 78% | Steps aside the moment you touch the machine, and comes back slowly. The default, and the one most people keep. |
-| **Balanced** | 90% | Shares the machine evenly. Heavy work still wins, but you may feel a short lag. |
-| **Full** | 100% | Every core, straight away — it doesn't wait for you to step away. Still yields to your apps and gives the CPU back slowly. For machines you are not sitting at. |
+| **Balanced** | 90% | Shares the computer evenly. Your other programs still come first, but you may feel a short lag. |
+| **Full** | 100% | Uses everything your other programs leave free, right away, without waiting for you to step away. Your programs still come first, but it makes room for them slowly. For computers you are not sitting at. |
 
 The formula behind the presets, and how the limit is applied: [How kind-miner works](docs/how-it-works.md#how-kindness-is-applied).
 
@@ -281,12 +281,12 @@ Every option, the connection modes and the default node: [Configuration](docs/co
 
 | Layer | What it protects |
 |---|---|
-| **Monero** | Amounts, sender and receiver are hidden by default (RingCT and stealth addresses). Coins are fungible. |
-| **P2Pool** | There is no pool operator. Payouts come directly from the Monero protocol, and no operator knows your wallet address or hashrate. |
-| **Tor** | With a `.onion` node (the default), the node and other P2Pool nodes do not see your IP. A node at any other address is reached directly, and it and P2Pool's peers do see your IP. |
-| **kind-miner** | No telemetry, analytics, account or registration. Beyond the node and P2Pool's peers it fetches only the signed advisory: once a day, over Tor, and not at all when Tor isn't running. A bare binary also downloads its pinned engines once, on first run. The macOS, Windows and plain Linux archives use upstream XMRig, which keeps its 1% minimum donation and connects to XMRig's pool directly; the .deb, AppImage and Flatpak ship XMRig built without it. |
+| **Monero** | Amounts, sender and receiver are hidden by default. One coin cannot be told apart from another. |
+| **P2Pool** | Nobody runs the pool. You are paid directly by the Monero network, and there is no operator to know your wallet address or how much you mine. |
+| **Tor** | With the default setup, the Monero server (node) you connect to and the other P2Pool computers do not see your internet address (IP). If you choose a node whose address doesn't end in `.onion`, the connection is direct, and that node and the other P2Pool computers do see your IP. |
+| **kind-miner** | No tracking, no usage statistics, no account and no sign-up. Apart from the node and the other P2Pool computers, it contacts only one thing: a small signed notice from the project saying which versions are still safe to run. It checks that once a day, through Tor, and not at all when Tor isn't running. A copy downloaded as a bare program file also downloads its mining programs once, the first time it runs. The macOS, Windows and plain Linux downloads use the standard XMRig miner, which keeps its built-in donation of at least 1% and connects to XMRig's pool directly. The .deb, AppImage and Flatpak versions come with XMRig built without it. |
 
-With the default `.onion` node, the only public trace is P2Pool's sharechain, which shows that *someone* with *some* hashrate submitted a share. Your wallet address appears in the coinbase of blocks you help find, exactly as in solo mining.
+With the default setup, the only public trace is P2Pool's shared record of work, which shows that *someone* contributed *some* mining power. Your wallet address appears in the blocks you help find, exactly as it would if you mined alone.
 
 ---
 
