@@ -18,9 +18,9 @@ once, and only creeps back after it ends. (Demo data.)*
 
 ## The premise
 
-Most of the time a computer is on, most of its CPU is doing nothing. kind-miner gives that spare capacity to Monero and hands it back the instant anything else wants it. It is not free: a busy CPU draws more power, so whether mining pays depends on what your electricity costs. What it never costs you is a smooth desktop.
+Most of the time your computer is on, most of its processor is doing nothing. kind-miner puts that spare power to work mining Monero, a private digital currency, and hands it back the instant you or another program needs it. It is not free: a busy processor uses more electricity, so whether mining pays depends on what your power costs. What it never costs you is a smooth-running computer.
 
-Monero's RandomX algorithm is designed to favour ordinary CPUs over ASICs, so a single computer adds real hashrate. Mining runs through [P2Pool](https://p2pool.io), which pays every participant directly from the coinbase output: no pool wallet, no payout threshold, no operator who knows your address. By default it works over Tor, so neither the node nor other P2Pool nodes see your IP. Point it at your own node and it connects directly, which is faster.
+Monero's mining is designed to favour ordinary computers over special mining hardware, so a single computer makes a real contribution. kind-miner mines through [P2Pool](https://p2pool.io), which pays you directly: nobody holds your coins for you, there is no minimum to reach before you get paid, and there is no middleman who knows your wallet address. By default it connects through Tor, a network that hides your internet address (IP). If you run your own Monero server (node), it can connect to that directly, which is faster.
 
 ---
 
@@ -233,10 +233,7 @@ built without the GUI, and the apt package runs it as a service.
 
 ## Kindness
 
-Kindness is the one thing kind-miner asks you to understand. Each preset is a
-**ceiling** — the share of the whole machine that mining and everything else may
-occupy together — plus how fast the miner gives ground and how slowly it takes
-it back.
+Kindness is the one thing kind-miner asks you to understand. It is one setting with four choices. Each choice sets a **ceiling**: how busy your whole computer may get, counting mining and everything else together. Mining only fills the gap between what your other programs are using and that ceiling. For example, with Polite (78%), if your other programs are using 30% of the computer, mining may use up to 48%. Each choice also sets how quickly mining backs off and how slowly it comes back.
 
 | Preset | Ceiling | What it feels like |
 |---|---|---|
