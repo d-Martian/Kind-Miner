@@ -18,36 +18,34 @@ once, and only creeps back after it ends. (Demo data.)*
 
 ## The premise
 
-Most of the time a computer is on, most of its CPU is doing nothing: you are reading, typing, in a call, or away. kind-miner gives that spare capacity to Monero and hands it back the instant anything else wants it — on a laptop you use every day as much as on a server in a cupboard. It is not free: a busy CPU draws more power than an idle one, so whether mining pays depends on what your electricity costs. What it never costs you is a smooth desktop.
+Most of the time a computer is on, most of its CPU is doing nothing. kind-miner gives that spare capacity to Monero and hands it back the instant anything else wants it. It is not free: a busy CPU draws more power, so whether mining pays depends on what your electricity costs. What it never costs you is a smooth desktop.
 
-Monero is one of the last coins where CPU mining is meaningful. RandomX was designed specifically to resist ASICs and favour commodity hardware. A single computer running kind-miner puts real hashrate onto a network that needs it — and does so in a way that is private by default, trustless from end to end, and completely invisible when you actually need your machine.
-
-[P2Pool](https://p2pool.io) changed the economics. Before P2Pool, solo mining was a lottery with months between wins; pools required accounts and took fees. P2Pool is a sidechain on top of Monero: your miner works on the P2Pool sharechain, and when any P2Pool miner finds a Monero block, every participant gets a proportional payout **directly from the coinbase output**. There is no pool wallet. No payout threshold. No operator who knows your address. Your coins arrive in your wallet exactly like solo-mined coins — they just arrive more often.
-
-By default kind-miner follows a Monero node run as a Tor hidden service, and sends P2Pool's own traffic over Tor as well, so neither that node nor other P2Pool nodes see your IP. Point it at your own node instead and it connects directly, which is faster. Either way the sidechain pays you directly, and nobody in between holds your coins.
+Monero's RandomX algorithm is designed to favour ordinary CPUs over ASICs, so a single computer adds real hashrate. Mining runs through [P2Pool](https://p2pool.io), which pays every participant directly from the coinbase output: no pool wallet, no payout threshold, no operator who knows your address. By default it works over Tor, so neither the node nor other P2Pool nodes see your IP. Point it at your own node and it connects directly, which is faster.
 
 ---
 
 ## Features
 
-- **Kindness, not thresholds.** One control decides how much of the machine mining may take and how fast it lets go — Ghost, Polite, Balanced, or Full. Change it from the tray without stopping anything.
-- **Disappears under load.** Every 2 seconds the scheduler measures CPU usage excluding the miner's own threads, and gives the miner whatever is left under the kindness ceiling. If you start compiling, gaming, or rendering, XMRig gets out of the way within one tick.
-- **Shows you it is doing so.** The dashboard plots the miner's CPU against everything else's, with the reserved headroom shaded and each backoff marked. You can watch the miner step aside.
-- **Uses the right cores.** While you are at the machine, mining runs one thread on each efficiency core (half the cores on a CPU with one kind); once you step away it spreads to the performance cores, fastest first. It never uses a second hyperthread of a core, or a core outside the L3 cache (the low-power E-cores on Intel Meteor Lake). Moving between the two takes xmrig a few milliseconds and keeps its RandomX dataset.
-- **Waits for you to step away.** Until your keyboard and mouse have been quiet for a while (5 minutes by default), mining is held to the Ghost ceiling whatever preset you picked. Reading a page or watching a video barely touches the CPU, so idle detection — not CPU load alone — is what decides.
-- **Mine now, kindly.** A toggle skips the wait when you want to mine on purpose. It skips *only* the wait: the CPU, battery, and temperature backoff all stay in force, so browsing and video stay smooth.
-- **Says what it has earned.** Hashrate now, over 30 minutes and over 24 hours, each as an estimate of XMR per month; when your next p2pool share is due; and how much of the payout window you occupy — in the window and in the tray. The 30-minute and 24-hour figures come from kind-miner's own record, which counts paused time as zero and survives a restart, so they describe what the machine actually earns while it gets out of your way. The tray's **Recent payouts** lists the last five payouts p2pool announced while kind-miner was running, with how long ago and, for the first two hours, when the coinbase output becomes spendable. Your wallet remains the full record.
-- **Starts with your machine.** Optional login-item registration on Linux, macOS, and Windows.
-- **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down — which catches the clogged-fan case a fixed °C limit misses.
-- **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
-- **Steps aside for games.** When a game turns on [GameMode](https://github.com/FeralInteractive/gamemode) (or you launch one with `gamemoderun`), mining pauses until it ends.
-- **Gives memory back.** When the machine starts thrashing — sustained memory stalls, or free memory below a small margin — the miner is stopped outright, not just paused, so its ~2 GB returns at once. It starts again only after ten calm minutes with room to spare.
-- **Works without a tray.** Stock GNOME has no system tray. There, closing the window keeps kind-miner mining in the background (inside a Flatpak it asks the desktop for permission first), and opening kind-miner again from your apps brings the running window back, with a Quit button in it. On every desktop, launching it a second time shows the one already running instead of starting a second miner.
-- **Snooze from the tray.** Pause for an hour, until tomorrow morning (06:00), or until you resume — and a snooze ends by itself. A pause survives a restart, so a reboot never brings the miner back early.
-- **Tor for onion nodes.** The default node is a Tor hidden service, and with it P2Pool's traffic goes over Tor too, so neither the node nor other P2Pool nodes see your IP. A node on your own network, or any other address that isn't `.onion`, is reached directly: faster, but that node and P2Pool's peers then see your IP.
-- **Zero-setup dependencies.** The AppImage, the Flatpak and the .deb ship their engines — XMRig built from source with kind-miner's patches, the pinned P2Pool, and (on the desktop) Tor — so nothing is downloaded when you first run it: no request to GitHub before Tor is up, nothing for antivirus to block. A bare binary with nothing beside it downloads the same pinned, SHA256-verified builds instead. You need: a Monero wallet address.
-- **Graphical or terminal.** Double-click for a full window — four-step setup, live dashboard, and a tabbed settings panel — that tucks into the system tray while it mines. Launched from a terminal it behaves as it always has: a tray icon and logs on stdout.
-- **Single native binary.** No installer, no runtime, no Python, no Electron. `./kind-miner` and you're done.
+- **Kindness, not thresholds.** One control (Ghost, Polite, Balanced or Full) sets how much of the machine mining may take and how fast it lets go.
+- **Disappears under load.** Every 2 seconds it measures everything else's CPU use and gives the miner only what is left under the kindness ceiling.
+- **Shows you it is doing so.** The dashboard plots the miner's CPU against everything else's, with each backoff marked.
+- **Uses the right cores.** Efficiency cores while you are at the machine, performance cores once you step away, and never a second hyperthread of a core.
+- **Waits for you to step away.** Until keyboard and mouse have been quiet for a while (5 minutes by default), mining is held to the Ghost ceiling.
+- **Mine now, kindly.** A toggle skips that wait. The CPU, battery and temperature backoff all stay in force.
+- **Says what it has earned.** Hashrate now, over 30 minutes and over 24 hours, each as an estimate of XMR per month, plus recent payouts in the tray.
+- **Starts with your machine.** Optional login-item registration on Linux, macOS and Windows.
+- **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down.
+- **Battery awareness.** Pauses when unplugged. Resumes on AC.
+- **Steps aside for games.** Mining pauses while a game has [GameMode](https://github.com/FeralInteractive/gamemode) on.
+- **Gives memory back.** When the machine starts thrashing, the miner is stopped outright so its ~2 GB returns at once. It restarts after ten calm minutes.
+- **Works without a tray.** On a desktop with no system tray, such as stock GNOME, closing the window keeps it mining, and opening kind-miner again brings the window back.
+- **Snooze from the tray.** Pause for an hour, until tomorrow morning (06:00), or until you resume. A pause survives a restart.
+- **Tor for onion nodes.** The default node is a Tor hidden service, so neither it nor other P2Pool nodes see your IP. Any address that isn't `.onion` is reached directly.
+- **Zero-setup dependencies.** The AppImage, the Flatpak and the .deb ship XMRig, P2Pool and (on the desktop) Tor. You need only a Monero wallet address.
+- **Graphical or terminal.** Double-click for a full window with setup, dashboard and settings. Launched from a terminal, it is a tray icon and logs on stdout.
+- **Single native binary.** No runtime, no Python, no Electron.
+
+More detail on each of these: [How kind-miner works](docs/how-it-works.md).
 
 ---
 
