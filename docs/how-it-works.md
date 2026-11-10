@@ -46,3 +46,81 @@ allocating its dataset on every launch, so a throttler that restarted XMRig to
 re-thread it would spend all its time re-initialising and never actually hash.
 Pausing keeps the dataset warm, gives smooth fractional control the thread count
 cannot, and hands idle cores straight back to your apps the instant it suspends.
+
+## How the scheduler works
+
+Your kindness preset sets the ceiling; the duty is the fraction of each half-second the miner actually runs, recalculated every tick.
+
+```
+every 2 seconds:
+  other_cpu = total_cpu% - xmrig_cpu%     ← other processes only
+
+  if manually paused                      → allowance 0
+  if on battery and pause_on_battery      → allowance 0
+  if any core temp >= temp limit          → allowance 0
+  if thermally throttled and asked to     → allowance 0
+  if screen unlocked and asked to         → allowance 0
+  else:
+    ceiling = kindness ceiling            ← Ghost's, until you have gone idle
+    target  = max(0, ceiling - other_cpu)
+    allowed += (target - allowed) x (target < allowed ? Fall : Rise)
+
+  duty = allowed ÷ (miner's full-tilt CPU share), capped at 1
+  duty 0  → XMRig stays suspended
+  duty 1  → XMRig runs without pauses
+  between → XMRig runs for that fraction of each half-second
+```
+
+XMRig also runs at OS idle priority (`nice 19` on Linux/macOS,
+`IDLE_PRIORITY_CLASS` on Windows). The scheduler is a second, independent layer
+on top of that. The combination means the miner loses scheduler fights to
+anything — including background browser tabs — and then explicitly hands back
+CPU if load climbs further.
+
+On Linux it goes further, since nice 19 still takes a real share of a busy core:
+
+- **CPU:** XMRig runs in its own idle-weighted systemd user scope (`cpu.idle=1`), so any app in your session preempts it outright. Inside Flatpak, or without a systemd user session, its threads run under `SCHED_IDLE` instead.
+- **Memory:** its OOM score is 1000, so if memory runs out the kernel kills the miner first, not what you are working in.
+- **Disk:** its I/O is in the idle class, served only when nothing else wants the disk.
+
+None of this needs root, and none of it changes the hashrate on an idle machine.
+
+The tray icon reflects state in real time:
+
+| Icon | State | Meaning |
+|---|---|---|
+| 🟠 colour | Mining | Running at its full thread count |
+| 🟠 dim | Stepping aside | Running at fewer threads than allowed |
+| ⚫ grey | Paused | Suspended — load, battery, heat, or you |
+| ⚫ grey, amber badge | Held | p2pool is mining alone on a sidechain of its own, so shares would never pay. The menu says why; mining resumes by itself once the check passes |
+
+p2pool on an island looks like healthy mining: it takes every share and never
+pays, because nobody else is on its chain. Once a minute kind-miner checks that
+p2pool has peers, that the sidechain is long and still moving, and that the pool
+is much bigger than this machine. If any check fails for three minutes, mining
+is held until they pass again.
+
+## The resource chart
+
+The dashboard draws the last 30 seconds (or 60, or 2 minutes) of two series:
+every other process's CPU, and the miner's. The band above the kindness ceiling
+is shaded — that is the part of the machine mining will not touch — and each
+moment the miner handed CPU back is ticked along the bottom.
+
+This exists because the failure mode that costs a user the most is deciding some
+unrelated slowdown is the miner's fault and uninstalling it. Watching the orange
+line dive the instant the grey one climbs is a better answer to that than any
+status line.
+
+Fyne 2.5.3 has no chart widget, so the plot is rasterised with
+`golang.org/x/image/vector` and handed to a `canvas.Raster`
+(`internal/gui/chart.go`).
+
+**A note on the power figures.** Since CVE-2020-8694 the Linux kernel ships the
+RAPL energy counters as root-only, because they are precise enough to infer what
+other processes are computing. kind-miner does not ask for privileges to read
+them, so on most machines the power tiles show `—`. Where the counters *are*
+readable, the miner's share is attributed proportionally to CPU — an
+approximation, exact only at the extremes. A modelled wattage presented next to
+a measured hashrate would be indistinguishable from a real one, so none is
+shown.
