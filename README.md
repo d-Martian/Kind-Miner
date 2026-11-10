@@ -63,17 +63,14 @@ Then pick the install that fits the machine:
 
 Linux is the primary target; macOS and Windows work but are less tested.
 
-Every file is on the [releases page](https://github.com/d-Martian/Kind-Miner/releases),
-newest at the top, each with a `.sha256` beside it to check the download
-against. The commands below name the current release, `0.2.0-rc10`. If the page
-shows a newer one, change `VERSION` to match (without the leading `v`).
+On Linux and macOS you don't need to pick anything from the [releases page](https://github.com/d-Martian/Kind-Miner/releases) yourself: the commands below download the right file. On Windows you download one file from that page; the table under [macOS, Windows, or a bare Linux binary](#macos-windows-or-a-bare-linux-binary) says which.
 
 ### Debian, Ubuntu and Mint: apt
 
 There are two packages; install the one that fits the machine:
 
-- **`kind-miner`** — the desktop app, with a window and a tray icon. amd64.
-- **`kind-minerd`** — the service for a machine with no screen. amd64 and arm64.
+- **`kind-miner`** — the desktop app, with a window and a tray icon. For ordinary Intel or AMD computers (amd64).
+- **`kind-minerd`** — the same miner with no window, for a machine with no screen, such as a home server. For ordinary Intel or AMD computers (amd64) and ARM-based ones (arm64).
 
 They cannot be installed side by side: installing one removes the other, so a
 machine never runs two miners.
