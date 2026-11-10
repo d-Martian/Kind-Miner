@@ -78,8 +78,7 @@ There are two packages; install the one that fits the machine:
 They cannot be installed side by side: installing one removes the other, so a
 machine never runs two miners.
 
-You download the first .deb by hand, once. It adds kind-miner's own apt
-repository, and from then on apt keeps it up to date.
+**To install, copy one whole block below, paste it into a terminal and press Enter.** It downloads the installer file (a `.deb`), checks that it arrived intact, and installs it only if the check passes. You only do this once: installing also adds kind-miner's own update source, and from then on it is kept up to date for you.
 
 **The desktop app:**
 
@@ -89,8 +88,7 @@ VERSION=0.2.0-rc10
 DEB=kind-miner_${VERSION}_amd64.deb
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
-sha256sum -c $DEB.sha256        # go on only if this prints "OK"
-sudo apt install ./$DEB tor
+sha256sum -c $DEB.sha256 && sudo apt install ./$DEB tor
 ```
 
 Then open **kind-miner** from your applications menu and carry on at
@@ -104,8 +102,7 @@ VERSION=0.2.0-rc10
 DEB=kind-minerd_${VERSION}_$(dpkg --print-architecture).deb
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
-sha256sum -c $DEB.sha256        # go on only if this prints "OK"
-sudo apt install ./$DEB
+sha256sum -c $DEB.sha256 && sudo apt install ./$DEB
 ```
 
 apt installs `tor` along with it.
