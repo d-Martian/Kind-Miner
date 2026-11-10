@@ -26,24 +26,19 @@ Monero's RandomX algorithm is designed to favour ordinary CPUs over ASICs, so a 
 
 ## Features
 
-- **Kindness, not thresholds.** One control (Ghost, Polite, Balanced or Full) sets how much of the machine mining may take and how fast it lets go.
-- **Disappears under load.** Every 2 seconds it measures everything else's CPU use and gives the miner only what is left under the kindness ceiling.
-- **Shows you it is doing so.** The dashboard plots the miner's CPU against everything else's, with each backoff marked.
-- **Uses the right cores.** Efficiency cores while you are at the machine, performance cores once you step away, and never a second hyperthread of a core.
-- **Waits for you to step away.** Until keyboard and mouse have been quiet for a while (5 minutes by default), mining is held to the Ghost ceiling.
-- **Mine now, kindly.** A toggle skips that wait. The CPU, battery and temperature backoff all stay in force.
-- **Says what it has earned.** Hashrate now, over 30 minutes and over 24 hours, each as an estimate of XMR per month, plus recent payouts in the tray.
-- **Starts with your machine.** Optional login-item registration on Linux, macOS and Windows.
-- **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down.
-- **Battery awareness.** Pauses when unplugged. Resumes on AC.
-- **Steps aside for games.** Mining pauses while a game has [GameMode](https://github.com/FeralInteractive/gamemode) on.
-- **Gives memory back.** When the machine starts thrashing, the miner is stopped outright so its ~2 GB returns at once. It restarts after ten calm minutes.
-- **Works without a tray.** On a desktop with no system tray, such as stock GNOME, closing the window keeps it mining, and opening kind-miner again brings the window back.
-- **Snooze from the tray.** Pause for an hour, until tomorrow morning (06:00), or until you resume. A pause survives a restart.
-- **Tor for onion nodes.** The default node is a Tor hidden service, so neither it nor other P2Pool nodes see your IP. Any address that isn't `.onion` is reached directly.
-- **Zero-setup dependencies.** The AppImage, the Flatpak and the .deb ship XMRig, P2Pool and (on the desktop) Tor. You need only a Monero wallet address.
-- **Graphical or terminal.** Double-click for a full window with setup, dashboard and settings. Launched from a terminal, it is a tray icon and logs on stdout.
-- **Single native binary.** No runtime, no Python, no Electron.
+- **Mining settings: Ghost, Polite, Balanced, or Full.** These set how much of your computer mining may use, from Ghost (the least) to Full (the most). Even Full backs off when your computer needs the power for something else.
+- **Stays out of your way.** Every 2 seconds it checks how busy your computer is, and gives mining only what's left over.
+- **Shows you what it's doing.** A live chart shows how much of your computer mining is using next to everything else, and marks each time mining stepped back.
+- **Leaves the fast parts for you.** While you're using the computer, mining keeps to part of the processor (the low-power cores, on chips that have them) and leaves the rest for you. Once you step away, it spreads out.
+- **Waits for you to step away.** Mining stays gentle until you haven't touched the keyboard or mouse for a few minutes. A "Mine now, kindly" switch skips the wait.
+- **Shows what you're earning.** Your mining speed (hashrate) now, over 30 minutes and over 24 hours, each with an estimate of the Monero (XMR) it would earn per month, plus your recent payouts.
+- **Starts with your computer.** It can start by itself whenever you log in, on Linux, macOS and Windows. You can switch that off.
+- **Pauses when it should.** Mining eases off when your computer gets hot, pauses while a laptop is on battery, and pauses while a game is running with [GameMode](https://github.com/FeralInteractive/gamemode) (a Linux tool that game launchers can switch on).
+- **Gives memory back.** When your computer runs short of memory, mining stops completely and frees up what it was using. It starts again after ten calm minutes.
+- **Pause it whenever you like.** From its small icon in the system tray (the row of icons by the clock), pause mining for an hour, until 6:00 tomorrow morning, or until you start it again. It stays paused even if you restart.
+- **Private by default.** Out of the box, mining connects through Tor, a network that hides your internet address (IP) from the computers it talks to. If you switch to a different Monero server (node) whose address doesn't end in `.onion`, it connects directly and they can see your IP.
+- **Everything in one download.** On Linux, the AppImage, Flatpak and .deb packages come with the mining programs they need, so there is nothing more to set up. All you bring is a Monero wallet address.
+- **Window or command line.** Double-click it for a normal window with setup, a dashboard and settings. Started from a terminal instead, it shows a tray icon and prints what it's doing as text.
 
 More detail on each of these: [How kind-miner works](docs/how-it-works.md).
 
