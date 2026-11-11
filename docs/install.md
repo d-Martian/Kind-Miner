@@ -28,9 +28,10 @@ Extra detail for the install steps in the [README](../README.md#install).
   `~/.local/share/kind-miner`. Delete the menu entry the AppImage made,
   `~/.local/share/applications/kind-miner.desktop`, or it shadows the
   package's.
-- **To remove it:** `sudo apt purge kind-miner` removes the program, the timer
-  and the repository; each user's data stays in their home.
-  `sudo apt purge kind-minerd` removes everything: the program, both pairs of
+- **To remove the desktop app:**
+  1. Quit kind-miner from its tray icon. A copy that is already running keeps running after the package is removed. To check it has stopped, run `pgrep -l 'kind-miner|xmrig|p2pool'`: it prints nothing once everything has quit.
+  2. `sudo apt purge kind-miner` removes the program, the timer and the repository.
+  3. `rm -r ~/.config/kind-miner ~/.local/share/kind-miner` deletes your settings and mining data, which the purge leaves in your home folder. Skip this step to keep them: a later reinstall then starts mining again with your old wallet address, without showing the setup screen.
+- **To remove the headless service:** `sudo apt purge kind-minerd` removes everything: the program, both pairs of
   engines, the timer, the config, and the state — p2pool's data, the hub's
   certificate and tokens, the onion keys.
-- **To remove your own data too:** the desktop app keeps your settings in `~/.config/kind-miner` and its mining data in `~/.local/share/kind-miner`. Until you delete both, a reinstall starts mining again with your old wallet address, without showing the setup screen. `rm -r ~/.config/kind-miner ~/.local/share/kind-miner` deletes them.
