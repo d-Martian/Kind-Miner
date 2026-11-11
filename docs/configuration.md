@@ -27,7 +27,7 @@ manage_p2pool: true
 max_threads: 0
 
 # How much of the machine mining may take, and how fast it lets go.
-# ghost | polite | balanced | full — see "Kindness" above.
+# ghost | polite | balanced | full — see "Kindness" in the README.
 kindness: polite
 
 # Pause when running on battery.
