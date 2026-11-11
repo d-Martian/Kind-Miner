@@ -61,6 +61,8 @@ Linux is the primary target; macOS and Windows work but are less tested.
 
 On Linux and macOS you don't need to pick anything from the [releases page](https://github.com/d-Martian/Kind-Miner/releases) yourself: the commands below download the right file. On Windows you download one file from that page; the table under [macOS, Windows, or a bare Linux binary](#macos-windows-or-a-bare-linux-binary) says which.
 
+The commands name version `0.2.0-rc11`. If a download stops with "error: 404", that version has been replaced by a newer one. Look at the top of the [releases page](https://github.com/d-Martian/Kind-Miner/releases) for the new version number, and change the `VERSION=` line to match, leaving off the `v` at the start.
+
 ### Debian, Ubuntu and Mint: apt
 
 There are two packages; install the one that fits the machine:
@@ -77,7 +79,7 @@ machine never runs two miners.
 
 ```sh
 sudo apt update
-VERSION=0.2.0-rc10
+VERSION=0.2.0-rc11
 DEB=kind-miner_${VERSION}_amd64.deb
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
@@ -91,7 +93,7 @@ Then open **kind-miner** from your applications menu and carry on at
 
 ```sh
 sudo apt update
-VERSION=0.2.0-rc10
+VERSION=0.2.0-rc11
 DEB=kind-minerd_${VERSION}_$(dpkg --print-architecture).deb
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$DEB.sha256
@@ -114,7 +116,7 @@ way.
 **AppImage** — one file, nothing to install. Copy the whole block, paste it into a terminal and press Enter. It downloads the file, checks it, and starts kind-miner only if the check passes:
 
 ```sh
-VERSION=0.2.0-rc10
+VERSION=0.2.0-rc11
 APP=kind-miner-v${VERSION}-linux-x86_64.AppImage
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$APP
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$APP.sha256
@@ -128,7 +130,7 @@ at it.
 **Flatpak** — needs `flatpak` installed; the runtime comes from Flathub. Copy the whole block, paste it into a terminal and press Enter. It downloads the file, checks it, and installs it only if the check passes:
 
 ```sh
-VERSION=0.2.0-rc10
+VERSION=0.2.0-rc11
 PAK=kind-miner-v${VERSION}-linux-amd64.flatpak
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$PAK
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$PAK.sha256
@@ -160,7 +162,7 @@ it needs the program to be there. (It also uses a Tor already listening on
 On macOS, for example:
 
 ```sh
-VERSION=0.2.0-rc10
+VERSION=0.2.0-rc11
 NAME=kind-miner-v${VERSION}-darwin-arm64     # -darwin-amd64 on an Intel Mac
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$NAME.tar.gz
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$NAME.tar.gz.sha256
