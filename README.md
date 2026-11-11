@@ -111,31 +111,28 @@ Both carry XMRig, P2Pool and Tor, so nothing is downloaded when you first run
 them. Neither updates itself: when a new release is out, download it the same
 way.
 
-**AppImage** — one file, nothing to install:
+**AppImage** — one file, nothing to install. Copy the whole block, paste it into a terminal and press Enter. It downloads the file, checks it, and starts kind-miner only if the check passes:
 
 ```sh
 VERSION=0.2.0-rc10
 APP=kind-miner-v${VERSION}-linux-x86_64.AppImage
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$APP
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$APP.sha256
-sha256sum -c $APP.sha256
-chmod +x $APP
-./$APP --gui
+sha256sum -c $APP.sha256 && chmod +x $APP && ./$APP --gui
 ```
 
 The first time it runs it adds itself to your applications menu, so after that
 you can start it from there. Keep the file where it is: the menu entry points
 at it.
 
-**Flatpak** — needs `flatpak` installed; the runtime comes from Flathub:
+**Flatpak** — needs `flatpak` installed; the runtime comes from Flathub. Copy the whole block, paste it into a terminal and press Enter. It downloads the file, checks it, and installs it only if the check passes:
 
 ```sh
 VERSION=0.2.0-rc10
 PAK=kind-miner-v${VERSION}-linux-amd64.flatpak
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$PAK
 curl -fLO https://github.com/d-Martian/Kind-Miner/releases/download/v$VERSION/$PAK.sha256
-sha256sum -c $PAK.sha256
-flatpak install --user $PAK
+sha256sum -c $PAK.sha256 && flatpak install --user $PAK
 ```
 
 Then open **kind-miner** from your applications menu, or run
