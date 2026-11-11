@@ -33,3 +33,4 @@ Extra detail for the install steps in the [README](../README.md#install).
   `sudo apt purge kind-minerd` removes everything: the program, both pairs of
   engines, the timer, the config, and the state — p2pool's data, the hub's
   certificate and tokens, the onion keys.
+- **To remove your own data too:** the desktop app keeps your settings in `~/.config/kind-miner` and its mining data in `~/.local/share/kind-miner`. Until you delete both, a reinstall starts mining again with your old wallet address, without showing the setup screen. `rm -r ~/.config/kind-miner ~/.local/share/kind-miner` deletes them.
