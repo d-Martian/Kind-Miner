@@ -89,8 +89,8 @@ The tray icon reflects state in real time:
 
 | Icon | State | Meaning |
 |---|---|---|
-| 🟠 colour | Mining | Running at its full thread count |
-| 🟠 dim | Stepping aside | Running at fewer threads than allowed |
+| 🟠 colour | Mining | Running at least 90% of the time |
+| 🟠 dim | Stepping aside | Running less than 90% of the time |
 | ⚫ grey | Paused | Suspended — load, battery, heat, or you |
 | ⚫ grey, amber badge | Held | p2pool is mining alone on a sidechain of its own, so shares would never pay. The menu says why; mining resumes by itself once the check passes |
 
