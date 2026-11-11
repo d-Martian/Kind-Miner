@@ -188,10 +188,7 @@ On Windows, unzip the archive and double-click `kind-miner.exe`.
 
 <img src="assets/screenshots/onboarding.png" alt="The first-run screen: one field for your Monero payout address, a ticked box to start with your computer, and a Start mining button" width="360" />
 
-That is the whole setup. **More options** lets you use your own Monero node
-instead of ours over Tor; everything else starts from a default — the
-automatic node, the nano sidechain, the bundled engines, the Polite preset,
-and pausing on battery — and all of it can be changed later in Settings.
+That is the whole setup. **More options** opens a choice to use your own Monero server (node) instead of ours over Tor. Everything else starts with a sensible default, such as the Polite setting and pausing on battery. You can change any of it later in Settings.
 
 Once mining has started, the window tucks into the system tray and a
 notification says where it went. On a desktop with no tray, such as stock
