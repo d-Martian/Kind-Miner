@@ -12,7 +12,7 @@ import (
 // require to exist for the p2pool version deps.json pins. Bumping p2pool
 // without checking this line fails the build.
 //
-// The wording, as of p2pool v4.18 (p2pool.cpp and side_chain.cpp, the same in
+// The wording, as of p2pool v4.18.1 (p2pool.cpp and side_chain.cpp, the same in
 // both, unchanged since at least v3.10):
 //
 //	Your wallet <address> got a payout of <W>.<FFFFFFFFFFFF> XMR in block <height>

@@ -8,4 +8,4 @@
 # The version must match deps.json; the script refuses to run if they
 # disagree. Move both together.
 #   name  sha256  url
-p2pool_source  ee6ea75e870be4480293908e7cc87bfc9b21afeb2738e9e73a9b8b7c066e21a9  https://github.com/SChernykh/p2pool/releases/download/v4.18/p2pool_source-v4.18.tar.xz
+p2pool_source  28b77f7ee3706812344599f8dbbf0a5a3718819399b7eef8cc11dd617057a523  https://github.com/SChernykh/p2pool/releases/download/v4.18.1/p2pool_source-v4.18.1.tar.xz
