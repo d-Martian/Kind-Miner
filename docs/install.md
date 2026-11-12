@@ -35,3 +35,12 @@ Extra detail for the install steps in the [README](../README.md#install).
 - **To remove the headless service:** `sudo apt purge kind-minerd` removes everything: the program, both pairs of
   engines, the timer, the config, and the state — p2pool's data, the hub's
   certificate and tokens, the onion keys.
+
+## Removing the AppImage
+
+The AppImage is one file: the file you downloaded is the program itself. To get rid of kind-miner, delete that file and the few things it added:
+
+1. Quit kind-miner from its tray icon. To check it has stopped, run `pgrep -l 'kind-miner|xmrig|p2pool'`: it prints nothing once everything has quit.
+2. Delete the AppImage file and the `.sha256` file beside it, from the folder you downloaded them into.
+3. `rm ~/.local/share/applications/kind-miner.desktop ~/.local/share/icons/hicolor/512x512/apps/kind-miner.png` deletes the menu entry and the icon it added the first time it ran.
+4. `rm -r ~/.config/kind-miner ~/.local/share/kind-miner` deletes your settings and mining data. These folders only exist once you have completed the setup screen.

@@ -113,7 +113,7 @@ Both carry XMRig, P2Pool and Tor, so nothing is downloaded when you first run
 them. Neither updates itself: when a new release is out, download it the same
 way.
 
-**AppImage** — one file, nothing to install. Copy the whole block, paste it into a terminal and press Enter. It downloads the file, checks it, and starts kind-miner only if the check passes:
+**AppImage** — one file that is the whole program. It stays in whichever folder your terminal is in when you run the block, so run it where you want to permanently keep it; a new terminal starts in your home folder, which is fine. Copy the whole block, paste it in and press Enter. It downloads the file, checks it, and starts kind-miner only if the check passes:
 
 ```sh
 VERSION=0.2.0-rc11
@@ -125,7 +125,7 @@ sha256sum -c $APP.sha256 && chmod +x $APP && ./$APP --gui
 
 The first time it runs it adds itself to your applications menu, so after that
 you can start it from there. Keep the file where it is: the menu entry points
-at it.
+at it. To remove it later, see [Removing the AppImage](docs/install.md#removing-the-appimage).
 
 **Flatpak** — needs `flatpak` installed; the runtime comes from Flathub. Copy the whole block, paste it into a terminal and press Enter. It downloads the file, checks it, and installs it only if the check passes:
 
