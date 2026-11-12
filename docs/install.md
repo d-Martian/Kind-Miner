@@ -44,3 +44,10 @@ The AppImage is one file: the file you downloaded is the program itself. To get 
 2. Delete the AppImage file and the `.sha256` file beside it, from the folder you downloaded them into.
 3. `rm ~/.local/share/applications/kind-miner.desktop ~/.local/share/icons/hicolor/512x512/apps/kind-miner.png` deletes the menu entry and the icon it added the first time it ran.
 4. `rm -r ~/.config/kind-miner ~/.local/share/kind-miner` deletes your settings and mining data. These folders only exist once you have completed the setup screen.
+
+## Removing the Flatpak
+
+1. Quit kind-miner from its tray icon. To check it has stopped, run `pgrep -l 'kind-miner|xmrig|p2pool'`: it prints nothing once everything has quit.
+2. `flatpak uninstall --user --delete-data io.github.d_Martian.KindMiner` removes the program and its private data. Answer `y` when it asks whether to delete the data.
+3. `rm -r ~/.config/kind-miner` deletes your settings. The Flatpak creates this folder the first time it starts, and uninstalling leaves it behind.
+4. Delete the `.flatpak` file and the `.sha256` file beside it, from the folder you downloaded them into.

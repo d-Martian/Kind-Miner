@@ -140,7 +140,7 @@ sha256sum -c $PAK.sha256 && flatpak install --user $PAK
 Then open **kind-miner** from your applications menu, or run
 `flatpak run io.github.d_Martian.KindMiner`. For a later release, install
 its bundle the same way (add `--reinstall` if flatpak says it is already
-installed).
+installed). To remove it later, see [Removing the Flatpak](docs/install.md#removing-the-flatpak).
 
 ### macOS, Windows, or a bare Linux binary
 
