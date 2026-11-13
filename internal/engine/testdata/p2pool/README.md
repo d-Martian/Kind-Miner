@@ -22,3 +22,6 @@ then review the diff of `payouts.golden.json` by hand.
 The 4.18 lines were written from the source (p2pool.cpp:627,
 side_chain.cpp:689, the `XMRAmount` formatter in log.h), not captured from a
 live payout.
+
+4.18.1 prints both lines unchanged, at the same places; its log.h is
+untouched, so its directory is a copy of 4.18's.

@@ -24,7 +24,7 @@ buildsystem: simple
 build-commands:
   - |
     cd /app/lib/kind-miner/engines
-    printf '{\n  "xmrig": "6.26.0",\n  "p2pool": "4.18",\n  "tor": "0.4.9.9",\n  "xmrig_sha256": "%s",\n  "p2pool_sha256": "%s"\n}\n' \
+    printf '{\n  "xmrig": "6.26.0",\n  "p2pool": "4.18.1",\n  "tor": "0.4.9.9",\n  "xmrig_sha256": "%s",\n  "p2pool_sha256": "%s"\n}\n' \
       "$(sha256sum xmrig | cut -d' ' -f1)" "$(sha256sum p2pool | cut -d' ' -f1)" > engines.json
 modules:
     # libuv and libzmq from p2pool's own source release, so p2pool links exactly
@@ -46,8 +46,8 @@ modules:
       sources:
         - &p2pool-source
           type: archive
-          url: https://github.com/SChernykh/p2pool/releases/download/v4.18/p2pool_source-v4.18.tar.xz
-          sha256: ee6ea75e870be4480293908e7cc87bfc9b21afeb2738e9e73a9b8b7c066e21a9
+          url: https://github.com/SChernykh/p2pool/releases/download/v4.18.1/p2pool_source-v4.18.1.tar.xz
+          sha256: 28b77f7ee3706812344599f8dbbf0a5a3718819399b7eef8cc11dd617057a523
 
     - name: libzmq
       buildsystem: cmake-ninja
