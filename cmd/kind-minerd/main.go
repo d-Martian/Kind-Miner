@@ -219,10 +219,28 @@ func runInit(w io.Writer, address string, force, noHub bool, env initEnv) error 
 	if err := config.CheckAddress(address); err != nil {
 		return fmt.Errorf("--address: %w", err)
 	}
-	forService := config.Path() == serviceConfig
 	if env.serviceInstalled && !env.root && !env.flagConfig {
 		return fmt.Errorf("kind-minerd is installed as a service; set it up as root:\n\n  sudo kind-minerd init --address %s", address)
 	}
+	// Root reaches the desktop-written config only because it is the one the
+	// service reads (configFor), so pair and doctor answer about it. init must
+	// not write it: the file is the service's own, and init wrote over it as a
+	// user's config — the hub off, no restart, a root-owned file in a state
+	// directory the service's dynamic user may not read — so a Nodo serving the
+	// house stopped at its next restart. Setting the service up over SSH means
+	// root's config, which then wins; the desktop's stays, unread, and removing
+	// root's later hands the hub back.
+	takeover := config.Path() == serviceStateConfig && !env.flagConfig
+	if takeover {
+		if !force {
+			return fmt.Errorf("this hub was set up from a desktop: its config is %s, and its wallet is "+
+				"changed on that desktop's Payout tab. To take it over from here instead, run again with "+
+				"--force: root's config in %s then wins, and the desktop can no longer change the wallet",
+				serviceStateConfig, serviceConfig)
+		}
+		config.SetPath(serviceConfig)
+	}
+	forService := config.Path() == serviceConfig
 	if _, err := os.Stat(config.Path()); err == nil && !force {
 		return fmt.Errorf("%s already exists; use --force to replace it", config.Path())
 	}
@@ -236,6 +254,9 @@ func runInit(w io.Writer, address string, force, noHub bool, env initEnv) error 
 		return nil
 	}
 	fmt.Fprintf(w, "Wrote %s.\n", config.Path())
+	if takeover {
+		fmt.Fprintf(w, "It takes over from the config the desktop wrote, %s, which stays but is no longer read.\n", serviceStateConfig)
+	}
 	if err := env.restart(); err != nil {
 		return fmt.Errorf("restarting the service: %w (try: sudo systemctl restart kind-minerd)", err)
 	}

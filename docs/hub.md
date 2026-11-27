@@ -330,15 +330,17 @@ Tor)` while it is away from home.
 
 **Lost the owner desktop?** Ownership is three lines in that desktop's config:
 `mode: hub`, `hub_code` and `hub_owner_token`. Copy them into a new desktop's
-config to carry it over. Without them, take the hub over from SSH by writing
-root's config:
+config to carry it over. Without them, take the hub over from SSH:
 
 ```sh
-sudo kind-minerd init --address 4… --config /etc/kind-miner/config.yaml
+sudo kind-minerd init --address 4… --force
 ```
 
-Root's config then wins over the one the desktop wrote. From then on the hub
-is changed over SSH. Its certificate is kept, so paired devices carry on.
+On a hub set up from a desktop, `init` refuses without `--force` and says
+what taking over means. With it, `init` writes root's config, which then wins
+over the one the desktop wrote; the desktop's stays, but is no longer read.
+From then on the hub is changed over SSH. Its certificate is kept, so paired
+devices carry on.
 
 **The ports.** Set `hub.stratum_port` and `hub.api_port`, restart, and pair
 every device again: the ports are in the code. The search that **Find a hub**

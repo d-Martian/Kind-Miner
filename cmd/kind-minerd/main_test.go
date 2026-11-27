@@ -203,6 +203,70 @@ func TestInit(t *testing.T) {
 			t.Errorf("--force: %v", err)
 		}
 	})
+
+	// The failure this guards: root reaches the desktop-written config through
+	// configFor, and init --force wrote over it with the hub off and no
+	// restart, so the house's hub stopped at its next restart.
+	t.Run("a hub set up from a desktop is taken over into root's config, only with --force", func(t *testing.T) {
+		dir := t.TempDir()
+		oldSvc, oldState := serviceConfig, serviceStateConfig
+		serviceConfig = filepath.Join(dir, "etc", "config.yaml")
+		serviceStateConfig = filepath.Join(dir, "state", "config.yaml")
+		t.Cleanup(func() {
+			serviceConfig, serviceStateConfig = oldSvc, oldState
+			config.SetPath("")
+		})
+
+		desktop, err := setupConfig(thirdAddress, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		config.SetPath(serviceStateConfig)
+		if err := desktop.Save(); err != nil {
+			t.Fatal(err)
+		}
+
+		var restarted, paired bool
+		env := initEnv{
+			root: true, serviceInstalled: true,
+			restart: func() error { restarted = true; return nil },
+			pairing: func(io.Writer) error { paired = true; return nil },
+		}
+
+		err = runInit(io.Discard, sampleAddress, false, false, env)
+		if err == nil || !strings.Contains(err.Error(), "--force") || !strings.Contains(err.Error(), "Payout") {
+			t.Fatalf("without --force: err = %v, want it to explain the takeover and --force", err)
+		}
+		if exists(serviceConfig) || restarted {
+			t.Fatal("without --force, init wrote root's config or restarted the service")
+		}
+
+		config.SetPath(serviceStateConfig) // as configFor resolves it for root
+		var out strings.Builder
+		if err := runInit(&out, sampleAddress, true, false, env); err != nil {
+			t.Fatalf("with --force: %v", err)
+		}
+		if !restarted || !paired {
+			t.Errorf("restarted=%v paired=%v, want both: taking over is a full service setup", restarted, paired)
+		}
+		if !strings.Contains(out.String(), "no longer read") {
+			t.Errorf("the output does not say the desktop's config is superseded:\n%s", out.String())
+		}
+
+		config.SetPath(serviceConfig)
+		root, err := config.Load()
+		if err != nil {
+			t.Fatalf("root's config: %v", err)
+		}
+		if root.Wallet != sampleAddress || !root.Hub.Serve {
+			t.Errorf("root's config: wallet %.8s…, hub %v; want the new wallet with the hub on", root.Wallet, root.Hub.Serve)
+		}
+		config.SetPath(serviceStateConfig)
+		left, err := config.Load()
+		if err != nil || left.Wallet != thirdAddress || !left.Hub.Serve {
+			t.Errorf("the desktop's config changed (err %v); it should stay as the desktop left it", err)
+		}
+	})
 }
 
 func TestConfigFor(t *testing.T) {
