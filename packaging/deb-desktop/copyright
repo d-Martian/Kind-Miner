@@ -3,8 +3,8 @@ Upstream-Name: kind-miner
 Source: https://github.com/d-Martian/Kind-Miner
 
 Files: opt/kind-miner-desktop/kind-miner
-License: unspecified
-Comment: The repository has no license file yet.
+Copyright: 2026 dMartian
+License: Expat
 
 Files: opt/kind-miner-desktop/engines/xmrig
 Copyright: XMRig <support@xmrig.com>
@@ -12,7 +12,7 @@ License: GPL-3.0-or-later
 Comment: Built from source with kind-miner's two patches; see engines/xmrig.
  The complete source — the pinned archives, the patches and the recipe — is
  published with every kind-miner release as
- kind-miner-<version>-xmrig-<version>-source.tar.gz.
+ kind-miner-v<version>-xmrig-<version>-source.tar.gz.
 
 Files: opt/kind-miner-desktop/engines/p2pool
 Copyright: SChernykh
@@ -36,3 +36,22 @@ Files: opt/kind-miner-desktop/engines/tor/libssl* opt/kind-miner-desktop/engines
 Copyright: The OpenSSL Project Authors
 License: Apache-2.0
 Comment: Shipped in the Tor Expert Bundle.
+
+License: Expat
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.

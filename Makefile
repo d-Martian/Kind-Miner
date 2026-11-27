@@ -91,19 +91,19 @@ bundle-linux: $(DIST)/linux-amd64/$(BINARY)
 	mkdir -p $(DIST)/linux-amd64/bin
 	cp -n $(DIST)/linux-amd64/bin/xmrig $(DIST)/linux-amd64/bin/ 2>/dev/null || true
 	cp -n $(DIST)/linux-amd64/bin/p2pool $(DIST)/linux-amd64/bin/ 2>/dev/null || true
-	cp config.example.yaml $(DIST)/linux-amd64/
+	cp LICENSE config.example.yaml $(DIST)/linux-amd64/
 	$(PACKAGE) tar $(DIST)/kind-miner-$(VERSION)-linux-amd64.tar.gz $(DIST)/linux-amd64 .
 
 bundle-darwin:
 	for arch in amd64 arm64; do \
 	  mkdir -p $(DIST)/darwin-$$arch/bin; \
-	  cp config.example.yaml $(DIST)/darwin-$$arch/; \
+	  cp LICENSE config.example.yaml $(DIST)/darwin-$$arch/; \
 	  $(PACKAGE) tar $(DIST)/kind-miner-$(VERSION)-darwin-$$arch.tar.gz $(DIST)/darwin-$$arch .; \
 	done
 
 bundle-windows: $(DIST)/windows-amd64/$(BINARY).exe
 	mkdir -p $(DIST)/windows-amd64/bin
-	cp config.example.yaml $(DIST)/windows-amd64/
+	cp LICENSE config.example.yaml $(DIST)/windows-amd64/
 	$(PACKAGE) zip $(DIST)/kind-miner-$(VERSION)-windows-amd64.zip $(DIST) windows-amd64
 
 appimage:

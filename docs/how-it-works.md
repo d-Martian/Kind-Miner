@@ -12,7 +12,7 @@ The detail behind the short feature list in the [README](../README.md).
 - **Mine now, kindly.** A toggle skips the wait when you want to mine on purpose. It skips *only* the wait: the CPU, battery, and temperature backoff all stay in force, so browsing and video stay smooth.
 - **Says what it has earned.** Hashrate now, over 30 minutes and over 24 hours, each as an estimate of XMR per month; when your next p2pool share is due; and how much of the payout window you occupy — in the window and in the tray. The 30-minute and 24-hour figures come from kind-miner's own record, which counts paused time as zero and survives a restart, so they describe what the machine actually earns while it gets out of your way. The tray's **Recent payouts** lists the last five payouts p2pool announced while kind-miner was running, with how long ago and, for the first two hours, when the coinbase output becomes spendable. Your wallet remains the full record.
 - **Starts with your machine.** Optional login-item registration on Linux, macOS, and Windows.
-- **Backs off for heat.** A configurable temperature ceiling, plus an optional pause while the CPU is clocking itself down — which catches the clogged-fan case a fixed °C limit misses.
+- **Backs off for heat.** Over the last 8 °C below its temperature limit (95 °C by default) mining eases off smoothly, so a machine that runs warm holds a temperature instead of swinging between full speed and a dead stop. Only the limit itself stops it.
 - **Battery awareness.** Pauses automatically when unplugged. Resumes on AC.
 - **Steps aside for games.** When a game turns on [GameMode](https://github.com/FeralInteractive/gamemode) (or you launch one with `gamemoderun`), mining pauses until it ends.
 - **Gives memory back.** When the machine starts thrashing — sustained memory stalls, or free memory below a small margin — the miner is stopped outright, not just paused, so its ~2 GB returns at once. It starts again only after ten calm minutes with room to spare.
@@ -40,9 +40,10 @@ falling fast and rising slowly turns the same load into a miner that simply
 is not there while you work.
 
 The allowance is applied by **duty-cycling** XMRig — suspending and resuming it
-(SIGSTOP/SIGCONT) so it runs for `duty` of each half-second — never by changing
-its thread count. That matters more than it sounds: RandomX spends ~3 seconds
-allocating its dataset on every launch, so a throttler that restarted XMRig to
+(SIGSTOP/SIGCONT) so it runs for `duty` of each half-second — never by
+restarting it with fewer threads. That matters more than it sounds: RandomX
+spends ~3 seconds allocating its dataset on every launch, so a throttler that
+restarted XMRig to
 re-thread it would spend all its time re-initialising and never actually hash.
 Pausing keeps the dataset warm, gives smooth fractional control the thread count
 cannot, and hands idle cores straight back to your apps the instant it suspends.
@@ -53,16 +54,22 @@ Your kindness preset sets the ceiling; the duty is the fraction of each half-sec
 
 ```
 every 2 seconds:
-  other_cpu = total_cpu% - xmrig_cpu%     ← other processes only
+  other_cpu = total_cpu% - xmrig_cpu%     ← other processes only, same window
 
-  if manually paused                      → allowance 0
-  if on battery and pause_on_battery      → allowance 0
-  if any core temp >= temp limit          → allowance 0
-  if thermally throttled and asked to     → allowance 0
-  if screen unlocked and asked to         → allowance 0
-  else:
+  hard stop — allowance 0 at once:
+    paused or snoozed by you
+    memory short                          ← xmrig stopped outright, not paused
+    held                                  ← p2pool on an island, or the advisory
+    on battery, with pause_on_battery
+    screen unlocked, with mine_only_when_locked
+    a game holding GameMode
+    the node still syncing                ← mine_on_nodo only
+    hottest core >= temp_limit_celsius
+
+  otherwise:
     ceiling = kindness ceiling            ← Ghost's, until you have gone idle
     target  = max(0, ceiling - other_cpu)
+    target ×= heat factor                 ← 1, falling to 0 over the last 8 °C
     allowed += (target - allowed) x (target < allowed ? Fall : Rise)
 
   duty = allowed ÷ (miner's full-tilt CPU share), capped at 1
@@ -70,6 +77,18 @@ every 2 seconds:
   duty 1  → XMRig runs without pauses
   between → XMRig runs for that fraction of each half-second
 ```
+
+A hard stop zeroes the allowance, and coming back is the full slow climb. Other
+work merely leaving no headroom is a *soft* zero: the allowance only falls at
+the Fall rate, so a background task every few seconds dents it rather than
+resetting it, and the miner can still build up an allowance on a mostly idle
+machine.
+
+Which cores xmrig runs on is a separate, slower choice: a few while you are at
+the machine, all of them once you have gone idle (see
+[Uses the right cores](#features-in-detail)). kind-miner moves between the two
+by rewriting xmrig's thread list, which xmrig applies in milliseconds without
+restarting or losing its dataset.
 
 XMRig also runs at OS idle priority (`nice 19` on Linux/macOS,
 `IDLE_PRIORITY_CLASS` on Windows). The scheduler is a second, independent layer
@@ -92,7 +111,7 @@ The tray icon reflects state in real time:
 | 🟠 colour | Mining | Running at least 90% of the time |
 | 🟠 dim | Stepping aside | Running less than 90% of the time |
 | ⚫ grey | Paused | Suspended — load, battery, heat, or you |
-| ⚫ grey, amber badge | Held | p2pool is mining alone on a sidechain of its own, so shares would never pay. The menu says why; mining resumes by itself once the check passes |
+| ⚫ grey, amber badge | Held | Mining would not pay, or is not safe: p2pool is alone on a sidechain of its own, so shares would never pay, or the [advisory](headless.md#the-advisory) says an engine needs updating. The menu says why; mining resumes by itself once that clears |
 
 p2pool on an island looks like healthy mining: it takes every share and never
 pays, because nobody else is on its chain. Once a minute kind-miner checks that

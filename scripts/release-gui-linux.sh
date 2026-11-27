@@ -22,7 +22,7 @@ scripts/in-build-container.sh "$OUT" -- bash -c "
 	set -euo pipefail
 	rm -rf '/out/${NAME}' && mkdir -p '/out/${NAME}'
 	bash scripts/reproduce.sh '${VERSION}' '/out/${NAME}/kind-miner' >/dev/null
-	cp README.md config.example.yaml '/out/${NAME}/'
+	cp README.md LICENSE config.example.yaml '/out/${NAME}/'
 	bash scripts/package.sh tar '/out/${NAME}.tar.gz' /out '${NAME}'
 	rm -rf '/out/${NAME}'"
 (cd "$OUT" && sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256")

@@ -144,7 +144,7 @@ installed). To remove it later, see [Removing the Flatpak](docs/install.md#remov
 
 ### macOS, Windows, or a bare Linux binary
 
-These archives hold the program alone, with this README and
+These archives hold the program alone, with this README, `LICENSE` and
 `config.example.yaml`. On first run it downloads the pinned XMRig and P2Pool
 and checks their SHA256 before using them.
 
@@ -238,6 +238,8 @@ For a box with no screen — a Nodo, a home server — there is `kind-minerd`, t
 
 Setup, commands, updates, running it as a service by hand, and one hub for several computers: [Headless: kind-minerd](docs/headless.md).
 
+One hub for the whole house: a kind-minerd box runs P2Pool once, and your other computers mine to it, whether they run kind-miner, plain xmrig, or a mining proxy you already have. Setup, pairing and security: [The household hub](docs/hub.md).
+
 ## Sleep
 
 kind-miner mines while your machine is awake and stops when it sleeps. It never keeps a machine awake, and we don't suggest turning sleep off to mine more: a kind miner uses the time you leave it, not time it takes.
@@ -294,4 +296,7 @@ You don't need something to hide to want privacy. Run the miner, collect some XM
 
 ## License
 
-MIT. Do what you want with it.
+MIT — see [LICENSE](LICENSE). Do what you want with it.
+
+The xmrig and p2pool that the packages bundle are GPLv3, under their own
+licences; see [Source for the bundled engines](docs/headless.md#source-for-the-bundled-engines).
