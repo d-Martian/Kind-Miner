@@ -144,7 +144,7 @@ installed). To remove it later, see [Removing the Flatpak](docs/install.md#remov
 
 ### macOS, Windows, or a bare Linux binary
 
-These archives hold the program alone, with this README and
+These archives hold the program alone, with this README, `LICENSE` and
 `config.example.yaml`. On first run it downloads the pinned XMRig and P2Pool
 and checks their SHA256 before using them.
 
@@ -294,4 +294,7 @@ You don't need something to hide to want privacy. Run the miner, collect some XM
 
 ## License
 
-MIT. Do what you want with it.
+MIT — see [LICENSE](LICENSE). Do what you want with it.
+
+The xmrig and p2pool that the packages bundle are GPLv3, under their own
+licences; see [Source for the bundled engines](docs/headless.md#source-for-the-bundled-engines).

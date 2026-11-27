@@ -104,7 +104,7 @@ jobs:
           [[ "${{ matrix.goos }}" == "windows" ]] && EXT=".exe"
           mkdir "$NAME"
           mv "kind-miner${EXT}" "$NAME/"
-          cp README.md config.example.yaml "$NAME/"
+          cp README.md LICENSE config.example.yaml "$NAME/"
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
             ASSET="${NAME}.zip"
