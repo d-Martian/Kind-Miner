@@ -189,10 +189,14 @@ bool (`Session.Locked`, `Power.Watts`) so callers can't read "not locked" or
   `throttle_sensitivity` → `kindness`) and `Save` drops the dead key via
   `omitempty`. `Load` also has to distinguish "key absent" from "key set to the
   default", which is why `Kindness` is blanked before unmarshalling.
-- Changing config keys touches `config.example.yaml` and the README config
-  block; the settings window groups the same keys and must say when a change
+- Changing config keys touches `config.example.yaml` and the config block in
+  `docs/configuration.md`; the settings window groups the same keys and must say when a change
   needs a restart (wallet, mode, node, sidechain) versus taking effect live
   (kindness, chart, pause conditions — via `Scheduler.UpdateRuntime`).
+- **The hub's user guide is `docs/hub.md`**: setup, pairing codes, the
+  `pair --name` pools block (also what a mining proxy uses), the onion,
+  ports and trust. A change to `internal/hub`, `cmd/kind-minerd` setup/pair, or
+  the hub config keys must keep it true.
 - **p2pool listens on one stratum port.** Given two (3333 and the hub's
   18087) 4.18 panics, so a hub moves its own miner onto the hub port over
   loopback; TLS is detected per connection. `Supervisor.stratumPort` owns this.

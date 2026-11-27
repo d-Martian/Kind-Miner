@@ -30,16 +30,21 @@ max_threads: 0
 # ghost | polite | balanced | full — see "Kindness" in the README.
 kindness: polite
 
+# How long the keyboard and mouse must be quiet (seconds) before mining may go
+# past the Ghost ceiling. 0 skips the wait; Full never waits.
+idle_full_after_seconds: 300
+
 # Pause when running on battery.
 pause_on_battery: true
 
-# Pause while the CPU is clocking itself down for heat.
-pause_on_thermal_throttle: true
+# Ease mining off over the last 8 °C below temp_limit_celsius, instead of
+# mining flat out and then stopping dead at the limit.
+thermal_governor: true
 
 # Mine only while the screen is locked.
 mine_only_when_locked: false
 
-# Pause if any CPU core exceeds this temperature (Celsius).
+# Pause if any CPU core reaches this temperature (Celsius). 0 turns it off.
 temp_limit_celsius: 95
 
 # Mine as a guest on a Nodo (or any big.LITTLE box that serves a Monero node):
@@ -70,13 +75,15 @@ chart:
 log_level: info
 ```
 
-Everything here except `mine_on_nodo` and `hub` (headless-box settings) is editable
-from the settings window, which groups it the same
-way: **Payout**, **Connection**, **Binaries**, **Kindness**, **Graph**,
-**Advanced**. Kindness and graph settings take effect while you watch; wallet,
-mode, node, hub code and sidechain need a restart, and the window says so when you save.
+Everything here except `manage_p2pool`, `log_level`, and the headless-box
+settings `mine_on_nodo` and `hub` is editable from the settings window, which
+groups it the same way: **Payout**, **Connection**, **Binaries**,
+**Kindness**, **Graph**, **Advanced**. Kindness, graph and pause settings take
+effect while you watch; wallet, mode, node, hub code, worker name and sidechain
+need a restart, and the window says so when you save.
 
-kind-miner only rewrites the keys it owns, so anything you add by hand is kept.
+Saving from the settings window writes the whole file afresh: comments, and
+any key kind-miner does not know, are not kept.
 
 ## Connection modes
 
@@ -108,11 +115,11 @@ Set `manage_monerod: true` to have kind-miner start and stop `monerod` for you.
 XMRig ──TLS, LAN──→ p2pool on the hub → the hub's monerod
 ```
 
-Only XMRig runs here; the hub (see [One hub for several computers](headless.md#one-hub-for-several-computers)) does the rest, and pays its owner's wallet. No Tor, because nothing leaves the LAN from this machine.
+Only XMRig runs here; the hub (see [One hub for several computers](headless.md#one-hub-for-several-computers), and the full guide in [hub.md](hub.md)) does the rest, and pays its owner's wallet. No Tor, because nothing leaves the LAN from this machine.
 
 ### No `pool` mode
 
-Earlier versions could send XMRig straight to a Stratum pool. That told the pool operator your wallet address, paid them a fee, and connected outside Tor, so it has been removed. A config that still says `mode: pool` is moved to `p2pool-remote` when it loads, with one line in the log. If your machine is too slow for P2Pool shares to arrive often — the reason pool mode used to be suggested — set `p2pool_chain: nano`.
+Earlier versions could send XMRig straight to a Stratum pool. That told the pool operator your wallet address, paid them a fee, and connected outside Tor, so it has been removed. A config that still says `mode: pool` is moved to `p2pool-remote` when it loads, with one line in the log. If your machine is too slow for P2Pool shares to arrive often — the reason pool mode used to be suggested — use nano, the default sidechain. A config written before nano was the default, with no `p2pool_chain` line, stays on mini until you set `p2pool_chain: nano`.
 
 ## The default node
 

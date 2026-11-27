@@ -97,7 +97,7 @@ old one cannot be replayed.
 The packages bundle xmrig and p2pool, which are GPLv3. Every release publishes
 their complete source beside the binaries:
 
-- `kind-miner-<version>-xmrig-<version>-source.tar.gz` — the pinned xmrig,
+- `kind-miner-v<version>-xmrig-<version>-source.tar.gz` — the pinned xmrig,
   libuv, hwloc and OpenSSL archives, kind-miner's two patches, and the recipe.
   Unpacked, `KM_XMRIG_SOURCES=upstream scripts/build-xmrig.sh out` rebuilds
   the shipped binary offline, bit for bit.
@@ -107,6 +107,11 @@ their complete source beside the binaries:
 
 A Nodo already follows the chain, so it can run P2Pool once for every computer
 that mines to it, and those computers then run only the miner.
+
+**The full guide is [hub.md](hub.md).** It covers setting a hub up, pairing
+desktops, headless boxes, plain xmrig and a mining proxy you already run, the
+onion, ports and security, and what to do when something is wrong. What
+follows is the short version.
 
 **From the desktop.** Start `kind-minerd` on the Nodo with no config. On a
 desktop, open **Settings → Connection → Find a hub**: it finds the Nodo on the
